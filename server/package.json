@@ -1,0 +1,29 @@
+{
+  "name": "hub-project-platform-server",
+  "version": "1.0.0",
+  "description": "Serveur pour la plateforme de gestion des projets Hub",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^3.3.0",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "axios": "^0.27.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.1",
+    "express": "^4.18.1",
+    "isomorphic-fetch": "^3.0.0",
+    "jsonwebtoken": "^8.5.1",
+    "mongoose": "^6.5.0",
+    "nodemailer": "^6.10.0",
+    "passport": "^0.6.0",
+    "passport-microsoft": "^1.0.0",
+    "resend": "^4.1.2"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.19"
+  }
+}
