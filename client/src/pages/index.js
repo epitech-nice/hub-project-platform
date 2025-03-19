@@ -26,7 +26,7 @@ export default function Home() {
             Bienvenue sur la plateforme Hub Projets
           </h1>
           <p className="text-xl text-gray-600 mb-8">
-            Soumettez et gérez vos demandes de projets en quelques clics
+            Soumettez et gérez vos demandes de projets facilement
           </p>
 
           {isAuthenticated ? (

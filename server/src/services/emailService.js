@@ -22,65 +22,182 @@ exports.sendStatusChangeEmail = async (project, newStatus) => {
     
     // Définir l'objet et le contenu en fonction du nouveau statut
     let subject = '';
-    let htmlContent = '';
+    let statusColor = '';
+    let statusEmoji = '';
+    let statusMessage = '';
     
     switch (newStatus) {
       case 'approved':
-        subject = `Projet approuvé : ${project.name}`;
-        htmlContent = `
-          <h1>Projet approuvé</h1>
-          <p>Félicitations ! Votre projet <strong>${project.name}</strong> a été approuvé.</p>
-        `;
+        subject = `✅ Projet approuvé : ${project.name}`;
+        statusColor = '#4CAF50'; // Vert
+        statusEmoji = '✅';
+        statusMessage = 'Votre projet a été approuvé !';
         break;
       
       case 'rejected':
-        subject = `Projet refusé : ${project.name}`;
-        htmlContent = `
-          <h1>Projet refusé</h1>
-          <p>Nous regrettons de vous informer que votre projet <strong>${project.name}</strong> a été refusé.</p>
-        `;
+        subject = `⛔ Projet non retenu : ${project.name}`;
+        statusColor = '#ab1409 '; // Rouge
+        statusEmoji = '⛔';
+        statusMessage = 'Votre projet n\'a pas été retenu';
         break;
       
       case 'pending_changes':
-        subject = `Modifications requises : ${project.name}`;
-        htmlContent = `
-          <h1>Modifications requises</h1>
-          <p>Des modifications sont requises pour votre projet <strong>${project.name}</strong>.</p>
-        `;
+        subject = `🔄 Modifications demandées : ${project.name}`;
+        statusColor = '#FF9800'; // Orange
+        statusEmoji = '🔄';
+        statusMessage = 'Des modifications sont requises pour votre projet';
         break;
       
       default:
-        subject = `Mise à jour du projet : ${project.name}`;
-        htmlContent = `
-          <h1>Mise à jour du projet</h1>
-          <p>Le statut de votre projet <strong>${project.name}</strong> a été mis à jour.</p>
-        `;
+        subject = `📝 Mise à jour du projet : ${project.name}`;
+        statusColor = '#2196F3'; // Bleu
+        statusEmoji = '📝';
+        statusMessage = 'Le statut de votre projet a été mis à jour';
     }
     
-    // Ajouter les commentaires s'ils existent
+    // Adresse physique pour conformité légale
+    const physicalAddress = `
+      <tr>
+        <td style="padding: 20px; text-align: center; color: #888; font-size: 12px; border-top: 1px solid #eee;">
+          {EPITECH} Nice<br>
+          131 Boulevard René Cassin<br>
+          06200 Nice, France
+        </td>
+      </tr>
+    `;
+    
+    // Formatage des commentaires
+    let commentsSection = '';
     if (project.reviewedBy && project.reviewedBy.comments) {
-      htmlContent += `
-        <div style="background-color: #f5f5f5; padding: 15px; border-left: 4px solid #0066cc; margin: 20px 0;">
-          <h3>Commentaires de l'évaluateur :</h3>
-          <p>${project.reviewedBy.comments.replace(/\n/g, '<br>')}</p>
-        </div>
+      commentsSection = `
+        <tr>
+          <td style="padding: 20px; background-color: #f8f9fa; border-left: 4px solid ${statusColor};">
+            <p style="font-weight: bold; margin-top: 0;">Commentaires de l'évaluateur :</p>
+            <p style="white-space: pre-line; margin-bottom: 0;">${project.reviewedBy.comments.replace(/\n/g, '<br>')}</p>
+          </td>
+        </tr>
       `;
     }
     
-    // Ajouter un lien vers le tableau de bord
-    htmlContent += `
-      <p>Vous pouvez consulter les détails du projet sur <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard">votre tableau de bord</a>.</p>
-      <p>Cordialement,<br>L'équipe Hub Projets</p>
+    // Créer le contenu HTML complet de l'email
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>${subject}</title>
+        </head>
+        <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; border-collapse: collapse;">
+            <!-- En-tête -->
+            <tr>
+              <td style="background-color: ${statusColor}; padding: 20px; text-align: center; color: white;">
+                <h1 style="margin: 0; font-size: 24px;">${statusEmoji} ${statusMessage}</h1>
+              </td>
+            </tr>
+            
+            <!-- Contenu principal -->
+            <tr>
+              <td style="padding: 20px;">
+                <p>Bonjour,</p>
+                <p>Le statut du projet <strong>${project.name}</strong> a été mis à jour.</p>
+                <p>
+                  <span style="display: inline-block; padding: 8px 16px; background-color: ${statusColor}; color: white; border-radius: 4px; font-weight: bold;">
+                    ${statusEmoji} ${newStatus === 'approved' ? 'Approuvé' : newStatus === 'rejected' ? 'Non retenu' : newStatus === 'pending_changes' ? 'Modifications requises' : 'Mis à jour'}
+                  </span>
+                </p>
+              </td>
+            </tr>
+            
+            <!-- Commentaires de l'évaluateur (si présents) -->
+            ${commentsSection}
+            
+            <!-- Informations du projet -->
+            <tr>
+              <td style="padding: 20px;">
+                <h2 style="margin-top: 0; color: #444; border-bottom: 1px solid #eee; padding-bottom: 10px;">Détails du projet</h2>
+                <p><strong>Nom :</strong> ${project.name}</p>
+                <p><strong>Description :</strong> ${project.description}</p>
+                <p><strong>Technologies :</strong> ${project.technologies.join(', ')}</p>
+                <p><strong>Nombre d'étudiants :</strong> ${project.studentCount}</p>
+                <p style="margin-top: 25px;">
+                  <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard" style="display: inline-block; padding: 10px 20px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">
+                    Voir les détails du projet
+                  </a>
+                </p>
+              </td>
+            </tr>
+            
+            <!-- Message de désabonnement -->
+            <tr>
+              <td style="padding: 20px; font-size: 14px; color: #666; background-color: #f8f9fa;">
+                <p>Cet email vous a été envoyé car vous êtes impliqué dans ce projet. Si vous recevez cet email dans vos courriers indésirables, veuillez le marquer comme "Non indésirable" ou ajouter notre adresse à vos contacts.</p>
+                <p style="margin-bottom: 0;">
+                  <a href="mailto:unsubscribe@${process.env.EMAIL_DOMAIN || 'votredomaine.com'}?subject=Unsubscribe&body=Please%20unsubscribe%20me%20from%20project%20notifications" style="color: #2196F3; text-decoration: none;">
+                    Se désabonner des notifications
+                  </a>
+                </p>
+              </td>
+            </tr>
+            
+            <!-- Adresse physique et informations légales -->
+            ${physicalAddress}
+          </table>
+        </body>
+      </html>
     `;
     
-    // Envoyer l'email via Resend
-    console.log(`Envoi d'email à ${recipients.length} destinataires...`);
+    // Créer une version texte simple pour les clients qui ne supportent pas HTML
+    const textContent = `
+${statusMessage}
+
+Bonjour,
+
+Le statut du projet "${project.name}" a été mis à jour.
+
+Statut: ${newStatus === 'approved' ? 'Approuvé' : newStatus === 'rejected' ? 'Non retenu' : newStatus === 'pending_changes' ? 'Modifications requises' : 'Mis à jour'}
+
+${project.reviewedBy && project.reviewedBy.comments ? `\nCommentaires de l'évaluateur :\n${project.reviewedBy.comments}\n` : ''}
+
+Détails du projet:
+- Nom: ${project.name}
+- Description: ${project.description}
+- Technologies: ${project.technologies.join(', ')}
+- Nombre d'étudiants: ${project.studentCount}
+
+Pour voir les détails du projet, visitez: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard
+
+---
+Cet email vous a été envoyé car vous êtes impliqué dans ce projet.
+Pour vous désabonner, contactez-nous à unsubscribe@${process.env.EMAIL_DOMAIN || 'votredomaine.com'}.
+
+{EPITECH} Nice<br>
+131 Boulevard René Cassin<br>
+06200 Nice, France
+    `.trim();
     
+    // Envoyer l'email via Resend avec des en-têtes supplémentaires
     const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || 'Hub Projets <onboarding@resend.dev>',
+      from: process.env.EMAIL_FROM || 'Hub Projets <notifications@votredomaine.com>',
       to: recipients,
       subject: subject,
       html: htmlContent,
+      text: textContent,
+      headers: {
+        'List-Unsubscribe': `<mailto:unsubscribe@${process.env.EMAIL_DOMAIN || 'votredomaine.com'}?subject=Unsubscribe>`,
+        'Precedence': 'bulk'
+      },
+      tags: [
+        {
+          name: 'category',
+          value: 'project_notification'
+        },
+        {
+          name: 'status',
+          value: newStatus
+        }
+      ]
     });
     
     if (error) {
