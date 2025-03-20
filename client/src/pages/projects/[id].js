@@ -238,15 +238,15 @@ export default function ProjectDetail() {
                       </a>
                     </li>
                   )}
-                  {project.links.docs && (
+                  {project.links.projectGithub && (
                     <li>
                       <a
-                        href={project.links.docs}
+                        href={project.links.projectGithub}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:underline"
                       >
-                        Documentation
+                        GitHub Project
                       </a>
                     </li>
                   )}

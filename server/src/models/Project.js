@@ -27,9 +27,15 @@ const ProjectSchema = new mongoose.Schema({
     default: [],
   },
   links: {
-    github: String,
-    docs: String,
-    other: [String],
+    github: {
+      type: String,
+      required: true
+    },
+    projectGithub: {
+      type: String,
+      required: true
+    },
+    other: [String]
   },
   status: {
     type: String,

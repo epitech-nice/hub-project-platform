@@ -20,7 +20,7 @@ export default function EditProject() {
     studentEmails: '',
     links: {
       github: '',
-      docs: '',
+      projectGithub: '',
       other: ''
     }
   });
@@ -28,6 +28,7 @@ export default function EditProject() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [project, setProject] = useState(null);
+  const [githubError, setGithubError] = useState('');
   
   useEffect(() => {
     // Rediriger si non authentifié
@@ -62,7 +63,7 @@ export default function EditProject() {
             studentEmails: project.studentEmails ? project.studentEmails.join(', ') : '',
             links: {
               github: project.links.github || '',
-              docs: project.links.docs || '',
+              projectGithub: project.links.projectGithub || '',
               other: project.links.other ? project.links.other.join(', ') : ''
             }
           });
@@ -76,6 +77,54 @@ export default function EditProject() {
     
     fetchProject();
   }, [isAuthenticated, id, router]);
+  
+  // Fonction pour valider uniquement le lien GitHub personnel
+  const validateGithubUrl = async (url) => {
+    if (!url) {
+      setGithubError('Ce champ est obligatoire');
+      return false;
+    }
+    
+    // Vérifier si l'URL ressemble à un lien GitHub
+    const githubRegex = /^https:\/\/github\.com\/[\w-]+\/[\w-]+\/?$/;
+    if (!githubRegex.test(url)) {
+      setGithubError('URL GitHub invalide (ex: https://github.com/username/repo)');
+      return false;
+    }
+    
+    try {
+      // Vérifier si le dépôt est public en essayant d'y accéder via l'API GitHub
+      const repoUrl = url.replace('https://github.com/', 'https://api.github.com/repos/');
+      const response = await fetch(repoUrl);
+      
+      if (response.status === 200) {
+        setGithubError('');
+        return true;
+      } else if (response.status === 404) {
+        setGithubError('Ce dépôt n\'existe pas ou est privé');
+        return false;
+      } else {
+        setGithubError('Erreur lors de la vérification du dépôt');
+        return false;
+      }
+    } catch (error) {
+      console.error('Erreur lors de la vérification du dépôt GitHub:', error);
+      setGithubError('Erreur de connexion lors de la vérification');
+      return false;
+    }
+  };
+
+  // Valider le lien GitHub personnel lorsqu'il change
+  useEffect(() => {
+    const validatePersonalGithub = async () => {
+      if (formData.links.github) {
+        await validateGithubUrl(formData.links.github);
+      }
+    };
+    
+    const timeoutId = setTimeout(validatePersonalGithub, 800); // Délai pour éviter trop de requêtes
+    return () => clearTimeout(timeoutId);
+  }, [formData.links.github]);
   
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -103,6 +152,18 @@ export default function EditProject() {
     setError('');
 
     try {
+      // Valider le lien GitHub personnel avant de soumettre
+      const isGithubValid = await validateGithubUrl(formData.links.github);
+      
+      if (!isGithubValid) {
+        throw new Error('Veuillez corriger les erreurs dans le lien GitHub personnel');
+      }
+      
+      // Vérification des champs obligatoires
+      if (!formData.links.projectGithub) {
+        throw new Error('Le lien GitHub du projet est obligatoire');
+      }
+      
       // Validation des emails si studentCount > 1
       if (formData.studentCount > 1 && !formData.studentEmails.trim()) {
         throw new Error('Veuillez indiquer les adresses e-mail des étudiants lorsque le projet implique plusieurs personnes');
@@ -243,7 +304,7 @@ export default function EditProject() {
               {formData.studentCount > 1 && (
                 <div className="mb-4">
                   <label className="block text-gray-700 font-bold mb-2" htmlFor="studentEmails">
-                    Adresses e-mail des team mates * (séparées par des virgules)
+                    Adresses e-mail des étudiants * (séparées par des virgules)
                   </label>
                   <input
                     type="text"
@@ -263,7 +324,7 @@ export default function EditProject() {
               
               <div className="mb-4">
                 <label className="block text-gray-700 font-bold mb-2" htmlFor="links.github">
-                  Lien GitHub
+                  Lien repo GitHub *
                 </label>
                 <input
                   type="url"
@@ -271,24 +332,35 @@ export default function EditProject() {
                   name="links.github"
                   value={formData.links.github}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg"
+                  className={`w-full px-3 py-2 border rounded-lg ${githubError ? 'border-red-500' : ''}`}
                   placeholder="https://github.com/username/repo"
+                  required
                 />
+                {githubError && (
+                  <p className="text-red-500 text-sm mt-1">{githubError}</p>
+                )}
+                <p className="text-sm text-gray-500 mt-1">
+                  Le lien vers le repo GitHub (doit être public)
+                </p>
               </div>
               
               <div className="mb-4">
-                <label className="block text-gray-700 font-bold mb-2" htmlFor="links.docs">
-                  Lien vers la documentation
+                <label className="block text-gray-700 font-bold mb-2" htmlFor="links.projectGithub">
+                  Lien GitHub Project *
                 </label>
                 <input
                   type="url"
-                  id="links.docs"
-                  name="links.docs"
-                  value={formData.links.docs}
+                  id="links.projectGithub"
+                  name="links.projectGithub"
+                  value={formData.links.projectGithub}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border rounded-lg"
-                  placeholder="https://docs.google.com/..."
+                  placeholder="https://github.com/organization/project"
+                  required
                 />
+                <p className="text-sm text-gray-500 mt-1">
+                  Le lien vers le GitHub Project
+                </p>
               </div>
               
               <div className="mb-6">
@@ -310,7 +382,7 @@ export default function EditProject() {
                 <button
                   type="submit"
                   className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || githubError}
                 >
                   {isSubmitting ? 'Mise à jour en cours...' : 'Mettre à jour le projet'}
                 </button>

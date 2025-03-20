@@ -17,6 +17,23 @@ exports.createProject = async (req, res) => {
       links,
     } = req.body;
 
+    // Vérifier que les liens GitHub sont fournis
+    if (!links.github || !links.projectGithub) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Les liens GitHub personnel et de projet sont obligatoires' 
+      });
+    }
+    
+    // Vérifier le format des liens GitHub
+    const githubRegex = /^https:\/\/github\.com\/[\w-]+\/[\w-]+\/?$/;
+    if (!githubRegex.test(links.github)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Le lien GitHub personnel doit être au format https://github.com/username/repo' 
+      });
+    }
+
     // Créer la liste des membres (le créateur + les emails fournis)
     const members = [
       {
@@ -345,6 +362,23 @@ exports.updateProject = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Seuls les projets en attente ou en attente de modifications peuvent être modifiés' });
     }
     
+    // Vérifier que les liens GitHub sont fournis
+    if (!links.github || !links.projectGithub) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Les liens GitHub personnel et de projet sont obligatoires' 
+      });
+    }
+    
+    // Vérifier le format des liens GitHub
+    const githubRegex = /^https:\/\/github\.com\/[\w-]+\/[\w-]+\/?$/;
+    if (!githubRegex.test(links.github)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Le lien GitHub personnel doit être au format https://github.com/username/repo' 
+      });
+    }
+
     // Mettre à jour la liste des membres
     // Commencez par le créateur du projet (qui ne change pas)
     const members = [
