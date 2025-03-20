@@ -181,10 +181,68 @@ exports.updateAdditionalInfo = async (req, res) => {
   }
 };
 
+exports.completeProject = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Projet non trouvé' });
+    }
+    
+    // Vérifier que l'utilisateur est administrateur
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Non autorisé' });
+    }
+    
+    // Vérifier que le projet était précédemment approuvé
+    if (project.status !== 'approved') {
+      return res.status(400).json({ success: false, message: 'Seuls les projets approuvés peuvent être marqués comme terminés' });
+    }
+    
+    // Changer le statut et ajouter les commentaires
+    project.status = 'completed';
+    if (req.body.comments) {
+      project.reviewedBy = {
+        userId: req.user._id,
+        name: req.user.name,
+        comments: req.body.comments
+      };
+    }
+    project.updatedAt = Date.now();
+    
+    // Ajouter à l'historique si existe
+    if (project.changeHistory) {
+      project.changeHistory.push({
+        status: 'completed',
+        comments: req.body.comments || 'Projet marqué comme terminé',
+        reviewer: {
+          userId: req.user._id,
+          name: req.user.name
+        },
+        date: new Date()
+      });
+    }
+    
+    await project.save();
+    
+    // Envoyer un email de notification
+    try {
+      await emailService.sendStatusChangeEmail(project, 'completed');
+    } catch (emailError) {
+      console.error('Erreur lors de l\'envoi de l\'email de notification:', emailError);
+    }
+    
+    res.status(200).json({ success: true, data: project });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+
 // Approuver ou refuser un projet ou demande de modifications (pour admin)
 exports.reviewProject = async (req, res) => {
   try {
-    const { status, comments } = req.body;
+    const { status, comments, credits } = req.body;
     
     if (!['approved', 'rejected', 'pending_changes'].includes(status)) {
       return res.status(400).json({ success: false, message: 'Statut invalide' });
@@ -196,6 +254,16 @@ exports.reviewProject = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Projet non trouvé' });
     }
     
+    // Vérifier si les crédits sont fournis pour un projet approuvé
+    if (status === 'approved') {
+      if (credits === undefined || credits === null) {
+        return res.status(400).json({ success: false, message: 'Le champ crédits est requis pour approuver un projet' });
+      }
+      
+      // Mettre à jour les crédits
+      project.credits = credits;
+    }
+
     // Enregistrer l'ancien statut pour vérifier s'il y a eu un changement
     const oldStatus = project.status;
     

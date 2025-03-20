@@ -1,4 +1,3 @@
-// pages/admin/projects/[id].js
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
@@ -15,6 +14,7 @@ export default function AdminProjectDetail() {
   const [reviewForm, setReviewForm] = useState({
     status: "",
     comments: "",
+    credits: null,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -38,6 +38,7 @@ export default function AdminProjectDetail() {
             setReviewForm({
               status: response.data.status,
               comments: response.data.reviewedBy?.comments || "",
+              credits: response.data.credits || null,
             });
           }
         } catch (error) {
@@ -51,31 +52,43 @@ export default function AdminProjectDetail() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setReviewForm({
-      ...reviewForm,
-      [name]: value,
-    });
+
+    if (name === "credits") {
+      setReviewForm({
+        ...reviewForm,
+        [name]: value === "" ? null : Number(value),
+      });
+    } else {
+      setReviewForm({
+        ...reviewForm,
+        [name]: value,
+      });
+    }
   };
 
-  const handleSubmit = async (e, overrideStatus = null) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError("");
 
     try {
-      const status = overrideStatus || reviewForm.status;
+      // Valider que les crédits sont fournis si le statut est "approved"
+      if (
+        reviewForm.status === "approved" &&
+        (reviewForm.credits === null || reviewForm.credits === undefined)
+      ) {
+        throw new Error("Le champ crédits est requis pour approuver un projet");
+      }
 
-      const response = await patch(`/api/projects/${id}/review`, {
-        status: status,
-        comments: reviewForm.comments,
-      });
+      const response = await patch(`/api/projects/${id}/review`, reviewForm);
       setProject(response.data);
       const actionMsg =
-        status === "pending_changes"
+        reviewForm.status === "pending_changes"
           ? "Des modifications ont été demandées"
-          : status === "approved"
+          : reviewForm.status === "approved"
           ? "Le projet a été approuvé"
           : "Le projet a été refusé";
+
       alert(`${actionMsg} avec succès!`);
       router.push("/admin/dashboard");
     } catch (err) {
@@ -84,6 +97,27 @@ export default function AdminProjectDetail() {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleCompleteProject = async () => {
+    if (
+      window.confirm(
+        "Êtes-vous sûr de vouloir marquer ce projet comme terminé ?"
+      )
+    ) {
+      try {
+        setIsSubmitting(true);
+        await patch(`/api/projects/${id}/complete`, {
+          comments: "Projet terminé avec succès.",
+        });
+        alert("Le projet a été marqué comme terminé avec succès !");
+        router.push("/admin/dashboard");
+      } catch (err) {
+        setError(err.message || "Une erreur est survenue");
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -100,6 +134,7 @@ export default function AdminProjectDetail() {
     pending_changes: "bg-orange-100 text-orange-800",
     approved: "bg-green-100 text-green-800",
     rejected: "bg-red-100 text-red-800",
+    completed: "bg-purple-100 text-purple-800",
   };
 
   const statusLabels = {
@@ -107,6 +142,7 @@ export default function AdminProjectDetail() {
     pending_changes: "Modifications requises",
     approved: "Approuvé",
     rejected: "Refusé",
+    completed: "Terminé",
   };
 
   return (
@@ -181,63 +217,30 @@ export default function AdminProjectDetail() {
 
           <div className="mb-6">
             <h2 className="text-xl font-semibold mb-2">Détails</h2>
-            {project.changeHistory && project.changeHistory.length > 0 && (
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold mb-2">Historique des modifications</h2>
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Par</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Commentaires</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {project.changeHistory.map((history, index) => (
-                        <tr key={index}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {new Date(history.date).toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
-                              ${history.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                              history.status === 'pending_changes' ? 'bg-orange-100 text-orange-800' :
-                              history.status === 'approved' ? 'bg-green-100 text-green-800' :
-                              'bg-red-100 text-red-800'}`}>
-                              {history.status === 'pending' ? 'En attente' : 
-                              history.status === 'pending_changes' ? 'Modifications requises' :
-                              history.status === 'approved' ? 'Approuvé' : 'Refusé'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {history.reviewer.name}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-500">
-                            {history.comments}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
             <p className="text-gray-700">
               Nombre d'étudiants impliqués: {project.studentCount}
             </p>
-            <div className="mt-2">
-              <p className="text-gray-700 font-semibold">
-                Étudiants impliqués:
+
+            {/* Afficher les crédits si définis */}
+            {project.credits !== null && project.credits !== undefined && (
+              <p className="text-gray-700 mt-2">
+                <span className="font-semibold">Crédits attribués:</span>{" "}
+                {project.credits}
               </p>
+            )}
+          </div>
+
+          {/* Affichage des étudiants impliqués */}
+          {project.studentCount > 1 && (
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold mb-2">
+                Étudiants impliqués
+              </h2>
               <ul className="list-disc list-inside ml-2">
                 <li className="text-gray-700">
                   Créateur: {project.submittedBy.email}
                 </li>
-                {project.studentCount > 1 &&
-                project.studentEmails &&
-                project.studentEmails.length > 0 ? (
+                {project.studentEmails && project.studentEmails.length > 0 ? (
                   project.studentEmails.map((email, index) => (
                     <li key={index} className="text-gray-700">
                       {email}
@@ -250,7 +253,8 @@ export default function AdminProjectDetail() {
                 )}
               </ul>
             </div>
-          </div>
+          )}
+
           {project.links &&
             Object.values(project.links).some(
               (link) => link && link.length > 0
@@ -379,6 +383,75 @@ export default function AdminProjectDetail() {
                 </p>
               </div>
             )}
+
+          {project.changeHistory && project.changeHistory.length > 0 && (
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold mb-2">
+                Historique des modifications
+              </h2>
+              <div className="border rounded-lg overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Statut
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Par
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Commentaires
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {project.changeHistory.map((history, index) => (
+                      <tr key={index}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(history.date).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            ${
+                              history.status === "pending"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : history.status === "pending_changes"
+                                ? "bg-orange-100 text-orange-800"
+                                : history.status === "approved"
+                                ? "bg-green-100 text-green-800"
+                                : history.status === "completed"
+                                ? "bg-purple-100 text-purple-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {history.status === "pending"
+                              ? "En attente"
+                              : history.status === "pending_changes"
+                              ? "Modifications requises"
+                              : history.status === "approved"
+                              ? "Approuvé"
+                              : history.status === "completed"
+                              ? "Terminé"
+                              : "Refusé"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {history.reviewer.name}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          {history.comments}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="bg-white shadow-md rounded-lg p-6">
@@ -407,6 +480,12 @@ export default function AdminProjectDetail() {
                 <span className="font-medium">Date d'évaluation:</span>{" "}
                 {new Date(project.updatedAt).toLocaleDateString()}
               </p>
+              {project.credits !== null && project.credits !== undefined && (
+                <p>
+                  <span className="font-medium">Crédits attribués:</span>{" "}
+                  {project.credits}
+                </p>
+              )}
               {project.reviewedBy?.comments && (
                 <div className="mt-2">
                   <p className="font-medium">Commentaires:</p>
@@ -424,74 +503,132 @@ export default function AdminProjectDetail() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-              <label className="block text-gray-700 font-bold mb-2">
-                Décision *
-              </label>
-              <div className="flex space-x-4">
-                <label className="inline-flex items-center">
-                  <input
-                    type="radio"
-                    name="status"
-                    value="approved"
-                    checked={reviewForm.status === "approved"}
-                    onChange={handleChange}
-                    className="mr-2"
-                    required
-                  />
-                  Approuver
+          {/* Afficher le formulaire d'évaluation uniquement si le projet n'est pas terminé */}
+          {project.status !== "completed" && (
+            <form onSubmit={handleSubmit}>
+              <div className="mb-4">
+                <label className="block text-gray-700 font-bold mb-2">
+                  Décision *
                 </label>
-                <label className="inline-flex items-center">
-                  <input
-                    type="radio"
-                    name="status"
-                    value="rejected"
-                    checked={reviewForm.status === "rejected"}
-                    onChange={handleChange}
-                    className="mr-2"
-                    required
-                  />
-                  Refuser
-                </label>
+                <div className="flex space-x-4">
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      name="status"
+                      value="approved"
+                      checked={reviewForm.status === "approved"}
+                      onChange={handleChange}
+                      className="mr-2"
+                      required
+                    />
+                    Approuver
+                  </label>
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      name="status"
+                      value="rejected"
+                      checked={reviewForm.status === "rejected"}
+                      onChange={handleChange}
+                      className="mr-2"
+                      required
+                    />
+                    Refuser
+                  </label>
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      name="status"
+                      value="pending_changes"
+                      checked={reviewForm.status === "pending_changes"}
+                      onChange={handleChange}
+                      className="mr-2"
+                      required
+                    />
+                    Demander des modifications
+                  </label>
+                </div>
               </div>
-            </div>
-            <div className="mb-6">
-              <label
-                className="block text-gray-700 font-bold mb-2"
-                htmlFor="comments"
-              >
-                Commentaires
-              </label>
-              <textarea
-                id="comments"
-                name="comments"
-                value={reviewForm.comments}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg"
-                rows="4"
-                placeholder="Fournir un retour aux étudiants sur leur projet..."
-              />
-            </div>
 
-            <div className="flex justify-end space-x-4">
+              {/* Champ de crédits conditionnel pour le statut "approved" */}
+              {reviewForm.status === "approved" && (
+                <div className="mb-4">
+                  <label
+                    className="block text-gray-700 font-bold mb-2"
+                    htmlFor="credits"
+                  >
+                    Crédits attribués *
+                  </label>
+                  <input
+                    type="number"
+                    id="credits"
+                    name="credits"
+                    value={
+                      reviewForm.credits === null ? "" : reviewForm.credits
+                    }
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    min="0"
+                    required
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Nombre de crédits à attribuer pour ce projet.
+                  </p>
+                </div>
+              )}
+
+              <div className="mb-6">
+                <label
+                  className="block text-gray-700 font-bold mb-2"
+                  htmlFor="comments"
+                >
+                  Commentaires
+                </label>
+                <textarea
+                  id="comments"
+                  name="comments"
+                  value={reviewForm.comments}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  rows="4"
+                  placeholder="Fournir un retour aux étudiants sur leur projet..."
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  disabled={isSubmitting || !reviewForm.status}
+                >
+                  {isSubmitting ? "Envoi en cours..." : "Envoyer l'évaluation"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Bouton pour marquer le projet comme terminé (visible uniquement pour les projets approuvés) */}
+          {project.status === "approved" && (
+            <div className="mt-6 p-4 border rounded-lg bg-gray-50">
+              <h3 className="text-lg font-semibold mb-3">
+                Marquer le projet comme terminé
+              </h3>
+              <p className="mb-4">
+                Une fois le projet complètement terminé, vous pouvez le marquer
+                comme tel.
+              </p>
               <button
                 type="button"
-                className="bg-yellow-500 text-white px-6 py-2 rounded-lg hover:bg-yellow-600 disabled:opacity-50"
-                onClick={(e) => handleSubmit(e, "pending_changes")}
+                onClick={handleCompleteProject}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
                 disabled={isSubmitting}
               >
-                Demander des modifications
-              </button>
-              <button
-                type="submit"
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                disabled={isSubmitting || !reviewForm.status}
-              >
-                {isSubmitting ? "Envoi en cours..." : "Envoyer l'évaluation"}
+                {isSubmitting
+                  ? "Traitement en cours..."
+                  : "Marquer comme terminé"}
               </button>
             </div>
-          </form>
+          )}
         </div>
       </main>
     </div>

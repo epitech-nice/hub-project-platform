@@ -33,8 +33,12 @@ const ProjectSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ["pending", "pending_changes", "approved", "rejected"],
-    default: "pending",
+    enum: ['pending', 'pending_changes', 'approved', 'rejected', 'completed'],
+    default: 'pending'
+  },
+  credits: {
+    type: Number,
+    default: null
   },
   members: [
     {
@@ -88,7 +92,7 @@ const ProjectSchema = new mongoose.Schema({
       {
         status: {
           type: String,
-          enum: ["pending", "pending_changes", "approved", "rejected"],
+          enum: ["pending", "pending_changes", "approved", "rejected", "completed"],
         },
         comments: String,
         reviewer: {

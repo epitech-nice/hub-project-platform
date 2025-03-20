@@ -1,4 +1,3 @@
-// pages/projects/[id].js
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
@@ -99,17 +98,19 @@ export default function ProjectDetail() {
   }
 
   const statusColors = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    pending_changes: 'bg-orange-100 text-orange-800',
-    approved: 'bg-green-100 text-green-800',
-    rejected: 'bg-red-100 text-red-800'
+    pending: "bg-yellow-100 text-yellow-800",
+    pending_changes: "bg-orange-100 text-orange-800",
+    approved: "bg-green-100 text-green-800",
+    rejected: "bg-red-100 text-red-800",
+    completed: "bg-purple-100 text-purple-800",
   };
-  
+
   const statusLabels = {
-    pending: 'En attente',
-    pending_changes: 'Modifications requises',
-    approved: 'Approuvé',
-    rejected: 'Refusé'
+    pending: "En attente",
+    pending_changes: "Modifications requises",
+    approved: "Approuvé",
+    rejected: "Refusé",
+    completed: "Terminé",
   };
 
   return (
@@ -141,24 +142,6 @@ export default function ProjectDetail() {
               {statusLabels[project.status]}
             </span>
           </div>
-
-          {project.status === "pending_changes" && (
-            <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-              <h3 className="text-lg font-semibold text-orange-800 mb-2">
-                Modifications requises
-              </h3>
-              <p className="text-gray-700 whitespace-pre-line">
-                {project.reviewedBy?.comments}
-              </p>
-              <div className="mt-4">
-                <Link href={`/projects/edit/${project._id}`}>
-                  <a className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 inline-block">
-                    Effectuer les modifications
-                  </a>
-                </Link>
-              </div>
-            </div>
-          )}
 
           <div className="mb-6">
             <h2 className="text-xl font-semibold mb-2">Description</h2>
@@ -192,73 +175,49 @@ export default function ProjectDetail() {
 
           <div className="mb-6">
             <h2 className="text-xl font-semibold mb-2">Détails</h2>
-            {project.changeHistory && project.changeHistory.length > 0 && (
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold mb-2">Historique des modifications</h2>
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Par</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Commentaires</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {project.changeHistory.map((history, index) => (
-                        <tr key={index}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {new Date(history.date).toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
-                              ${history.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                              history.status === 'pending_changes' ? 'bg-orange-100 text-orange-800' :
-                              history.status === 'approved' ? 'bg-green-100 text-green-800' :
-                              'bg-red-100 text-red-800'}`}>
-                              {history.status === 'pending' ? 'En attente' : 
-                              history.status === 'pending_changes' ? 'Modifications requises' :
-                              history.status === 'approved' ? 'Approuvé' : 'Refusé'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {history.reviewer.name}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-500">
-                            {history.comments}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
             <p className="text-gray-700">
               Nombre d'étudiants impliqués: {project.studentCount}
             </p>
             <p className="text-gray-700">
               Soumis le: {new Date(project.createdAt).toLocaleDateString()}
             </p>
+
+            {/* Afficher les crédits si définis et si le projet est approuvé ou terminé */}
+            {(project.status === "approved" ||
+              project.status === "completed") &&
+              project.credits !== null &&
+              project.credits !== undefined && (
+                <p className="text-gray-700 mt-2">
+                  <span className="font-semibold">Crédits attribués:</span>{" "}
+                  {project.credits}
+                </p>
+              )}
           </div>
 
-          <div className="mt-2">
-            <p className="text-gray-700 font-semibold">Étudiants impliqués:</p>
-            <ul className="list-disc list-inside ml-2">
-              <li className="text-gray-700">
-                Chef de groupe: {project.submittedBy.email}
-              </li>
-              {project.studentCount > 1 &&
-                project.studentEmails &&
-                project.studentEmails.length > 0 &&
-                project.studentEmails.map((email, index) => (
-                  <li key={index} className="text-gray-700">
-                    {email}
+          {/* Affichage des étudiants impliqués */}
+          {project.studentCount > 1 && (
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold mb-2">
+                Étudiants impliqués
+              </h2>
+              <ul className="list-disc list-inside ml-2">
+                <li className="text-gray-700">
+                  Créateur: {project.submittedBy.email}
+                </li>
+                {project.studentEmails && project.studentEmails.length > 0 ? (
+                  project.studentEmails.map((email, index) => (
+                    <li key={index} className="text-gray-700">
+                      {email}
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-gray-700 italic">
+                    Aucun email d'étudiant supplémentaire fourni
                   </li>
-                ))}
-            </ul>
-          </div>
+                )}
+              </ul>
+            </div>
+          )}
 
           {project.links &&
             Object.values(project.links).some(
@@ -324,9 +283,99 @@ export default function ProjectDetail() {
               )}
             </div>
           )}
+
+          {/* Afficher l'historique des modifications si disponible */}
+          {project.changeHistory && project.changeHistory.length > 0 && (
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold mb-2">
+                Historique des modifications
+              </h2>
+              <div className="border rounded-lg overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Statut
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Par
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Commentaires
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {project.changeHistory.map((history, index) => (
+                      <tr key={index}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(history.date).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            ${
+                              history.status === "pending"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : history.status === "pending_changes"
+                                ? "bg-orange-100 text-orange-800"
+                                : history.status === "approved"
+                                ? "bg-green-100 text-green-800"
+                                : history.status === "completed"
+                                ? "bg-purple-100 text-purple-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {history.status === "pending"
+                              ? "En attente"
+                              : history.status === "pending_changes"
+                              ? "Modifications requises"
+                              : history.status === "approved"
+                              ? "Approuvé"
+                              : history.status === "completed"
+                              ? "Terminé"
+                              : "Refusé"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {history.reviewer.name}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          {history.comments}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
 
-        {project.status === "approved" && (
+        {/* Message pour modifications requises */}
+        {project.status === "pending_changes" && (
+          <div className="mb-8 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+            <h3 className="text-lg font-semibold text-orange-800 mb-2">
+              Modifications requises
+            </h3>
+            <p className="text-gray-700 whitespace-pre-line">
+              {project.reviewedBy?.comments}
+            </p>
+            <div className="mt-4">
+              <Link href={`/projects/edit/${project._id}`}>
+                <a className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 inline-block">
+                  Effectuer les modifications
+                </a>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Informations supplémentaires pour les projets approuvés */}
+        {(project.status === "approved" || project.status === "completed") && (
           <div className="bg-white shadow-md rounded-lg p-6">
             <h2 className="text-2xl font-bold mb-4">
               Informations supplémentaires
@@ -338,73 +387,144 @@ export default function ProjectDetail() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label
-                  className="block text-gray-700 font-bold mb-2"
-                  htmlFor="personalGithub"
-                >
-                  Lien GitHub personnel
-                </label>
-                <input
-                  type="url"
-                  id="personalGithub"
-                  name="personalGithub"
-                  value={additionalInfo.personalGithub}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg"
-                  placeholder="https://github.com/votre-username"
-                />
-              </div>
+            {/* Formulaire modifiable uniquement si le projet est approuvé (pas terminé) */}
+            {project.status === "approved" ? (
+              <form onSubmit={handleSubmit}>
+                <div className="mb-4">
+                  <label
+                    className="block text-gray-700 font-bold mb-2"
+                    htmlFor="personalGithub"
+                  >
+                    Lien GitHub personnel
+                  </label>
+                  <input
+                    type="url"
+                    id="personalGithub"
+                    name="personalGithub"
+                    value={additionalInfo.personalGithub}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="https://github.com/votre-username"
+                  />
+                </div>
 
-              <div className="mb-4">
-                <label
-                  className="block text-gray-700 font-bold mb-2"
-                  htmlFor="projectGithub"
-                >
-                  Lien GitHub du projet
-                </label>
-                <input
-                  type="url"
-                  id="projectGithub"
-                  name="projectGithub"
-                  value={additionalInfo.projectGithub}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg"
-                  placeholder="https://github.com/organization/project"
-                />
-              </div>
+                <div className="mb-4">
+                  <label
+                    className="block text-gray-700 font-bold mb-2"
+                    htmlFor="projectGithub"
+                  >
+                    Lien GitHub du projet
+                  </label>
+                  <input
+                    type="url"
+                    id="projectGithub"
+                    name="projectGithub"
+                    value={additionalInfo.projectGithub}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="https://github.com/organization/project"
+                  />
+                </div>
 
-              <div className="mb-6">
-                <label
-                  className="block text-gray-700 font-bold mb-2"
-                  htmlFor="documents"
-                >
-                  Documents complémentaires (URLs séparées par des virgules)
-                </label>
-                <input
-                  type="text"
-                  id="documents"
-                  name="documents"
-                  value={additionalInfo.documents}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg"
-                  placeholder="https://docs.google.com/document1, https://docs.google.com/document2"
-                />
-              </div>
+                <div className="mb-6">
+                  <label
+                    className="block text-gray-700 font-bold mb-2"
+                    htmlFor="documents"
+                  >
+                    Documents complémentaires (URLs séparées par des virgules)
+                  </label>
+                  <input
+                    type="text"
+                    id="documents"
+                    name="documents"
+                    value={additionalInfo.documents}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="https://docs.google.com/document1, https://docs.google.com/document2"
+                  />
+                </div>
 
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting
-                    ? "Mise à jour..."
-                    : "Mettre à jour les informations"}
-                </button>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting
+                      ? "Mise à jour..."
+                      : "Mettre à jour les informations"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              // Affichage en lecture seule pour les projets terminés
+              <div>
+                <div className="mb-4">
+                  <p className="font-semibold">Lien GitHub personnel:</p>
+                  {project.additionalInfo?.personalGithub ? (
+                    <a
+                      href={project.additionalInfo.personalGithub}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      {project.additionalInfo.personalGithub}
+                    </a>
+                  ) : (
+                    <p className="text-gray-500 italic">Non fourni</p>
+                  )}
+                </div>
+
+                <div className="mb-4">
+                  <p className="font-semibold">Lien GitHub du projet:</p>
+                  {project.additionalInfo?.projectGithub ? (
+                    <a
+                      href={project.additionalInfo.projectGithub}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      {project.additionalInfo.projectGithub}
+                    </a>
+                  ) : (
+                    <p className="text-gray-500 italic">Non fourni</p>
+                  )}
+                </div>
+
+                <div className="mb-4">
+                  <p className="font-semibold">Documents complémentaires:</p>
+                  {project.additionalInfo?.documents &&
+                  project.additionalInfo.documents.length > 0 ? (
+                    <ul className="list-disc list-inside ml-2">
+                      {project.additionalInfo.documents.map((doc, index) => (
+                        <li key={index}>
+                          <a
+                            href={doc}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                          >
+                            Document {index + 1}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-gray-500 italic">
+                      Aucun document fourni
+                    </p>
+                  )}
+                </div>
+
+                {project.status === "completed" && (
+                  <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                    <p className="text-purple-800 font-semibold">
+                      Ce projet est marqué comme terminé.
+                    </p>
+                  </div>
+                )}
               </div>
-            </form>
+            )}
           </div>
         )}
       </main>

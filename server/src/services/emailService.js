@@ -48,6 +48,13 @@ exports.sendStatusChangeEmail = async (project, newStatus) => {
         statusMessage = 'Des modifications sont requises pour votre projet';
         break;
       
+      case 'completed':
+        subject = `🏆 Projet terminé : ${project.name}`;
+        statusColor = '#9C27B0'; // Violet
+        statusEmoji = '🏆';
+        statusMessage = 'Votre projet est maintenant terminé !';
+        break;
+
       default:
         subject = `📝 Mise à jour du projet : ${project.name}`;
         statusColor = '#2196F3'; // Bleu
@@ -121,6 +128,7 @@ exports.sendStatusChangeEmail = async (project, newStatus) => {
                 <p><strong>Description :</strong> ${project.description}</p>
                 <p><strong>Technologies :</strong> ${project.technologies.join(', ')}</p>
                 <p><strong>Nombre d'étudiants :</strong> ${project.studentCount}</p>
+                <p><strong>Nombre de crédits :</strong> ${project.credits}</p>
                 <p style="margin-top: 25px;">
                   <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard" style="display: inline-block; padding: 10px 20px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">
                     Voir les détails du projet
@@ -164,7 +172,8 @@ Détails du projet:
 - Nom: ${project.name}
 - Description: ${project.description}
 - Technologies: ${project.technologies.join(', ')}
-- Nombre d'étudiants: ${project.studentCount}
+- Nombre d'étudiant(s): ${project.studentCount}
+- Nombre de crédit(s) : ${project.credits}
 
 Pour voir les détails du projet, visitez: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard
 

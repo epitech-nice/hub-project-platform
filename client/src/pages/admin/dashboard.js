@@ -63,6 +63,7 @@ export default function AdminDashboard() {
     pending_changes: "bg-orange-100 text-orange-800",
     approved: "bg-green-100 text-green-800",
     rejected: "bg-red-100 text-red-800",
+    completed: "bg-purple-100 text-purple-800",
   };
 
   const statusLabels = {
@@ -70,6 +71,7 @@ export default function AdminDashboard() {
     pending_changes: "Modifications requises",
     approved: "Approuvé",
     rejected: "Refusé",
+    completed: "Terminé",
   };
 
   return (
@@ -130,6 +132,16 @@ export default function AdminDashboard() {
               onClick={() => setFilter("rejected")}
             >
               Refusés
+            </button>
+            <button
+              className={`px-4 py-2 rounded-md ${
+                filter === "completed"
+                  ? "bg-purple-600 text-white"
+                  : "bg-gray-200"
+              }`}
+              onClick={() => setFilter("completed")}
+            >
+              Terminés
             </button>
           </div>
 
