@@ -1,7 +1,4 @@
-version: '3.8'
-
 services:
-  # Service pour la base de données MongoDB
   db:
     image: mongo:latest
     container_name: hub-project-db
@@ -20,8 +17,7 @@ services:
   # Service pour le serveur backend
   server:
     build:
-      context: .
-      dockerfile: Dockerfile.server
+      context: server/
     container_name: hub-project-server
     depends_on:
       - db
@@ -38,15 +34,14 @@ services:
   # Service pour le client frontend
   client:
     build:
-      context: .
-      dockerfile: Dockerfile.client
+      context: client
     container_name: hub-project-client
     depends_on:
       - server
     environment:
       REACT_APP_API_URL: http://localhost:5000
     ports:
-      - "3002:80"
+      - "3002:3000"
     networks:
       - app-network
     restart: always
