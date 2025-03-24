@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # Service pour la base de données MongoDB
+  db:
+    image: mongo:latest
+    container_name: hub-project-db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongo
+      MONGO_INITDB_ROOT_PASSWORD: mongo
+      MONGO_INITDB_DATABASE: hub_project_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - app-network
+    restart: always
+
+  # Service pour le serveur backend
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: hub-project-server
+    depends_on:
+      - db
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongo:mongo@db:27017/hub_project_db?authSource=admin
+      PORT: 5000
+    ports:
+      - "5000:5000"
+    networks:
+      - app-network
+    restart: always
+
+  # Service pour le client frontend
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    container_name: hub-project-client
+    depends_on:
+      - server
+    environment:
+      REACT_APP_API_URL: http://localhost:5000
+    ports:
+      - "3002:80"
+    networks:
+      - app-network
+    restart: always
+
+# Volumes pour persister les données
+volumes:
+  mongodb_data:
+
+# Réseau commun pour tous les services
+networks:
+  app-network:
+    driver: bridge

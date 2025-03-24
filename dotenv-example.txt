@@ -1,0 +1,24 @@
+# Server configuration
+PORT=5000
+NODE_ENV=development
+
+# MongoDB configuration
+MONGODB_URI=mongodb://your_db_url/hub-projects
+# ou votre URI MongoDB Atlas
+
+# Microsoft OAuth
+MICROSOFT_CLIENT_ID=your_client_id
+MICROSOFT_CLIENT_SECRET=your_client_secret
+MICROSOFT_CALLBACK_URL=call_back_url
+MICROSOFT_TENANT_ID=tenant_id
+
+# Frontend URL
+FRONTEND_URL=you_frontend_url
+
+# External API for projects (à remplir plus tard)
+EXTERNAL_API_URL=https://external-service.example.com/api/projects
+EXTERNAL_API_KEY=your-external-api-key
+
+# Configuration email
+EMAIL_FROM=Hub Projets <Hub-project@yourdomain.eu>
+RESEND_API_KEY=your_resend_api_key

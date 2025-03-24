@@ -1,0 +1,19 @@
+# Dockerfile pour la partie serveur
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copier les fichiers package.json et package-lock.json
+COPY server/package*.json ./
+
+# Installer les dépendances
+RUN npm install
+
+# Copier les fichiers du projet
+COPY server/ ./
+
+# Exposer le port sur lequel le serveur écoute
+EXPOSE 5000
+
+# Commande pour démarrer le serveur
+CMD ["npm", "start"]
