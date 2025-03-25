@@ -22,3 +22,6 @@ EXTERNAL_API_KEY=your-external-api-key
 # Configuration email
 EMAIL_FROM=Hub Projets <Hub-project@yourdomain.eu>
 RESEND_API_KEY=your_resend_api_key
+
+# Mail adresse for owner of the app to auto promo admin
+APP_OWNER_EMAILS=user@epitech.eu,user2@epitech.eu
