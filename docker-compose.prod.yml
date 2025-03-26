@@ -1,0 +1,52 @@
+services:
+  db:
+    image: mongo:latest
+    container_name: hub-project-db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongo
+      MONGO_INITDB_ROOT_PASSWORD: mongo
+      MONGO_INITDB_DATABASE: hub_project_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - app-network
+    restart: always
+
+  # Service pour le serveur backend
+  server:
+    build:
+      context: server/
+      dockerfile: server/Dockerfile.prod
+    container_name: hub-project-server
+    depends_on:
+      - db
+    ports:
+      - "5000:5000"
+    networks:
+      - app-network
+    restart: always
+
+  # Service pour le client frontend
+  client:
+    build:
+      context: client
+      dockerfile: client/Dockerfile.prod
+    container_name: hub-project-client
+    depends_on:
+      - server
+    ports:
+      - "3002:3002"
+    networks:
+      - app-network
+    restart: always
+
+# Volumes pour persister les données
+volumes:
+  mongodb_data:
+
+# Réseau commun pour tous les services
+networks:
+  app-network:
+    driver: bridge
