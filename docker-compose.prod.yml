@@ -37,7 +37,7 @@ services:
     depends_on:
       - server
     ports:
-      - "3002:3002"
+      - "3002:3000"
     networks:
       - app-network
     restart: always
