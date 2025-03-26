@@ -17,7 +17,6 @@ services:
   # Service pour le serveur backend
   server:
     build:
-      context: server/
       dockerfile: server/Dockerfile.prod
     container_name: hub-project-server
     depends_on:
@@ -31,7 +30,6 @@ services:
   # Service pour le client frontend
   client:
     build:
-      context: client
       dockerfile: client/Dockerfile.prod
     container_name: hub-project-client
     depends_on:
