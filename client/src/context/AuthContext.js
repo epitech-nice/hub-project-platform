@@ -27,7 +27,6 @@ export const AuthProvider = ({ children }) => {
             // Essayer d'abord de décoder le token pour obtenir les informations de base
             try {
               const decoded = jwtDecode(storedToken);
-              console.log("Token décodé:", decoded);
               // Initialiser l'utilisateur avec les informations du token
               if (decoded.id) {
                 setUser({
@@ -47,7 +46,7 @@ export const AuthProvider = ({ children }) => {
               headers: { Authorization: `Bearer ${storedToken}` }
             });
             
-            console.log("Réponse API:", response.data);
+//            console.log("Réponse API:", response.data);
             setUser(response.data.data);
           } catch (error) {
             console.error('Erreur de chargement utilisateur:', error);
