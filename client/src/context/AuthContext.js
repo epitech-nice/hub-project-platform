@@ -73,9 +73,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (router.pathname === '/auth/callback' && router.query.token) {
       const { token } = router.query;
-      
-      console.log("Token reçu dans le callback:", token ? "Présent" : "Absent");
-      
+            
       if (token) {
         localStorage.setItem('token', token);
         setToken(token);
@@ -83,7 +81,6 @@ export const AuthProvider = ({ children }) => {
         // Décodage immédiat du token pour obtenir les informations de base
         try {
           const decoded = jwtDecode(token);
-          console.log("Token décodé dans le callback:", decoded);
           
           // Définir les informations de l'utilisateur à partir du token
           setUser({
@@ -98,7 +95,6 @@ export const AuthProvider = ({ children }) => {
                 headers: { Authorization: `Bearer ${token}` }
               });
               
-              console.log("Infos utilisateur récupérées:", response.data);
               setUser(response.data.data);
             } catch (error) {
               console.error('Erreur lors du chargement des informations utilisateur:', error);
