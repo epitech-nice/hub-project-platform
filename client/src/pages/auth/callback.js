@@ -8,11 +8,21 @@ export default function AuthCallback() {
   const { token, loading } = useAuth();
   
   useEffect(() => {
-    // Si l'utilisateur est déjà authentifié ou si le token a été récupéré, rediriger vers le dashboard
-    if (!loading && token) {
-      router.push('/dashboard');
-    }
-  }, [token, loading, router]);
+    // Fonction pour gérer la redirection
+    const handleAuthRedirect = () => {
+      if (!router.isReady) return;
+      
+      const { redirectTo } = router.query;
+      
+      // Si l'utilisateur est authentifié, rediriger vers la page appropriée
+      if (!loading && token) {
+        // Utiliser le chemin de redirection fourni par le serveur ou tomber sur dashboard par défaut
+        router.push(redirectTo || '/dashboard');
+      }
+    };
+    
+    handleAuthRedirect();
+  }, [token, loading, router, router.isReady, router.query]);
   
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">

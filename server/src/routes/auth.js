@@ -45,13 +45,20 @@ router.get(
           expiresIn: config.jwt.expiresIn,
         }
       );
+
+      // Déterminer la page de redirection en fonction du rôle
+      let redirectPath = "/dashboard"; // Par défaut
+      if (req.user.role === "admin") {
+        redirectPath = "/admin/dashboard";
+      }
+
       console.log(
         "Redirection vers:",
-        `${process.env.FRONTEND_URL}/auth/callback?token=${token}`
+        `${process.env.FRONTEND_URL}/auth/callback?token=${token}&redirectTo=${redirectPath}`
       );
 
-      // Rediriger vers le frontend avec le token
-      res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
+      // Rediriger vers le frontend avec le token et le chemin de redirection
+      res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&redirectTo=${redirectPath}`);
     } catch (error) {
       console.error("Erreur dans le callback:", error);
       res.status(500).send("Erreur interne du serveur");
