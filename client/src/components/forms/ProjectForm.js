@@ -134,18 +134,18 @@ const ProjectForm = () => {
   };
 
   return (
-    <div className="bg-white shadow-md rounded-lg p-6">
-      <h2 className="text-2xl font-bold mb-6">Soumettre un nouveau projet</h2>
+    <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+      <h2 className="text-2xl font-bold mb-6 dark:text-white">Soumettre un nouveau projet</h2>
       
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        <div className="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400 px-4 py-3 rounded mb-4">
           {error}
         </div>
       )}
       
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
-          <label className="block text-gray-700 font-bold mb-2" htmlFor="name">
+          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="name">
             Nom du projet *
           </label>
           <input
@@ -154,13 +154,13 @@ const ProjectForm = () => {
             name="name"
             value={formData.name}
             onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-lg"
+            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             required
           />
         </div>
         
         <div className="mb-4">
-          <label className="block text-gray-700 font-bold mb-2" htmlFor="description">
+          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="description">
             Description détaillée *
           </label>
           <textarea
@@ -168,14 +168,14 @@ const ProjectForm = () => {
             name="description"
             value={formData.description}
             onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-lg"
+            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             rows="4"
             required
           />
         </div>
         
         <div className="mb-4">
-          <label className="block text-gray-700 font-bold mb-2" htmlFor="objectives">
+          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="objectives">
             Objectifs *
           </label>
           <textarea
@@ -183,14 +183,14 @@ const ProjectForm = () => {
             name="objectives"
             value={formData.objectives}
             onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-lg"
+            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             rows="3"
             required
           />
         </div>
         
         <div className="mb-4">
-          <label className="block text-gray-700 font-bold mb-2" htmlFor="technologies">
+          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="technologies">
             Technologies utilisées * (séparées par des virgules)
           </label>
           <input
@@ -199,14 +199,14 @@ const ProjectForm = () => {
             name="technologies"
             value={formData.technologies}
             onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-lg"
+            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             placeholder="React, Node.js, MongoDB, etc."
             required
           />
         </div>
         
         <div className="mb-4">
-          <label className="block text-gray-700 font-bold mb-2" htmlFor="studentCount">
+          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="studentCount">
             Nombre d'étudiants impliqués *
           </label>
           <input
@@ -215,7 +215,7 @@ const ProjectForm = () => {
             name="studentCount"
             value={formData.studentCount}
             onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-lg"
+            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             min="1"
             required
           />
@@ -224,7 +224,7 @@ const ProjectForm = () => {
         {/* Champ conditionnel pour les emails des étudiants */}
         {formData.studentCount > 1 && (
           <div className="mb-4">
-            <label className="block text-gray-700 font-bold mb-2" htmlFor="studentEmails">
+            <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="studentEmails">
               Adresses e-mail des étudiants * (séparées par des virgules)
             </label>
             <input
@@ -233,18 +233,18 @@ const ProjectForm = () => {
               name="studentEmails"
               value={formData.studentEmails}
               onChange={handleChange}
-              className="w-full px-3 py-2 border rounded-lg"
+              className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
               placeholder="etudiant1@email.com, etudiant2@email.com, ..."
               required
             />
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Indiquez les adresses e-mail des {formData.studentCount - 1} autres étudiants impliqués dans ce projet.
             </p>
           </div>
         )}
         
         <div className="mb-4">
-          <label className="block text-gray-700 font-bold mb-2" htmlFor="links.github">
+          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="links.github">
             Lien GitHub personnel *
           </label>
           <input
@@ -253,20 +253,20 @@ const ProjectForm = () => {
             name="links.github"
             value={formData.links.github}
             onChange={handleChange}
-            className={`w-full px-3 py-2 border rounded-lg ${githubError ? 'border-red-500' : ''}`}
+            className={`w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg ${githubError ? 'border-red-500 dark:border-red-700' : ''}`}
             placeholder="https://github.com/username/repo"
             required
           />
           {githubError && (
-            <p className="text-red-500 text-sm mt-1">{githubError}</p>
+            <p className="text-red-500 dark:text-red-400 text-sm mt-1">{githubError}</p>
           )}
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Le lien vers votre dépôt GitHub personnel (doit être public)
           </p>
         </div>
         
         <div className="mb-4">
-          <label className="block text-gray-700 font-bold mb-2" htmlFor="links.projectGithub">
+          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="links.projectGithub">
             Lien GitHub du projet *
           </label>
           <input
@@ -275,17 +275,17 @@ const ProjectForm = () => {
             name="links.projectGithub"
             value={formData.links.projectGithub}
             onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-lg"
+            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             placeholder="https://github.com/organization/project"
             required
           />
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Le lien vers le dépôt GitHub du projet
           </p>
         </div>
         
         <div className="mb-6">
-          <label className="block text-gray-700 font-bold mb-2" htmlFor="links.other">
+          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="links.other">
             Autres liens (séparés par des virgules)
           </label>
           <input
@@ -294,7 +294,7 @@ const ProjectForm = () => {
             name="links.other"
             value={formData.links.other}
             onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-lg"
+            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             placeholder="https://example.com, https://another-site.com"
           />
         </div>
@@ -302,7 +302,7 @@ const ProjectForm = () => {
         <div className="flex justify-end">
           <button
             type="submit"
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-50"
             disabled={isSubmitting || githubError}
           >
             {isSubmitting ? 'Soumission en cours...' : 'Soumettre le projet'}

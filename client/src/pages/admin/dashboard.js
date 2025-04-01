@@ -51,7 +51,7 @@ export default function AdminDashboard() {
     : projects;
 
   if (authLoading) {
-    return <div className="text-center py-10">Chargement...</div>;
+    return <div className="text-center py-10 dark:text-white">Chargement...</div>;
   }
 
   if (!isAuthenticated || !isAdmin) {
@@ -59,11 +59,11 @@ export default function AdminDashboard() {
   }
 
   const statusColors = {
-    pending: "bg-yellow-100 text-yellow-800",
-    pending_changes: "bg-orange-100 text-orange-800",
-    approved: "bg-green-100 text-green-800",
-    rejected: "bg-red-100 text-red-800",
-    completed: "bg-purple-100 text-purple-800",
+    pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-800/20 dark:text-yellow-300",
+    pending_changes: "bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-300",
+    approved: "bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-300",
+    rejected: "bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-300",
+    completed: "bg-purple-100 text-purple-800 dark:bg-purple-800/20 dark:text-purple-300",
   };
 
   const statusLabels = {
@@ -75,7 +75,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div>
+    <div className="min-h-screen dark:bg-gray-900">
       <Head>
         <title>Hub Projets - Administration</title>
       </Head>
@@ -83,13 +83,15 @@ export default function AdminDashboard() {
       <Header />
 
       <main className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-6">Administration des projets</h1>
+        <h1 className="text-3xl font-bold mb-6 dark:text-white">Administration des projets</h1>
 
         <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex space-x-2">
+          <div className="flex space-x-2 overflow-x-auto pb-2">
             <button
               className={`px-4 py-2 rounded-md ${
-                filter === "all" ? "bg-gray-700 text-white" : "bg-gray-200"
+                filter === "all" 
+                  ? "bg-gray-700 text-white dark:bg-gray-600" 
+                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
               }`}
               onClick={() => setFilter("all")}
             >
@@ -98,8 +100,8 @@ export default function AdminDashboard() {
             <button
               className={`px-4 py-2 rounded-md ${
                 filter === "pending"
-                  ? "bg-yellow-500 text-white"
-                  : "bg-gray-200"
+                  ? "bg-yellow-500 text-white dark:bg-yellow-600"
+                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
               }`}
               onClick={() => setFilter("pending")}
             >
@@ -108,8 +110,8 @@ export default function AdminDashboard() {
             <button
               className={`px-4 py-2 rounded-md ${
                 filter === "pending_changes"
-                  ? "bg-orange-500 text-white"
-                  : "bg-gray-200"
+                  ? "bg-orange-500 text-white dark:bg-orange-600"
+                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
               }`}
               onClick={() => setFilter("pending_changes")}
             >
@@ -118,8 +120,8 @@ export default function AdminDashboard() {
             <button
               className={`px-4 py-2 rounded-md ${
                 filter === "approved"
-                  ? "bg-green-600 text-white"
-                  : "bg-gray-200"
+                  ? "bg-green-600 text-white dark:bg-green-700"
+                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
               }`}
               onClick={() => setFilter("approved")}
             >
@@ -127,7 +129,9 @@ export default function AdminDashboard() {
             </button>
             <button
               className={`px-4 py-2 rounded-md ${
-                filter === "rejected" ? "bg-red-600 text-white" : "bg-gray-200"
+                filter === "rejected" 
+                  ? "bg-red-600 text-white dark:bg-red-700" 
+                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
               }`}
               onClick={() => setFilter("rejected")}
             >
@@ -136,8 +140,8 @@ export default function AdminDashboard() {
             <button
               className={`px-4 py-2 rounded-md ${
                 filter === "completed"
-                  ? "bg-purple-600 text-white"
-                  : "bg-gray-200"
+                  ? "bg-purple-600 text-white dark:bg-purple-700"
+                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
               }`}
               onClick={() => setFilter("completed")}
             >
@@ -151,17 +155,17 @@ export default function AdminDashboard() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Rechercher..."
-              className="w-full px-3 py-2 border rounded-md"
+              className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
           </div>
         </div>
 
         {apiLoading ? (
-          <div className="text-center py-10">Chargement des projets...</div>
+          <div className="text-center py-10 dark:text-white">Chargement des projets...</div>
         ) : filteredProjects.length === 0 ? (
-          <div className="bg-white shadow-md rounded-lg p-8 text-center">
-            <h3 className="text-xl font-bold mb-3">Aucun projet à afficher</h3>
-            <p className="text-gray-600 mb-4">
+          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 text-center">
+            <h3 className="text-xl font-bold mb-3 dark:text-white">Aucun projet à afficher</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
               {searchTerm
                 ? "Aucun projet ne correspond à votre recherche."
                 : `Il n'y a actuellement aucun projet ${
@@ -177,24 +181,24 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full bg-white shadow-md rounded-lg">
-              <thead className="bg-gray-100">
+            <table className="w-full bg-white dark:bg-gray-800 shadow-md rounded-lg">
+              <thead className="bg-gray-100 dark:bg-gray-700">
                 <tr>
-                  <th className="px-4 py-3 text-left">Nom du projet</th>
-                  <th className="px-4 py-3 text-left">Soumis par</th>
-                  <th className="px-4 py-3 text-left">Date de soumission</th>
-                  <th className="px-4 py-3 text-left">Statut</th>
-                  <th className="px-4 py-3 text-center">Actions</th>
+                  <th className="px-4 py-3 text-left dark:text-gray-200">Nom du projet</th>
+                  <th className="px-4 py-3 text-left dark:text-gray-200">Soumis par</th>
+                  <th className="px-4 py-3 text-left dark:text-gray-200">Date de soumission</th>
+                  <th className="px-4 py-3 text-left dark:text-gray-200">Statut</th>
+                  <th className="px-4 py-3 text-center dark:text-gray-200">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredProjects.map((project) => (
-                  <tr key={project._id} className="border-t">
-                    <td className="px-4 py-3">
+                  <tr key={project._id} className="border-t dark:border-gray-700">
+                    <td className="px-4 py-3 dark:text-white">
                       <span className="font-medium">{project.name}</span>
                     </td>
-                    <td className="px-4 py-3">{project.submittedBy.name}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 dark:text-gray-300">{project.submittedBy.name}</td>
+                    <td className="px-4 py-3 dark:text-gray-300">
                       {new Date(project.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-3">
@@ -208,7 +212,7 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <Link href={`/admin/projects/${project._id}`}>
-                        <a className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 text-sm">
+                        <a className="bg-blue-600 dark:bg-blue-700 text-white px-3 py-1 rounded hover:bg-blue-700 dark:hover:bg-blue-800 text-sm">
                           Détails
                         </a>
                       </Link>

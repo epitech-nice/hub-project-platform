@@ -43,7 +43,7 @@ export default function Dashboard() {
       : projects.filter((project) => project.status === filter);
 
   if (authLoading) {
-    return <div className="text-center py-10">Chargement...</div>;
+    return <div className="text-center py-10 dark:text-white">Chargement...</div>;
   }
 
   if (!isAuthenticated) {
@@ -56,7 +56,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div>
+    <div className="min-h-screen dark:bg-gray-900">
       <Head>
         <title>Hub Projets - Tableau de bord</title>
       </Head>
@@ -65,19 +65,21 @@ export default function Dashboard() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Mes projets</h1>
+          <h1 className="text-3xl font-bold dark:text-white">Mes projets</h1>
           <Link href="/submit-project">
-            <a className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+            <a className="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800">
               Soumettre un nouveau projet
             </a>
           </Link>
         </div>
 
         <div className="mb-6">
-          <div className="flex space-x-4">
+          <div className="flex space-x-4 overflow-x-auto pb-2">
             <button
               className={`px-4 py-2 rounded-md ${
-                filter === "all" ? "bg-blue-600 text-white" : "bg-gray-200"
+                filter === "all" 
+                  ? "bg-blue-600 text-white dark:bg-blue-700" 
+                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
               }`}
               onClick={() => setFilter("all")}
             >
@@ -86,8 +88,8 @@ export default function Dashboard() {
             <button
               className={`px-4 py-2 rounded-md ${
                 filter === "pending"
-                  ? "bg-yellow-500 text-white"
-                  : "bg-gray-200"
+                  ? "bg-yellow-500 text-white dark:bg-yellow-600"
+                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
               }`}
               onClick={() => setFilter("pending")}
             >
@@ -96,8 +98,8 @@ export default function Dashboard() {
             <button
               className={`px-4 py-2 rounded-md ${
                 filter === "pending_changes"
-                  ? "bg-orange-500 text-white"
-                  : "bg-gray-200"
+                  ? "bg-orange-500 text-white dark:bg-orange-600"
+                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
               }`}
               onClick={() => setFilter("pending_changes")}
             >
@@ -106,8 +108,8 @@ export default function Dashboard() {
             <button
               className={`px-4 py-2 rounded-md ${
                 filter === "approved"
-                  ? "bg-green-600 text-white"
-                  : "bg-gray-200"
+                  ? "bg-green-600 text-white dark:bg-green-700"
+                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
               }`}
               onClick={() => setFilter("approved")}
             >
@@ -115,7 +117,9 @@ export default function Dashboard() {
             </button>
             <button
               className={`px-4 py-2 rounded-md ${
-                filter === "rejected" ? "bg-red-600 text-white" : "bg-gray-200"
+                filter === "rejected" 
+                  ? "bg-red-600 text-white dark:bg-red-700" 
+                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
               }`}
               onClick={() => setFilter("rejected")}
             >
@@ -124,8 +128,8 @@ export default function Dashboard() {
             <button
               className={`px-4 py-2 rounded-md ${
                 filter === "completed"
-                  ? "bg-purple-600 text-white"
-                  : "bg-gray-200"
+                  ? "bg-purple-600 text-white dark:bg-purple-700"
+                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
               }`}
               onClick={() => setFilter("completed")}
             >
@@ -135,11 +139,11 @@ export default function Dashboard() {
         </div>
 
         {apiLoading ? (
-          <div className="text-center py-10">Chargement des projets...</div>
+          <div className="text-center py-10 dark:text-white">Chargement des projets...</div>
         ) : filteredProjects.length === 0 ? (
-          <div className="bg-white shadow-md rounded-lg p-8 text-center">
-            <h3 className="text-xl font-bold mb-3">Aucun projet à afficher</h3>
-            <p className="text-gray-600 mb-4">
+          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 text-center">
+            <h3 className="text-xl font-bold mb-3 dark:text-white">Aucun projet à afficher</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
               {filter === "all"
                 ? "Vous n'avez pas encore soumis de projet."
                 : `Vous n'avez pas de projets ${
@@ -152,7 +156,7 @@ export default function Dashboard() {
             </p>
             {filter === "all" && (
               <Link href="/submit-project">
-                <a className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 inline-block">
+                <a className="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-800 inline-block">
                   Soumettre mon premier projet
                 </a>
               </Link>

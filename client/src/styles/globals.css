@@ -5,6 +5,8 @@
 html, body {
     height: 100%;
     margin: 0;
+    color: rgb(var(--foreground));
+    background: rgb(var(--background));
   }
   
   body > div#__next {
@@ -19,4 +21,24 @@ html, body {
   
   footer {
     flex-shrink: 0;
+  }
+
+  @layer base {
+    :root {
+      --background: 255 255 255;
+      --foreground: 10 10 10;
+      --card: 255 255 255;
+      --card-foreground: 10 10 10;
+      --primary: 47 112 193;
+      --primary-foreground: 250 250 250;
+    }
+    
+    .dark {
+      --background: 20 20 20;
+      --foreground: 250 250 250;
+      --card: 32 32 32;
+      --card-foreground: 250 250 250;
+      --primary: 62 135 226;
+      --primary-foreground: 250 250 250;
+    }
   }
