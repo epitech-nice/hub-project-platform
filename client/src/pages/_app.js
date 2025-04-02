@@ -18,7 +18,7 @@ function MyApp({ Component, pageProps }) {
             content="Plateforme de gestion des projets Hub"
           />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <link rel="icon" href="/favicon.ico" />
+          <link rel="icon" href="/favicon.ico" sizes="any" />
         </Head>
         <Component {...pageProps} />
         <Footer />
