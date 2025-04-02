@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "axios": "^0.27.2",
+    "axios": "^0.30.0",
     "jwt-decode": "^4.0.0",
     "next": "12.2.3",
     "next-themes": "^0.4.6",
@@ -20,7 +20,7 @@
     "autoprefixer": "^10.4.8",
     "eslint": "8.20.0",
     "eslint-config-next": "12.2.3",
-    "postcss": "^8.4.14",
+    "postcss": "^8.4.31",
     "tailwindcss": "^3.1.7"
   }
 }
