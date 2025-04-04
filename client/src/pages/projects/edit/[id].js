@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import Header from "../../../components/layout/Header";
 import { useAuth } from "../../../context/AuthContext";
 import { useApi } from "../../../hooks/useApi";
+import { toast } from 'react-toastify';
 
 export default function EditProject() {
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -49,7 +50,7 @@ export default function EditProject() {
             project.status !== "pending" &&
             project.status !== "pending_changes"
           ) {
-            alert(
+            toast.warning(
               "Seuls les projets en attente ou en attente de modifications peuvent être modifiés."
             );
             router.push("/dashboard");
@@ -76,7 +77,7 @@ export default function EditProject() {
           });
         } catch (error) {
           console.error("Erreur lors de la récupération du projet:", error);
-          alert(
+          toast.error(
             "Erreur lors de la récupération du projet. Redirection vers le tableau de bord."
           );
           router.push("/dashboard");
@@ -206,7 +207,7 @@ export default function EditProject() {
       };
 
       await put(`/api/projects/${id}`, formattedData);
-      alert("Projet mis à jour avec succès !");
+      toast.success("Projet mis à jour avec succès !");
       router.push("/dashboard");
     } catch (err) {
       setError(

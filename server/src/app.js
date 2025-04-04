@@ -95,6 +95,7 @@ passport.use(
 // Routes
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/projects", require("./routes/projects"));
+app.use("/api/workshops", require('./routes/workshops'));
 
 // Route de santé
 app.get("/api/health", (req, res) => {

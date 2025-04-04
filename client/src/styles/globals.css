@@ -42,3 +42,38 @@ html, body {
       --primary-foreground: 250 250 250;
     }
   }
+ 
+  .dark .Toastify__close-button {
+    color: #f3f4f6;
+  }
+  
+  .dark .Toastify__progress-bar {
+    background-color: #60a5fa;
+  }
+
+  /* Style de base pour tous les toasts */
+.Toastify__toast {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.Toastify__toast--success {
+  border-left: 4px solid #10B981;
+}
+
+.Toastify__toast--error {
+  border-left: 4px solid #EF4444;
+}
+
+.Toastify__toast--warning {
+  border-left: 4px solid #F59E0B;
+}
+
+.Toastify__toast--info {
+  border-left: 4px solid #3B82F6;
+}
+
+/* Support pour le mode sombre */
+.dark .Toastify__toast {
+  color: #F3F4F6;
+}

@@ -6,16 +6,15 @@ import { useAuth } from "../../../context/AuthContext";
 import { useApi } from "../../../hooks/useApi";
 import { toast } from "react-toastify";
 
-export default function AdminProjectDetail() {
+export default function AdminWorkshopDetail() {
   const { isAuthenticated, isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
   const { id } = router.query;
   const { get, patch, loading: apiLoading } = useApi();
-  const [project, setProject] = useState(null);
+  const [workshop, setWorkshop] = useState(null);
   const [reviewForm, setReviewForm] = useState({
     status: "",
     comments: "",
-    credits: null,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -28,43 +27,34 @@ export default function AdminProjectDetail() {
   }, [isAuthenticated, isAdmin, authLoading, router]);
 
   useEffect(() => {
-    const fetchProject = async () => {
+    const fetchWorkshop = async () => {
       if (isAuthenticated && isAdmin && id) {
         try {
-          const response = await get(`/api/projects/${id}`);
-          setProject(response.data);
+          const response = await get(`/api/workshops/${id}`);
+          setWorkshop(response.data);
 
-          // Si le projet a déjà été évalué, initialiser le formulaire avec les valeurs existantes
+          // Si le workshop a déjà été évalué, initialiser le formulaire avec les valeurs existantes
           if (response.data.status !== "pending") {
             setReviewForm({
               status: response.data.status,
               comments: response.data.reviewedBy?.comments || "",
-              credits: response.data.credits || null,
             });
           }
         } catch (error) {
-          console.error("Erreur lors de la récupération du projet:", error);
+          console.error("Erreur lors de la récupération du workshop:", error);
         }
       }
     };
 
-    fetchProject();
+    fetchWorkshop();
   }, [isAuthenticated, isAdmin, id]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
-    if (name === "credits") {
-      setReviewForm({
-        ...reviewForm,
-        [name]: value === "" ? null : Number(value),
-      });
-    } else {
-      setReviewForm({
-        ...reviewForm,
-        [name]: value,
-      });
-    }
+    setReviewForm({
+      ...reviewForm,
+      [name]: value,
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -73,47 +63,40 @@ export default function AdminProjectDetail() {
     setError("");
 
     try {
-      // Valider que les crédits sont fournis si le statut est "approved"
-      if (
-        reviewForm.status === "approved" &&
-        (reviewForm.credits === null || reviewForm.credits === undefined)
-      ) {
-        throw new Error("Le champ crédits est requis pour approuver un projet");
-      }
-
-      const response = await patch(`/api/projects/${id}/review`, reviewForm);
-      setProject(response.data);
+      const response = await patch(`/api/workshops/${id}/review`, reviewForm);
+      setWorkshop(response.data);
       const actionMsg =
         reviewForm.status === "pending_changes"
           ? "Des modifications ont été demandées"
           : reviewForm.status === "approved"
-          ? "Le projet a été approuvé"
-          : "Le projet a été refusé";
+          ? "Le workshop a été approuvé"
+          : "Le workshop a été refusé";
 
       toast.success(`${actionMsg} avec succès!`);
-      router.push("/admin/dashboard");
+      router.push("/admin/workshops/dashboard");
     } catch (err) {
       setError(
-        err.message || "Une erreur est survenue lors de l'évaluation du projet"
+        err.message ||
+          "Une erreur est survenue lors de l'évaluation du workshop"
       );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleCompleteProject = async () => {
+  const handleCompleteWorkshop = async () => {
     if (
       window.confirm(
-        "Êtes-vous sûr de vouloir marquer ce projet comme terminé ?"
+        "Êtes-vous sûr de vouloir marquer ce workshop comme terminé ?"
       )
     ) {
       try {
         setIsSubmitting(true);
-        await patch(`/api/projects/${id}/complete`, {
-          comments: "Projet terminé avec succès.",
+        await patch(`/api/workshops/${id}/complete`, {
+          comments: "Workshop terminé avec succès.",
         });
-        toast.success("Le projet a été marqué comme terminé avec succès !");
-        router.push("/admin/dashboard");
+        toast.success("Le workshop a été marqué comme terminé avec succès !");
+        router.push("/admin/workshops/dashboard");
       } catch (err) {
         setError(err.message || "Une erreur est survenue");
       } finally {
@@ -128,7 +111,7 @@ export default function AdminProjectDetail() {
     );
   }
 
-  if (!project) {
+  if (!workshop) {
     return null;
   }
 
@@ -155,7 +138,7 @@ export default function AdminProjectDetail() {
   return (
     <div className="min-h-screen dark:bg-gray-900">
       <Head>
-        <title>Hub Projets - Administration - {project.name}</title>
+        <title>Hub Projets - Administration - {workshop.title}</title>
       </Head>
 
       <Header />
@@ -173,14 +156,14 @@ export default function AdminProjectDetail() {
         <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-8">
           <div className="flex justify-between items-start mb-4">
             <h1 className="text-3xl font-bold dark:text-white">
-              {project.name}
+              {workshop.title}
             </h1>
             <span
               className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                statusColors[project.status]
+                statusColors[workshop.status]
               }`}
             >
-              {statusLabels[project.status]}
+              {statusLabels[workshop.status]}
             </span>
           </div>
 
@@ -189,96 +172,57 @@ export default function AdminProjectDetail() {
               Soumis par
             </h2>
             <p className="text-gray-700 dark:text-gray-300">
-              {project.submittedBy.name} ({project.submittedBy.email})
+              {workshop.submittedBy.name} ({workshop.submittedBy.email})
             </p>
             <p className="text-gray-700 dark:text-gray-300">
-              Le {new Date(project.createdAt).toLocaleDateString()}
+              Le {new Date(workshop.createdAt).toLocaleDateString()}
             </p>
-          </div>
-
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold mb-2 dark:text-white">
-              Description
-            </h2>
-            <p className="text-gray-700 dark:text-gray-300 whitespace-pre-line">
-              {project.description}
-            </p>
-          </div>
-
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold mb-2 dark:text-white">
-              Objectifs
-            </h2>
-            <p className="text-gray-700 dark:text-gray-300 whitespace-pre-line">
-              {project.objectives}
-            </p>
-          </div>
-
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold mb-2 dark:text-white">
-              Technologies utilisées
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              {project.technologies.map((tech, index) => (
-                <span
-                  key={index}
-                  className="bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-md text-gray-700 dark:text-gray-300"
-                >
-                  {tech}
-                </span>
-              ))}
-            </div>
           </div>
 
           <div className="mb-6">
             <h2 className="text-xl font-semibold mb-2 dark:text-white">
               Détails
             </h2>
-            <p className="text-gray-700 dark:text-gray-300">
-              Nombre d'étudiants impliqués: {project.studentCount}
+            <p className="text-gray-700 dark:text-gray-300 whitespace-pre-line">
+              {workshop.details}
             </p>
-
-            {/* Afficher les crédits si définis */}
-            {project.credits !== null && project.credits !== undefined && (
-              <p className="text-gray-700 dark:text-gray-300 mt-2">
-                <span className="font-semibold dark:text-white">
-                  Crédits attribués:
-                </span>{" "}
-                {project.credits}
-              </p>
-            )}
           </div>
 
-          {/* Affichage des étudiants impliqués */}
-          {project.studentCount > 1 && (
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold mb-2 dark:text-white">
-                Étudiants impliqués
-              </h2>
-              <ul className="list-disc list-inside ml-2">
-                <li className="text-gray-700 dark:text-gray-300">
-                  Créateur: {project.submittedBy.email}
-                </li>
-                {project.studentEmails && project.studentEmails.length > 0 ? (
-                  project.studentEmails.map((email, index) => (
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold mb-2 dark:text-white">
+              Intervenants
+            </h2>
+            <p className="text-gray-700 dark:text-gray-300">
+              Nombre d'intervenants: {workshop.instructorCount}
+            </p>
+          </div>
+
+          {/* Affichage des intervenants */}
+          {workshop.instructorCount > 1 &&
+            workshop.instructorEmails &&
+            workshop.instructorEmails.length > 0 && (
+              <div className="mb-6">
+                <h2 className="text-xl font-semibold mb-2 dark:text-white">
+                  Liste des intervenants
+                </h2>
+                <ul className="list-disc list-inside ml-2">
+                  <li className="text-gray-700 dark:text-gray-300">
+                    Principal: {workshop.submittedBy.email}
+                  </li>
+                  {workshop.instructorEmails.map((email, index) => (
                     <li
                       key={index}
                       className="text-gray-700 dark:text-gray-300"
                     >
                       {email}
                     </li>
-                  ))
-                ) : (
-                  <li className="text-gray-700 dark:text-gray-300 italic">
-                    Aucun email d'étudiant supplémentaire fourni
-                  </li>
-                )}
-              </ul>
-            </div>
-          )}
+                  ))}
+                </ul>
+              </div>
+            )}
 
-          {project.links &&
-            Object.values(project.links).some(
+          {workshop.links &&
+            Object.values(workshop.links).some(
               (link) => link && link.length > 0
             ) && (
               <div className="mb-6">
@@ -286,32 +230,32 @@ export default function AdminProjectDetail() {
                   Liens
                 </h2>
                 <ul className="list-disc list-inside">
-                  {project.links.github && (
+                  {workshop.links.github && (
                     <li>
                       <a
-                        href={project.links.github}
+                        href={workshop.links.github}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 dark:text-blue-400 hover:underline"
                       >
-                        GitHub
+                        GitHub de référence
                       </a>
                     </li>
                   )}
-                  {project.links.projectGithub && (
+                  {workshop.links.presentation && (
                     <li>
                       <a
-                        href={project.links.projectGithub}
+                        href={workshop.links.presentation}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 dark:text-blue-400 hover:underline"
                       >
-                        GitHub Project
+                        Présentation PowerPoint
                       </a>
                     </li>
                   )}
-                  {project.links.other &&
-                    project.links.other.map((link, index) => (
+                  {workshop.links.other &&
+                    workshop.links.other.map((link, index) => (
                       <li key={index}>
                         <a
                           href={link}
@@ -327,96 +271,7 @@ export default function AdminProjectDetail() {
               </div>
             )}
 
-          {project.additionalInfo &&
-            Object.values(project.additionalInfo).some(
-              (info) => info && (Array.isArray(info) ? info.length > 0 : true)
-            ) && (
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold mb-2 dark:text-white">
-                  Informations supplémentaires
-                </h2>
-                <ul className="list-disc list-inside">
-                  {project.additionalInfo.personalGithub && (
-                    <li className="dark:text-gray-300">
-                      <span className="font-medium dark:text-white">
-                        GitHub personnel:{" "}
-                      </span>
-                      <a
-                        href={project.additionalInfo.personalGithub}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        {project.additionalInfo.personalGithub}
-                      </a>
-                    </li>
-                  )}
-                  {project.additionalInfo.projectGithub && (
-                    <li className="dark:text-gray-300">
-                      <span className="font-medium dark:text-white">
-                        GitHub du projet:{" "}
-                      </span>
-                      <a
-                        href={project.additionalInfo.projectGithub}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        {project.additionalInfo.projectGithub}
-                      </a>
-                    </li>
-                  )}
-                  {project.additionalInfo.documents &&
-                    project.additionalInfo.documents.length > 0 && (
-                      <li className="dark:text-gray-300">
-                        <span className="font-medium dark:text-white">
-                          Documents complémentaires:
-                        </span>
-                        <ul className="ml-6 list-disc">
-                          {project.additionalInfo.documents.map(
-                            (doc, index) => (
-                              <li key={index}>
-                                <a
-                                  href={doc}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-600 dark:text-blue-400 hover:underline"
-                                >
-                                  Document {index + 1}
-                                </a>
-                              </li>
-                            )
-                          )}
-                        </ul>
-                      </li>
-                    )}
-                </ul>
-              </div>
-            )}
-
-          {project.externalRequestStatus &&
-            project.externalRequestStatus.sent && (
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold mb-2 dark:text-white">
-                  Requête externe
-                </h2>
-                <p className="text-gray-700 dark:text-gray-300">
-                  <span className="font-medium dark:text-white">
-                    Envoyée le:
-                  </span>{" "}
-                  {new Date(
-                    project.externalRequestStatus.sentAt
-                  ).toLocaleString()}
-                </p>
-                <p className="text-gray-700 dark:text-gray-300">
-                  <span className="font-medium dark:text-white">Statut:</span>{" "}
-                  {project.externalRequestStatus.response?.status ||
-                    "Pas de réponse"}
-                </p>
-              </div>
-            )}
-
-          {project.changeHistory && project.changeHistory.length > 0 && (
+          {workshop.changeHistory && workshop.changeHistory.length > 0 && (
             <div className="mb-6">
               <h2 className="text-xl font-semibold mb-2 dark:text-white">
                 Historique des modifications
@@ -440,7 +295,7 @@ export default function AdminProjectDetail() {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {project.changeHistory.map((history, index) => (
+                    {workshop.changeHistory.map((history, index) => (
                       <tr key={index}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                           {new Date(history.date).toLocaleString()}
@@ -488,10 +343,10 @@ export default function AdminProjectDetail() {
 
         <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
           <h2 className="text-2xl font-bold mb-4 dark:text-white">
-            Évaluation du projet
+            Évaluation du workshop
           </h2>
 
-          {project.status !== "pending" && (
+          {workshop.status !== "pending" && (
             <div className="mb-6 p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700">
               <h3 className="text-lg font-semibold mb-2 dark:text-white">
                 Évaluation actuelle
@@ -500,35 +355,27 @@ export default function AdminProjectDetail() {
                 <span className="font-medium dark:text-white">Statut:</span>
                 <span
                   className={`ml-2 px-2 py-1 rounded-full text-xs font-semibold ${
-                    statusColors[project.status]
+                    statusColors[workshop.status]
                   }`}
                 >
-                  {statusLabels[project.status]}
+                  {statusLabels[workshop.status]}
                 </span>
               </p>
               <p className="dark:text-gray-300">
                 <span className="font-medium dark:text-white">Évalué par:</span>{" "}
-                {project.reviewedBy?.name}
+                {workshop.reviewedBy?.name}
               </p>
               <p className="dark:text-gray-300">
                 <span className="font-medium dark:text-white">
                   Date d'évaluation:
                 </span>{" "}
-                {new Date(project.updatedAt).toLocaleDateString()}
+                {new Date(workshop.updatedAt).toLocaleDateString()}
               </p>
-              {project.credits !== null && project.credits !== undefined && (
-                <p className="dark:text-gray-300">
-                  <span className="font-medium dark:text-white">
-                    Crédits attribués:
-                  </span>{" "}
-                  {project.credits}
-                </p>
-              )}
-              {project.reviewedBy?.comments && (
+              {workshop.reviewedBy?.comments && (
                 <div className="mt-2">
                   <p className="font-medium dark:text-white">Commentaires:</p>
                   <p className="text-gray-700 dark:text-gray-300 whitespace-pre-line">
-                    {project.reviewedBy.comments}
+                    {workshop.reviewedBy.comments}
                   </p>
                 </div>
               )}
@@ -541,8 +388,8 @@ export default function AdminProjectDetail() {
             </div>
           )}
 
-          {/* Afficher le formulaire d'évaluation uniquement si le projet n'est pas terminé */}
-          {project.status !== "completed" && (
+          {/* Afficher le formulaire d'évaluation uniquement si le workshop n'est pas terminé */}
+          {workshop.status !== "completed" && (
             <form onSubmit={handleSubmit}>
               <div className="mb-4">
                 <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2">
@@ -588,33 +435,6 @@ export default function AdminProjectDetail() {
                 </div>
               </div>
 
-              {/* Champ de crédits conditionnel pour le statut "approved" */}
-              {reviewForm.status === "approved" && (
-                <div className="mb-4">
-                  <label
-                    className="block text-gray-700 dark:text-gray-300 font-bold mb-2"
-                    htmlFor="credits"
-                  >
-                    Crédits attribués *
-                  </label>
-                  <input
-                    type="number"
-                    id="credits"
-                    name="credits"
-                    value={
-                      reviewForm.credits === null ? "" : reviewForm.credits
-                    }
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
-                    min="0"
-                    required
-                  />
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Nombre de crédits à attribuer pour ce projet.
-                  </p>
-                </div>
-              )}
-
               <div className="mb-6">
                 <label
                   className="block text-gray-700 dark:text-gray-300 font-bold mb-2"
@@ -629,7 +449,7 @@ export default function AdminProjectDetail() {
                   onChange={handleChange}
                   className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
                   rows="4"
-                  placeholder="Fournir un retour aux étudiants sur leur projet..."
+                  placeholder="Fournir un retour sur le workshop proposé..."
                 />
               </div>
 
@@ -645,19 +465,19 @@ export default function AdminProjectDetail() {
             </form>
           )}
 
-          {/* Bouton pour marquer le projet comme terminé (visible uniquement pour les projets approuvés) */}
-          {project.status === "approved" && (
+          {/* Bouton pour marquer le workshop comme terminé (visible uniquement pour les workshops approuvés) */}
+          {workshop.status === "approved" && (
             <div className="mt-6 p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700">
               <h3 className="text-lg font-semibold mb-3 dark:text-white">
-                Marquer le projet comme terminé
+                Marquer le workshop comme terminé
               </h3>
               <p className="mb-4 dark:text-gray-300">
-                Une fois le projet complètement terminé, vous pouvez le marquer
-                comme tel.
+                Une fois le workshop complètement terminé, vous pouvez le
+                marquer comme tel.
               </p>
               <button
                 type="button"
-                onClick={handleCompleteProject}
+                onClick={handleCompleteWorkshop}
                 className="bg-purple-600 dark:bg-purple-700 text-white px-4 py-2 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-800"
                 disabled={isSubmitting}
               >

@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import Header from "../../components/layout/Header";
 import { useAuth } from "../../context/AuthContext";
 import { useApi } from "../../hooks/useApi";
+import { toast } from 'react-toastify';
 
 export default function ProjectDetail() {
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -78,7 +79,7 @@ export default function ProjectDetail() {
         formattedData
       );
       setProject(response.data);
-      alert("Informations mises à jour avec succès!");
+      toast.success("Informations mises à jour avec succès!");
     } catch (err) {
       setError(
         err.message ||
