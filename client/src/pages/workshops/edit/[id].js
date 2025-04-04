@@ -46,7 +46,7 @@ export default function EditWorkshop() {
           // Vérifier si le workshop est en attente ou en attente de modifications
           if (workshop.status !== 'pending' && workshop.status !== 'pending_changes') {
             toast.warning('Seuls les workshops en attente ou en attente de modifications peuvent être modifiés.');
-            router.push('/dashboard');
+            router.push('/workshops/dashboard');
             return;
           }
           
@@ -67,7 +67,7 @@ export default function EditWorkshop() {
         } catch (error) {
           console.error('Erreur lors de la récupération du workshop:', error);
           toast.error('Erreur lors de la récupération du workshop. Redirection vers le tableau de bord.');
-          router.push('/dashboard');
+          router.push('/workshops/dashboard');
         }
       }
     };
@@ -178,7 +178,7 @@ export default function EditWorkshop() {
 
       await put(`/api/workshops/${id}`, formattedData);
       toast.success('Workshop mis à jour avec succès !');
-      router.push('/dashboard');
+      router.push('/workshops/dashboard');
     } catch (err) {
       setError(err.message || 'Une erreur est survenue lors de la mise à jour du workshop');
     } finally {
