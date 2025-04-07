@@ -307,6 +307,7 @@ exports.reviewProject = async (req, res) => {
     project.updatedAt = Date.now();
     
     // Si le projet est approuvé, envoyer la requête externe
+    const externalSiteUrl = "https://intra.epitech.eu/module/2024/G-INN-020/NCE-0-1/#!/create";
     if (status === 'approved') {
       try {
         const response = await sendExternalRequest(project);
@@ -335,7 +336,15 @@ exports.reviewProject = async (req, res) => {
       }
     }
     
-    res.status(200).json({ success: true, data: project });
+    const responseData = {
+      success: true,
+      data: project
+    };
+    
+    if (status === 'approved') {
+      responseData.externalSiteUrl = externalSiteUrl;
+    }
+    res.status(200).json(responseData);
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }

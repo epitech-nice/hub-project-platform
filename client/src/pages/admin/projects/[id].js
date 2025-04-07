@@ -91,6 +91,11 @@ export default function AdminProjectDetail() {
           : "Le projet a été refusé";
 
       toast.success(`${actionMsg} avec succès!`);
+
+      // Si le projet est approuvé et que l'URL externe est fournie, ouvrir dans un nouvel onglet
+      if (reviewForm.status === "approved" && response.externalSiteUrl) {
+        window.open(response.externalSiteUrl, "_blank");
+      }
       router.push("/admin/dashboard");
     } catch (err) {
       setError(
