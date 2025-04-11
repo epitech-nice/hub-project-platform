@@ -5,14 +5,16 @@ import { useRouter } from "next/router";
 import Header from "../../components/layout/Header";
 import { useAuth } from "../../context/AuthContext";
 import { useApi } from "../../hooks/useApi";
-import { toast } from 'react-toastify';
+import { toast } from "react-toastify";
 
 export default function ProjectDetail() {
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { id } = router.query;
-  const { get, patch, loading: apiLoading } = useApi();
+  const { get, patch, post, loading: apiLoading } = useApi();
   const [project, setProject] = useState(null);
+  const [isCreator, setIsCreator] = useState(false);
+  const [isMember, setIsMember] = useState(false);
   const [additionalInfo, setAdditionalInfo] = useState({
     personalGithub: "",
     projectGithub: "",
@@ -35,6 +37,19 @@ export default function ProjectDetail() {
           const response = await get(`/api/projects/${id}`);
           setProject(response.data);
 
+          // Vérifier si l'utilisateur est le créateur ou membre
+          if (user) {
+            const isProjectCreator = 
+              response.data.submittedBy.userId === user._id ||
+              response.data.submittedBy.userId.toString() === user._id.toString();
+            setIsCreator(isProjectCreator);
+            
+            const isMemberOfProject = response.data.members.some(
+              member => member.email === user.email
+            );
+            setIsMember(isMemberOfProject);
+          }
+
           // Initialiser le formulaire d'informations additionnelles
           if (response.data.additionalInfo) {
             setAdditionalInfo({
@@ -51,7 +66,7 @@ export default function ProjectDetail() {
     };
 
     fetchProject();
-  }, [isAuthenticated, id]);
+  }, [isAuthenticated, id, user]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -90,8 +105,31 @@ export default function ProjectDetail() {
     }
   };
 
+  const handleLeaveProject = async () => {
+    if (
+      window.confirm(
+        "Êtes-vous sûr de vouloir quitter ce projet ? Cette action est irréversible."
+      )
+    ) {
+      try {
+        setIsSubmitting(true);
+        await post(`/api/projects/${id}/leave`);
+        toast.success("Vous avez quitté le projet avec succès !");
+        router.push("/dashboard"); // Rediriger vers le tableau de bord personnel
+      } catch (err) {
+        setError(
+          err.message ||
+            "Une erreur est survenue lors de la tentative de quitter le projet"
+        );
+        setIsSubmitting(false);
+      }
+    }
+  };
+
   if (authLoading || apiLoading) {
-    return <div className="text-center py-10 dark:text-white">Chargement...</div>;
+    return (
+      <div className="text-center py-10 dark:text-white">Chargement...</div>
+    );
   }
 
   if (!project) {
@@ -99,11 +137,15 @@ export default function ProjectDetail() {
   }
 
   const statusColors = {
-    pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-800/20 dark:text-yellow-300",
-    pending_changes: "bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-300",
-    approved: "bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-300",
+    pending:
+      "bg-yellow-100 text-yellow-800 dark:bg-yellow-800/20 dark:text-yellow-300",
+    pending_changes:
+      "bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-300",
+    approved:
+      "bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-300",
     rejected: "bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-300",
-    completed: "bg-purple-100 text-purple-800 dark:bg-purple-800/20 dark:text-purple-300",
+    completed:
+      "bg-purple-100 text-purple-800 dark:bg-purple-800/20 dark:text-purple-300",
   };
 
   const statusLabels = {
@@ -131,10 +173,34 @@ export default function ProjectDetail() {
             &larr; Retour
           </button>
         </div>
+          
+        {/* Bouton pour quitter le projet (visible uniquement pour les membres non-créateurs) */}
+        {isMember && !isCreator && (
+          <div className="mb-6 p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700">
+            <h3 className="text-lg font-semibold mb-3 dark:text-white">
+              Quitter ce projet
+            </h3>
+            <p className="mb-4 dark:text-gray-300">
+              En quittant ce projet, vous serez supprimé de la liste des
+              membres et n'aurez plus accès aux informations spécifiques du
+              projet.
+            </p>
+            <button
+              type="button"
+              onClick={handleLeaveProject}
+              className="bg-red-600 dark:bg-red-700 text-white px-4 py-2 rounded-lg hover:bg-red-700 dark:hover:bg-red-800"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Traitement en cours..." : "Quitter le projet"}
+            </button>
+          </div>
+        )}
 
         <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-8">
           <div className="flex justify-between items-start mb-4">
-            <h1 className="text-3xl font-bold dark:text-white">{project.name}</h1>
+            <h1 className="text-3xl font-bold dark:text-white">
+              {project.name}
+            </h1>
             <span
               className={`px-3 py-1 rounded-full text-sm font-semibold ${
                 statusColors[project.status]
@@ -145,14 +211,18 @@ export default function ProjectDetail() {
           </div>
 
           <div className="mb-6">
-            <h2 className="text-xl font-semibold mb-2 dark:text-white">Description</h2>
+            <h2 className="text-xl font-semibold mb-2 dark:text-white">
+              Description
+            </h2>
             <p className="text-gray-700 dark:text-gray-300 whitespace-pre-line">
               {project.description}
             </p>
           </div>
 
           <div className="mb-6">
-            <h2 className="text-xl font-semibold mb-2 dark:text-white">Objectifs</h2>
+            <h2 className="text-xl font-semibold mb-2 dark:text-white">
+              Objectifs
+            </h2>
             <p className="text-gray-700 dark:text-gray-300 whitespace-pre-line">
               {project.objectives}
             </p>
@@ -175,7 +245,9 @@ export default function ProjectDetail() {
           </div>
 
           <div className="mb-6">
-            <h2 className="text-xl font-semibold mb-2 dark:text-white">Détails</h2>
+            <h2 className="text-xl font-semibold mb-2 dark:text-white">
+              Détails
+            </h2>
             <p className="text-gray-700 dark:text-gray-300">
               Nombre d'étudiants impliqués: {project.studentCount}
             </p>
@@ -207,7 +279,10 @@ export default function ProjectDetail() {
                 </li>
                 {project.studentEmails && project.studentEmails.length > 0 ? (
                   project.studentEmails.map((email, index) => (
-                    <li key={index} className="text-gray-700 dark:text-gray-300">
+                    <li
+                      key={index}
+                      className="text-gray-700 dark:text-gray-300"
+                    >
                       {email}
                     </li>
                   ))
@@ -225,7 +300,9 @@ export default function ProjectDetail() {
               (link) => link && link.length > 0
             ) && (
               <div className="mb-6">
-                <h2 className="text-xl font-semibold mb-2 dark:text-white">Liens</h2>
+                <h2 className="text-xl font-semibold mb-2 dark:text-white">
+                  Liens
+                </h2>
                 <ul className="list-disc list-inside">
                   {project.links.github && (
                     <li>
@@ -270,13 +347,17 @@ export default function ProjectDetail() {
 
           {project.reviewedBy && (
             <div className="mb-6">
-              <h2 className="text-xl font-semibold mb-2 dark:text-white">Évaluation</h2>
+              <h2 className="text-xl font-semibold mb-2 dark:text-white">
+                Évaluation
+              </h2>
               <p className="text-gray-700 dark:text-gray-300">
                 Évalué par: {project.reviewedBy.name}
               </p>
               {project.reviewedBy.comments && (
                 <div>
-                  <p className="font-semibold mt-2 dark:text-white">Commentaires:</p>
+                  <p className="font-semibold mt-2 dark:text-white">
+                    Commentaires:
+                  </p>
                   <p className="text-gray-700 dark:text-gray-300 whitespace-pre-line">
                     {project.reviewedBy.comments}
                   </p>
@@ -461,7 +542,9 @@ export default function ProjectDetail() {
               // Affichage en lecture seule pour les projets terminés
               <div>
                 <div className="mb-4">
-                  <p className="font-semibold dark:text-white">Lien GitHub personnel:</p>
+                  <p className="font-semibold dark:text-white">
+                    Lien GitHub personnel:
+                  </p>
                   {project.additionalInfo?.personalGithub ? (
                     <a
                       href={project.additionalInfo.personalGithub}
@@ -472,12 +555,16 @@ export default function ProjectDetail() {
                       {project.additionalInfo.personalGithub}
                     </a>
                   ) : (
-                    <p className="text-gray-500 dark:text-gray-400 italic">Non fourni</p>
+                    <p className="text-gray-500 dark:text-gray-400 italic">
+                      Non fourni
+                    </p>
                   )}
                 </div>
 
                 <div className="mb-4">
-                  <p className="font-semibold dark:text-white">Lien GitHub du projet:</p>
+                  <p className="font-semibold dark:text-white">
+                    Lien GitHub du projet:
+                  </p>
                   {project.additionalInfo?.projectGithub ? (
                     <a
                       href={project.additionalInfo.projectGithub}
@@ -488,12 +575,16 @@ export default function ProjectDetail() {
                       {project.additionalInfo.projectGithub}
                     </a>
                   ) : (
-                    <p className="text-gray-500 dark:text-gray-400 italic">Non fourni</p>
+                    <p className="text-gray-500 dark:text-gray-400 italic">
+                      Non fourni
+                    </p>
                   )}
                 </div>
 
                 <div className="mb-4">
-                  <p className="font-semibold dark:text-white">Documents complémentaires:</p>
+                  <p className="font-semibold dark:text-white">
+                    Documents complémentaires:
+                  </p>
                   {project.additionalInfo?.documents &&
                   project.additionalInfo.documents.length > 0 ? (
                     <ul className="list-disc list-inside ml-2">

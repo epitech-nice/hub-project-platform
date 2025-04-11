@@ -10,6 +10,7 @@ router.get('/me', authenticateToken, workshopController.getUserWorkshops);
 router.get('/:id', authenticateToken, workshopController.getWorkshopById);
 router.put('/:id', authenticateToken, workshopController.updateWorkshop);
 router.delete('/:id', authenticateToken, workshopController.deleteWorkshop);
+router.post('/:id/leave', authenticateToken, workshopController.leaveWorkshop);
 
 // Routes pour les administrateurs
 router.get('/', authenticateToken, isAdmin, workshopController.getAllWorkshops);

@@ -488,6 +488,71 @@ exports.requestChanges = async (req, res) => {
   }
 };
 
+// Quitter un projet pour un membre non-créateur
+exports.leaveProject = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Projet non trouvé' });
+    }
+    
+    // Vérifier que l'utilisateur est un membre mais pas le créateur
+    const isCreator = project.submittedBy.userId.toString() === req.user._id.toString();
+    const isMember = project.members.some(member => member.email === req.user.email);
+    
+    if (isCreator) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Le créateur du projet ne peut pas quitter le projet' 
+      });
+    }
+    
+    if (!isMember) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Vous n\'êtes pas membre de ce projet' 
+      });
+    }
+    
+    // Supprimer l'utilisateur des membres
+    project.members = project.members.filter(member => member.email !== req.user.email);
+    
+    // Supprimer l'email de la liste des emails d'étudiants si présent
+    if (project.studentEmails && project.studentEmails.includes(req.user.email)) {
+      project.studentEmails = project.studentEmails.filter(email => email !== req.user.email);
+    }
+    
+    // Mettre à jour le nombre d'étudiants si nécessaire
+    project.studentCount = project.members.length;
+    
+    // Ajouter à l'historique si existe
+    if (project.changeHistory) {
+      project.changeHistory.push({
+        status: project.status,
+        comments: `${req.user.name} (${req.user.email}) a quitté le projet`,
+        reviewer: {
+          userId: req.user._id,
+          name: req.user.name
+        },
+        date: new Date()
+      });
+    }
+    
+    project.updatedAt = Date.now();
+    await project.save();
+    
+    res.status(200).json({ 
+      success: true, 
+      message: 'Vous avez quitté le projet avec succès',
+      data: project 
+    });
+  } catch (error) {
+    console.error('Erreur lors du départ du projet:', error);
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 // Supprimer un projet
 exports.deleteProject = async (req, res) => {
   try {

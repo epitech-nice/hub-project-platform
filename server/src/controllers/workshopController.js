@@ -405,6 +405,71 @@ exports.requestChanges = async (req, res) => {
   }
 };
 
+// Quitter un workshop pour un intervenant non-principal
+exports.leaveWorkshop = async (req, res) => {
+  try {
+    const workshop = await Workshop.findById(req.params.id);
+    
+    if (!workshop) {
+      return res.status(404).json({ success: false, message: 'Workshop non trouvé' });
+    }
+    
+    // Vérifier que l'utilisateur est un intervenant mais pas l'intervenant principal
+    const isMain = workshop.submittedBy.userId.toString() === req.user._id.toString();
+    const isInstructor = workshop.instructors.some(instructor => instructor.email === req.user.email);
+    
+    if (isMain) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'L\'intervenant principal ne peut pas quitter le workshop' 
+      });
+    }
+    
+    if (!isInstructor) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Vous n\'êtes pas intervenant dans ce workshop' 
+      });
+    }
+    
+    // Supprimer l'utilisateur des intervenants
+    workshop.instructors = workshop.instructors.filter(instructor => instructor.email !== req.user.email);
+    
+    // Supprimer l'email de la liste des emails d'intervenants si présent
+    if (workshop.instructorEmails && workshop.instructorEmails.includes(req.user.email)) {
+      workshop.instructorEmails = workshop.instructorEmails.filter(email => email !== req.user.email);
+    }
+    
+    // Mettre à jour le nombre d'intervenants
+    workshop.instructorCount = workshop.instructors.length;
+    
+    // Ajouter à l'historique si existe
+    if (workshop.changeHistory) {
+      workshop.changeHistory.push({
+        status: workshop.status,
+        comments: `${req.user.name} (${req.user.email}) a quitté le workshop`,
+        reviewer: {
+          userId: req.user._id,
+          name: req.user.name
+        },
+        date: new Date()
+      });
+    }
+    
+    workshop.updatedAt = Date.now();
+    await workshop.save();
+    
+    res.status(200).json({ 
+      success: true, 
+      message: 'Vous avez quitté le workshop avec succès',
+      data: workshop 
+    });
+  } catch (error) {
+    console.error('Erreur lors du départ du workshop:', error);
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 // Supprimer un workshop
 exports.deleteWorkshop = async (req, res) => {
   try {
