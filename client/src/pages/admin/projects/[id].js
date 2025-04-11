@@ -10,7 +10,7 @@ export default function AdminProjectDetail() {
   const { isAuthenticated, isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
   const { id } = router.query;
-  const { get, patch, loading: apiLoading } = useApi();
+  const { get, patch, delete: deleteRequest, loading: apiLoading } = useApi();
   const [project, setProject] = useState(null);
   const [reviewForm, setReviewForm] = useState({
     status: "",
@@ -127,6 +127,24 @@ export default function AdminProjectDetail() {
     }
   };
 
+  const handleDeleteProject = async () => {
+    if (
+      window.confirm(
+        "Êtes-vous sûr de vouloir supprimer définitivement ce projet ? Cette action est irréversible."
+      )
+    ) {
+      try {
+        setIsSubmitting(true);
+        await deleteRequest(`/api/projects/${id}`);
+        toast.success("Le projet a été supprimé avec succès !");
+        router.push("/admin/dashboard");
+      } catch (err) {
+        setError(err.message || "Une erreur est survenue lors de la suppression");
+        setIsSubmitting(false);
+      }
+    }
+  };
+
   if (authLoading || apiLoading) {
     return (
       <div className="text-center py-10 dark:text-white">Chargement...</div>
@@ -166,12 +184,24 @@ export default function AdminProjectDetail() {
       <Header />
 
       <main className="container mx-auto px-4 py-8">
-        <div className="mb-6">
+        <div className="mb-6 flex justify-between items-center">
           <button
             onClick={() => router.back()}
             className="text-blue-600 dark:text-blue-400 hover:underline flex items-center"
           >
             &larr; Retour
+          </button>
+          
+          {/* Bouton de suppression */}
+          <button
+            onClick={handleDeleteProject}
+            className="bg-red-600 dark:bg-red-700 text-white px-4 py-2 rounded-lg hover:bg-red-700 dark:hover:bg-red-800 disabled:opacity-50 flex items-center"
+            disabled={isSubmitting}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            Supprimer le projet
           </button>
         </div>
 

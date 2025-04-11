@@ -416,25 +416,32 @@ exports.deleteWorkshop = async (req, res) => {
         .json({ success: false, message: "Workshop non trouvé" });
     }
 
-    // Vérifier que l'utilisateur est l'intervenant principal
-    if (workshop.submittedBy.userId.toString() !== req.user._id.toString()) {
+    // Vérifier si l'utilisateur est un administrateur
+    const isAdmin = req.user.role === "admin";
+    
+    // Vérifier que l'utilisateur est l'intervenant principal ou un administrateur
+    if (workshop.submittedBy.userId.toString() !== req.user._id.toString() && !isAdmin) {
       return res.status(403).json({
         success: false,
         message: "Non autorisé à supprimer ce workshop",
       });
     }
 
-    // Vérifier que le workshop est en attente
-    if (workshop.status !== "pending" && workshop.status !== "pending_changes") {
+    // Si l'utilisateur est l'intervenant principal (et non administrateur), vérifier que le workshop est en attente
+    if (!isAdmin && workshop.status !== "pending" && workshop.status !== "pending_changes") {
       return res.status(400).json({
         success: false,
         message:
-          "Seuls les workshops en attente ou en attente de modifications peuvent être supprimés",
+          "Seuls les workshops en attente ou en attente de modifications peuvent être supprimés par leur intervenant principal",
       });
     }
 
     await Workshop.findByIdAndDelete(req.params.id);
-    res.status(200).json({ success: true, data: {} });
+    res.status(200).json({ 
+      success: true, 
+      message: "Workshop supprimé avec succès",
+      data: {} 
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }

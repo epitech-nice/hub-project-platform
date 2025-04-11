@@ -499,25 +499,32 @@ exports.deleteProject = async (req, res) => {
         .json({ success: false, message: "Projet non trouvé" });
     }
 
-    // Vérifier que l'utilisateur est le propriétaire du projet
-    if (project.submittedBy.userId.toString() !== req.user._id.toString()) {
+    // Vérifier si l'utilisateur est un administrateur
+    const isAdmin = req.user.role === "admin";
+    
+    // Vérifier que l'utilisateur est le propriétaire du projet ou un administrateur
+    if (project.submittedBy.userId.toString() !== req.user._id.toString() && !isAdmin) {
       return res.status(403).json({
         success: false,
         message: "Non autorisé à supprimer ce projet",
       });
     }
 
-    // Vérifier que le projet est en attente
-    if (project.status !== "pending" && project.status !== "pending_changes") {
+    // Si l'utilisateur est le propriétaire (et non administrateur), vérifier que le projet est en attente
+    if (!isAdmin && project.status !== "pending" && project.status !== "pending_changes") {
       return res.status(400).json({
         success: false,
         message:
-          "Seuls les projets en attente ou en attente de modifications peuvent être supprimés",
+          "Seuls les projets en attente ou en attente de modifications peuvent être supprimés par leur propriétaire",
       });
     }
 
     await Project.findByIdAndDelete(req.params.id);
-    res.status(200).json({ success: true, data: {} });
+    res.status(200).json({ 
+      success: true, 
+      message: "Projet supprimé avec succès",
+      data: {} 
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
