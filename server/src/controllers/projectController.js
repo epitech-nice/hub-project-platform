@@ -307,7 +307,7 @@ exports.reviewProject = async (req, res) => {
     project.updatedAt = Date.now();
     
     // Si le projet est approuvé, envoyer la requête externe
-    const externalSiteUrl = "https://intra.epitech.eu/module/2024/G-INN-020/NCE-0-1/#!/create";
+    const externalSiteUrl = "https://intra.epitech.eu/module/2025/G-INN-020/NCE-0-1/#!/create";
     if (status === 'approved') {
       try {
         const response = await sendExternalRequest(project);
