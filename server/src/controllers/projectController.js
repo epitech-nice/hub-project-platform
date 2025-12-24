@@ -566,7 +566,7 @@ exports.deleteProject = async (req, res) => {
 
     // Vérifier si l'utilisateur est un administrateur
     const isAdmin = req.user.role === "admin";
-    
+
     // Vérifier que l'utilisateur est le propriétaire du projet ou un administrateur
     if (project.submittedBy.userId.toString() !== req.user._id.toString() && !isAdmin) {
       return res.status(403).json({
@@ -585,12 +585,75 @@ exports.deleteProject = async (req, res) => {
     }
 
     await Project.findByIdAndDelete(req.params.id);
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       message: "Projet supprimé avec succès",
-      data: {} 
+      data: {}
     });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Exporter les projets terminés en CSV avec filtre de date
+exports.exportCompletedProjectsCSV = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Construire la requête pour les projets terminés
+    const query = { status: 'completed' };
+
+    // Ajouter le filtre de date si fourni
+    if (startDate || endDate) {
+      query.updatedAt = {};
+
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0); // Début de la journée
+        query.updatedAt.$gte = start;
+      }
+
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999); // Fin de la journée
+        query.updatedAt.$lte = end;
+      }
+    }
+
+    // Récupérer les projets terminés
+    const projects = await Project.find(query).sort({ updatedAt: -1 });
+
+    if (projects.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Aucun projet terminé trouvé pour la période spécifiée'
+      });
+    }
+
+    // Générer le contenu CSV
+    const csvHeader = 'Name,Student Emails,Credits\n';
+    const csvRows = projects.map(project => {
+      const name = `"${(project.name || '').replace(/"/g, '""')}"`;
+      const studentEmails = `"${(project.studentEmails || []).join(', ').replace(/"/g, '""')}"`;
+      const credits = project.credits !== null && project.credits !== undefined ? project.credits : '';
+
+      return `${name},${studentEmails},${credits}`;
+    }).join('\n');
+
+    const csvContent = csvHeader + csvRows;
+
+    // Définir les en-têtes de réponse pour télécharger le fichier CSV
+    const filename = `completed_projects_${startDate || 'all'}_to_${endDate || 'all'}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // Ajouter le BOM UTF-8 pour une meilleure compatibilité avec Excel
+    res.write('\uFEFF');
+    res.write(csvContent);
+    res.end();
+
+  } catch (error) {
+    console.error('Erreur lors de l\'export CSV:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };

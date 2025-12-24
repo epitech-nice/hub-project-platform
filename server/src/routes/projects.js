@@ -18,5 +18,6 @@ router.get('/', authenticateToken, isAdmin, projectController.getAllProjects);
 router.patch('/:id/review', authenticateToken, isAdmin, projectController.reviewProject);
 router.patch('/:id/request-changes', authenticateToken, isAdmin, projectController.requestChanges);
 router.patch('/:id/complete', authenticateToken, isAdmin, projectController.completeProject);
+router.get('/export/completed-csv', authenticateToken, isAdmin, projectController.exportCompletedProjectsCSV);
 
 module.exports = router;
