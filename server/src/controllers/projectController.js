@@ -636,7 +636,17 @@ exports.exportCompletedProjectsCSV = async (req, res) => {
     // Parcourir tous les projets et leurs emails d'étudiants
     projects.forEach(project => {
       const projectCredits = project.credits || 0;
-      const emails = project.studentEmails || [];
+      let emails = [];
+
+      // Si studentCount est 1, utiliser l'email de submittedBy
+      if (project.studentCount === 1) {
+        if (project.submittedBy && project.submittedBy.email) {
+          emails = [project.submittedBy.email];
+        }
+      } else {
+        // Sinon, utiliser studentEmails
+        emails = project.studentEmails || [];
+      }
 
       emails.forEach(email => {
         if (email && email.trim()) {
