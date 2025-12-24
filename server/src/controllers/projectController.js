@@ -630,14 +630,33 @@ exports.exportCompletedProjectsCSV = async (req, res) => {
       });
     }
 
-    // Générer le contenu CSV
-    const csvHeader = 'Name,Student Emails,Credits\n';
-    const csvRows = projects.map(project => {
-      const name = `"${(project.name || '').replace(/"/g, '""')}"`;
-      const studentEmails = `"${(project.studentEmails || []).join(', ').replace(/"/g, '""')}"`;
-      const credits = project.credits !== null && project.credits !== undefined ? project.credits : '';
+    // Créer un objet pour agréger les crédits par email
+    const emailCreditsMap = {};
 
-      return `${name},${studentEmails},${credits}`;
+    // Parcourir tous les projets et leurs emails d'étudiants
+    projects.forEach(project => {
+      const projectCredits = project.credits || 0;
+      const emails = project.studentEmails || [];
+
+      emails.forEach(email => {
+        if (email && email.trim()) {
+          const normalizedEmail = email.trim().toLowerCase();
+          if (!emailCreditsMap[normalizedEmail]) {
+            emailCreditsMap[normalizedEmail] = {
+              originalEmail: email.trim(),
+              totalCredits: 0
+            };
+          }
+          emailCreditsMap[normalizedEmail].totalCredits += projectCredits;
+        }
+      });
+    });
+
+    // Générer les lignes CSV
+    const csvHeader = 'email;grade;credits\n';
+    const csvRows = Object.values(emailCreditsMap).map(({ originalEmail, totalCredits }) => {
+      const grade = totalCredits > 0 ? 'Acquis' : '-';
+      return `${originalEmail};${grade};${totalCredits}`;
     }).join('\n');
 
     const csvContent = csvHeader + csvRows;
