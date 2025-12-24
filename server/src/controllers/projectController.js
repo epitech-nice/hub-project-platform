@@ -663,7 +663,7 @@ exports.exportCompletedProjectsCSV = async (req, res) => {
     });
 
     // Générer les lignes CSV
-    const csvHeader = 'email;grade;credits\n';
+    const csvHeader = 'login;grade;credits\n';
     const csvRows = Object.values(emailCreditsMap).map(({ originalEmail, totalCredits }) => {
       const grade = totalCredits > 0 ? 'Acquis' : '-';
       return `${originalEmail};${grade};${totalCredits}`;
