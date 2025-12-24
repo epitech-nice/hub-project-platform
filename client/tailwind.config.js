@@ -7,7 +7,20 @@ module.exports = {
     './app/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
-    extend: {},
+    extend: {
+      // Add Christmas theme colors
+      colors: {
+        'christmas-red': '#DC2626',
+        'christmas-green': '#15803D',
+        'christmas-gold': '#EAB308',
+        'winter-blue': '#3B82F6',
+      },
+    },
   },
-  plugins: [],
+  plugins: [
+    // Add christmas variant plugin
+    function({ addVariant }) {
+      addVariant('christmas', ':root.christmas &')
+    }
+  ],
 };

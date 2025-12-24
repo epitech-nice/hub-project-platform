@@ -8,6 +8,8 @@ import "react-toastify/dist/ReactToastify.css";
 import "../styles/globals.css";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
+import { Snowfall } from "../components/theme/Snowfall";
+import { ChristmasBackground } from "../components/theme/ChristmasBackground";
 
 function ToastWithTheme() {
   const { theme, resolvedTheme } = useTheme();
@@ -57,8 +59,10 @@ function MyApp({ Component, pageProps }) {
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <link rel="icon" href="/favicon.ico" sizes="any" />
         </Head>
+        <ChristmasBackground />
         <Component {...pageProps} />
         <Footer />
+        <Snowfall />
         <ToastWithTheme />
         {/* <ToastContainer
           position="bottom-right"

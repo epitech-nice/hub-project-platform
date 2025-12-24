@@ -24,6 +24,7 @@ html, body {
   }
 
   @layer base {
+    /* Normal Theme - Light Mode */
     :root {
       --background: 255 255 255;
       --foreground: 10 10 10;
@@ -31,8 +32,16 @@ html, body {
       --card-foreground: 10 10 10;
       --primary: 47 112 193;
       --primary-foreground: 250 250 250;
+      --secondary: 21 128 61;
+      --secondary-foreground: 255 255 255;
+      --accent: 234 179 8;
+      --accent-foreground: 10 10 10;
+      --muted: 241 245 249;
+      --muted-foreground: 100 116 139;
+      --border: 226 232 240;
     }
-    
+
+    /* Normal Theme - Dark Mode */
     .dark {
       --background: 20 20 20;
       --foreground: 250 250 250;
@@ -40,7 +49,83 @@ html, body {
       --card-foreground: 250 250 250;
       --primary: 62 135 226;
       --primary-foreground: 250 250 250;
+      --secondary: 34 197 94;
+      --secondary-foreground: 255 255 255;
+      --accent: 250 204 21;
+      --accent-foreground: 20 20 20;
+      --muted: 51 65 85;
+      --muted-foreground: 148 163 184;
+      --border: 51 65 85;
     }
+
+    /* Christmas Winter Theme - Light Mode */
+    :root.christmas {
+      --background: 248 250 252; /* Soft snow white */
+      --foreground: 30 41 59; /* Deep winter blue-gray */
+      --card: 255 255 255; /* Pure white like fresh snow */
+      --card-foreground: 30 41 59;
+      --primary: 220 38 38; /* Christmas red */
+      --primary-foreground: 255 255 255;
+      --secondary: 21 128 61; /* Christmas green */
+      --secondary-foreground: 255 255 255;
+      --accent: 234 179 8; /* Gold/star yellow */
+      --accent-foreground: 30 41 59;
+      --muted: 226 232 240; /* Light frost */
+      --muted-foreground: 100 116 139;
+      --border: 226 232 240;
+      --winter-blue: 59 130 246; /* Icy blue */
+      --winter-silver: 148 163 184; /* Silver/frost */
+    }
+
+    /* Christmas Winter Theme - Dark Mode */
+    .dark.christmas {
+      --background: 15 23 42; /* Deep midnight blue */
+      --foreground: 248 250 252; /* Soft white */
+      --card: 30 41 59; /* Dark winter blue */
+      --card-foreground: 248 250 252;
+      --primary: 239 68 68; /* Bright Christmas red */
+      --primary-foreground: 255 255 255;
+      --secondary: 34 197 94; /* Bright Christmas green */
+      --secondary-foreground: 255 255 255;
+      --accent: 250 204 21; /* Bright gold */
+      --accent-foreground: 15 23 42;
+      --muted: 51 65 85; /* Dark frost */
+      --muted-foreground: 148 163 184;
+      --border: 51 65 85;
+      --winter-blue: 96 165 250; /* Light icy blue */
+      --winter-silver: 203 213 225; /* Bright silver */
+    }
+  }
+
+  /* Christmas decorative animations */
+  @keyframes snowfall {
+    0% { transform: translateY(-10px) translateX(0); }
+    100% { transform: translateY(100vh) translateX(10px); }
+  }
+
+  @keyframes twinkle {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* Festive styling classes */
+  .christmas-card {
+    background: linear-gradient(135deg, rgb(var(--card)) 0%, rgb(var(--muted)) 100%);
+    border: 1px solid rgb(var(--border));
+    box-shadow: 0 4px 6px -1px rgba(220, 38, 38, 0.1), 0 2px 4px -1px rgba(21, 128, 61, 0.06);
+  }
+
+  .dark .christmas-card {
+    box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.2), 0 2px 4px -1px rgba(34, 197, 94, 0.1);
+  }
+
+  .festive-hover {
+    transition: all 0.3s ease;
+  }
+
+  .festive-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(220, 38, 38, 0.2);
   }
  
   .dark .Toastify__close-button {
