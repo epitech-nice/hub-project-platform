@@ -246,8 +246,17 @@ const Header = () => {
                       <WorkshopsMenu />
                     </li>
                     <li>
-                      <button 
-                        onClick={logout} 
+                      <Link href="/glossaire">
+                        <a className={`hover:text-blue-200 dark:hover:text-blue-300 ${
+                          router.pathname === "/glossaire" ? "text-blue-200 dark:text-blue-300 font-medium" : ""
+                        }`}>
+                          Glossaire
+                        </a>
+                      </Link>
+                    </li>
+                    <li>
+                      <button
+                        onClick={logout}
                         className="hover:text-blue-200 dark:hover:text-blue-300"
                       >
                         Déconnexion
@@ -290,8 +299,17 @@ const Header = () => {
                   <WorkshopsMenu />
                 </li>
                 <li className="mt-2">
-                  <button 
-                    onClick={logout} 
+                  <Link href="/glossaire">
+                    <a className={`block py-2 hover:text-blue-200 dark:hover:text-blue-300 ${
+                      router.pathname === "/glossaire" ? "text-blue-200 dark:text-blue-300 font-medium" : ""
+                    }`}>
+                      Glossaire
+                    </a>
+                  </Link>
+                </li>
+                <li className="mt-2">
+                  <button
+                    onClick={logout}
                     className="w-full text-left py-2 hover:text-blue-200 dark:hover:text-blue-300"
                   >
                     Déconnexion
