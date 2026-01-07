@@ -299,16 +299,6 @@ export default function Glossaire() {
                   </li>
                   <li>
                     <a
-                      href="https://www.scrum.org/resources/what-is-a-user-story"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      Scrum.org - User Stories
-                    </a>
-                  </li>
-                  <li>
-                    <a
                       href="https://www.atlassian.com/agile/project-management/estimation"
                       target="_blank"
                       rel="noopener noreferrer"
