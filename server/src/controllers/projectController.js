@@ -659,7 +659,9 @@ exports.exportCompletedProjectsCSV = async (req, res) => {
             };
           }
           emailCreditsMap[normalizedEmail].totalCredits += projectCredits;
-          emailCreditsMap[normalizedEmail].projectCount += 1;
+          if (projectCredits > 0) {
+            emailCreditsMap[normalizedEmail].projectCount += 1;
+          }
         }
       });
     });
