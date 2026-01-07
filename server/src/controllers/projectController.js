@@ -654,19 +654,21 @@ exports.exportCompletedProjectsCSV = async (req, res) => {
           if (!emailCreditsMap[normalizedEmail]) {
             emailCreditsMap[normalizedEmail] = {
               originalEmail: email.trim(),
-              totalCredits: 0
+              totalCredits: 0,
+              projectCount: 0
             };
           }
           emailCreditsMap[normalizedEmail].totalCredits += projectCredits;
+          emailCreditsMap[normalizedEmail].projectCount += 1;
         }
       });
     });
 
     // Générer les lignes CSV
-    const csvHeader = 'login;grade;credits\n';
-    const csvRows = Object.values(emailCreditsMap).map(({ originalEmail, totalCredits }) => {
+    const csvHeader = 'login;grade;credits;number project\n';
+    const csvRows = Object.values(emailCreditsMap).map(({ originalEmail, totalCredits, projectCount }) => {
       const grade = totalCredits > 0 ? 'Acquis' : '-';
-      return `${originalEmail};${grade};${totalCredits}`;
+      return `${originalEmail};${grade};${totalCredits};${projectCount}`;
     }).join('\n');
 
     const csvContent = csvHeader + csvRows;
