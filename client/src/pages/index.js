@@ -30,7 +30,7 @@ export default function Home() {
           </p>
 
           {isAuthenticated ? (
-            <div className="flex justify-center space-x-4">
+            <div className="flex flex-wrap justify-center gap-4">
               <Link href="/dashboard">
                 <a className="bg-blue-600 dark:bg-blue-700 text-white px-6 py-3 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800">
                   Accéder à mon tableau de bord
@@ -39,6 +39,11 @@ export default function Home() {
               <Link href="/submit-project">
                 <a className="bg-green-600 dark:bg-green-700 text-white px-6 py-3 rounded-lg hover:bg-green-700 dark:hover:bg-green-800">
                   Soumettre un nouveau projet
+                </a>
+              </Link>
+              <Link href="/glossaire">
+                <a className="bg-purple-600 dark:bg-purple-700 text-white px-6 py-3 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-800">
+                  Comprendre la planification projet
                 </a>
               </Link>
             </div>
