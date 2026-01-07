@@ -695,6 +695,48 @@ Marquer un projet comme terminé.
 
 ---
 
+#### `GET /api/projects/export/csv`
+Exporter les projets terminés au format CSV.
+
+**Auth** : Requise (Admin)
+
+**Query Params** :
+- `startDate` : Date de début (format: YYYY-MM-DD) - optionnel
+- `endDate` : Date de fin (format: YYYY-MM-DD) - optionnel
+
+**Exemple** :
+```
+GET /api/projects/export/csv?startDate=2024-01-01&endDate=2024-12-31
+```
+
+**Réponse** :
+- Type : `text/csv`
+- Encoding : UTF-8 avec BOM
+- Format CSV avec séparateur `;`
+
+**Colonnes du CSV** :
+- `login` : Email de l'étudiant
+- `grade` : "Acquis" si crédits > 0, sinon "-"
+- `credits` : Total des crédits cumulés
+- `number project` : Nombre de projets terminés
+
+**Exemple de contenu** :
+```csv
+login;grade;credits;number project
+student1@epitech.eu;Acquis;15;3
+student2@epitech.eu;Acquis;10;2
+student3@epitech.eu;Acquis;5;1
+```
+
+**Notes** :
+- Seuls les projets avec statut `completed` sont exportés
+- Les crédits sont agrégés par email (login)
+- Si `studentCount` = 1, utilise l'email de `submittedBy`
+- Sinon, utilise les emails dans `studentEmails`
+- Chaque projet compte pour 1 dans le compteur de projets
+
+---
+
 ### Workshops Routes
 
 Les routes workshops suivent la même structure que les projets :
@@ -1194,6 +1236,17 @@ const api = axios.create({
    - Tous les changements de statut
    - Qui a fait quoi et quand
    - Commentaires associés
+
+7. **Exporter les Projets Terminés (CSV)**
+   - Export au format CSV des projets complétés
+   - Filtrage par plage de dates (optionnel)
+   - Données agrégées par étudiant :
+     - Email (login)
+     - Grade ("Acquis" ou "-")
+     - Total des crédits cumulés
+     - Nombre de projets terminés
+   - Format compatible Excel avec encodage UTF-8
+   - Téléchargement direct du fichier
 
 ---
 
