@@ -142,7 +142,7 @@ export default function Glossaire() {
           {/* Man-day Section */}
           <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 mb-6">
             <h2 className="text-2xl font-bold mb-4 text-purple-600 dark:text-purple-400">
-              Man-day (Jour-homme)
+              Sizing Man-day (Jour-homme)
             </h2>
 
             <div className="space-y-4 text-gray-700 dark:text-gray-300">
