@@ -29,6 +29,8 @@ Hub Project Platform est une application full-stack permettant aux étudiants de
 - Système de crédits pour les projets approuvés
 - Notifications par email automatiques
 - Dashboard administrateur pour la gestion et révision
+- Glossaire Scrum Agile pour la planification de projet
+- Export CSV des projets terminés avec statistiques
 - Mode sombre/clair
 - Design responsive
 
@@ -45,6 +47,7 @@ hub-project-platform/
 │   │   │   ├── dashboard.js   # Dashboard étudiant
 │   │   │   ├── submit-project.js
 │   │   │   ├── submit-workshop.js
+│   │   │   ├── glossaire.js   # Glossaire Scrum Agile
 │   │   │   ├── projects/
 │   │   │   │   ├── [id].js           # Détails projet
 │   │   │   │   └── edit/[id].js      # Édition projet
@@ -806,6 +809,15 @@ Vérifier le statut du serveur.
 #### `/` (index.js)
 Page d'accueil avec présentation de la plateforme.
 
+**Fonctionnalités** :
+- Présentation de la plateforme
+- Boutons d'accès rapide (si authentifié) :
+  - Accéder au tableau de bord
+  - Soumettre un nouveau projet
+  - Comprendre la planification projet (glossaire)
+- Bouton de connexion (si non authentifié)
+- Aperçu des fonctionnalités principales
+
 ---
 
 #### `/dashboard` (dashboard.js)
@@ -901,6 +913,31 @@ Détails d'un workshop.
 Édition d'un workshop.
 
 **Auth** : Requise (Owner)
+
+---
+
+#### `/glossaire` (glossaire.js)
+Glossaire des termes Scrum Agile pour la gestion de projet.
+
+**Contenu** :
+- **User Story (US)** : Définition, format, exemples et critères INVEST
+- **Sizing (Estimation)** : Story Points et T-shirt sizing avec exemples pratiques
+- **Man-day (Jour-homme)** : Calculs, exemples et conversions
+- **Intégration GitHub Projects** : Guide pour appliquer ces concepts dans un projet
+- **Ressources complémentaires** : Liens vers la documentation officielle
+
+**Fonctionnalités** :
+- Explications détaillées de chaque concept
+- Exemples concrets et cas d'usage
+- Conseils pour GitHub Projects
+- Support du mode sombre
+- Design responsive
+
+**Auth** : Requise
+
+**Accès** :
+- Lien dans le menu de navigation
+- Bouton sur la page d'accueil : "Comprendre la planification projet"
 
 ---
 
