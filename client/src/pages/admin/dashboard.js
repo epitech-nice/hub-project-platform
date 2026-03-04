@@ -50,7 +50,11 @@ export default function AdminDashboard() {
           project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           project.submittedBy.name
             .toLowerCase()
-            .includes(searchTerm.toLowerCase())
+            .includes(searchTerm.toLowerCase()) ||
+          (project.members &&
+            project.members.some((member) =>
+              member.email.toLowerCase().includes(searchTerm.toLowerCase())
+            ))
       )
     : projects;
 
