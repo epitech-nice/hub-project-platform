@@ -4,7 +4,7 @@ import { useApi } from '../../hooks/useApi';
 
 const ProjectForm = () => {
   const router = useRouter();
-  const { post } = useApi();
+  const { post, get } = useApi();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -22,38 +22,25 @@ const ProjectForm = () => {
   const [error, setError] = useState('');
   const [githubError, setGithubError] = useState('');
   
-  // Fonction pour valider uniquement le lien GitHub personnel
+  // Fonction pour valider le lien GitHub via le backend
   const validateGithubUrl = async (url) => {
     if (!url) {
       setGithubError('Ce champ est obligatoire');
       return false;
     }
-    
-    // Vérifier si l'URL ressemble à un lien GitHub
-    const githubRegex = /^https:\/\/github\.com\/[\w-]+\/[\w-]+\/?$/;
-    if (!githubRegex.test(url)) {
-      setGithubError('URL GitHub invalide (ex: https://github.com/username/repo)');
-      return false;
-    }
-    
+
     try {
-      // Vérifier si le dépôt est public en essayant d'y accéder via l'API GitHub
-      const repoUrl = url.replace('https://github.com/', 'https://api.github.com/repos/');
-      const response = await fetch(repoUrl);
-      
-      if (response.status === 200) {
+      const data = await get('/api/projects/validate-github', { url });
+
+      if (data.valid) {
         setGithubError('');
         return true;
-      } else if (response.status === 404) {
-        setGithubError('Ce dépôt n\'existe pas ou est privé');
-        return false;
       } else {
-        setGithubError('Erreur lors de la vérification du dépôt');
+        setGithubError(data.message || 'Ce dépôt n\'existe pas ou est privé');
         return false;
       }
     } catch (error) {
-      console.error('Erreur lors de la vérification du dépôt GitHub:', error);
-      setGithubError('Erreur de connexion lors de la vérification');
+      setGithubError(error.message || 'Erreur lors de la vérification du dépôt');
       return false;
     }
   };
@@ -65,8 +52,8 @@ const ProjectForm = () => {
         await validateGithubUrl(formData.links.github);
       }
     };
-    
-    const timeoutId = setTimeout(validatePersonalGithub, 800); // Délai pour éviter trop de requêtes
+
+    const timeoutId = setTimeout(validatePersonalGithub, 1500);
     return () => clearTimeout(timeoutId);
   }, [formData.links.github]);
   

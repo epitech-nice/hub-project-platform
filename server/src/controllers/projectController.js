@@ -3,6 +3,44 @@ const Project = require("../models/Project");
 const User = require("../models/User");
 const { sendExternalRequest } = require("../services/externalService");
 const emailService = require('../services/emailService');
+const axios = require('axios');
+
+// Valider qu'un dépôt GitHub est public et existant
+exports.validateGithubRepo = async (req, res) => {
+  const { url } = req.query;
+
+  if (!url) {
+    return res.status(400).json({ success: false, message: 'URL manquante' });
+  }
+
+  const githubRegex = /^https:\/\/github\.com\/[\w-]+\/[\w-]+\/?$/;
+  if (!githubRegex.test(url)) {
+    return res.status(400).json({ success: false, message: 'URL GitHub invalide (ex: https://github.com/username/repo)' });
+  }
+
+  try {
+    const apiUrl = url.replace('https://github.com/', 'https://api.github.com/repos/').replace(/\/$/, '');
+    const headers = { Accept: 'application/vnd.github+json' };
+    if (process.env.GITHUB_TOKEN) {
+      headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
+    }
+
+    const response = await axios.get(apiUrl, { headers, validateStatus: null });
+
+    if (response.status === 200) {
+      return res.json({ success: true, valid: true });
+    } else if (response.status === 404) {
+      return res.json({ success: true, valid: false, message: "Ce dépôt n'existe pas ou est privé" });
+    } else if (response.status === 403 || response.status === 429) {
+      return res.status(503).json({ success: false, message: 'Limite de requêtes GitHub atteinte, réessayez dans quelques instants' });
+    } else {
+      return res.status(502).json({ success: false, message: 'Erreur lors de la vérification GitHub' });
+    }
+  } catch (error) {
+    console.error('Erreur validateGithubRepo:', error.message);
+    return res.status(502).json({ success: false, message: 'Erreur de connexion à GitHub' });
+  }
+};
 
 // Créer un nouveau projet
 exports.createProject = async (req, res) => {

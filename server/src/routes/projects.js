@@ -4,6 +4,9 @@ const router = express.Router();
 const { authenticateToken, isAdmin } = require('../middleware/auth');
 const projectController = require('../controllers/projectController');
 
+// Validation GitHub (avant /:id pour éviter les conflits de route)
+router.get('/validate-github', authenticateToken, projectController.validateGithubRepo);
+
 // Routes pour les étudiants
 router.post('/', authenticateToken, projectController.createProject);
 router.get('/me', authenticateToken, projectController.getUserProjects);
