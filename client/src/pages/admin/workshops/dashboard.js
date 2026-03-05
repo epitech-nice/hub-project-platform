@@ -14,6 +14,7 @@ export default function AdminWorkshopsDashboard() {
   const [workshops, setWorkshops] = useState([]);
   const [filter, setFilter] = useState("pending");
   const [searchTerm, setSearchTerm] = useState("");
+  const [schoolYear, setSchoolYear] = useState("");
 
   useEffect(() => {
     // Rediriger si non authentifié ou non admin
@@ -39,16 +40,32 @@ export default function AdminWorkshopsDashboard() {
     fetchWorkshops();
   }, [isAuthenticated, isAdmin, filter]);
 
-  // Filtrer les workshops en fonction du terme de recherche
-  const filteredWorkshops = searchTerm
-    ? workshops.filter(
-        (workshop) =>
-          workshop.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          workshop.submittedBy.name
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase())
-      )
-    : workshops;
+  // Générer les options d'années scolaires (de 2020 jusqu'à l'année en cours)
+  const currentYear = new Date().getFullYear();
+  const schoolYearOptions = [];
+  for (let y = 2020; y <= currentYear; y++) {
+    schoolYearOptions.push(`${y}-${y + 1}`);
+  }
+
+  // Filtrer par année scolaire (1 sept → 31 août)
+  const isInSchoolYear = (date, yearLabel) => {
+    if (!yearLabel) return true;
+    const startYear = parseInt(yearLabel.split("-")[0], 10);
+    const start = new Date(startYear, 8, 1); // 1 septembre
+    const end = new Date(startYear + 1, 7, 31, 23, 59, 59); // 31 août
+    const d = new Date(date);
+    return d >= start && d <= end;
+  };
+
+  // Filtrer les workshops en fonction du terme de recherche et de l'année scolaire
+  const filteredWorkshops = workshops.filter((workshop) => {
+    const matchesSearch =
+      !searchTerm ||
+      workshop.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      workshop.submittedBy.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesYear = isInSchoolYear(workshop.createdAt, schoolYear);
+    return matchesSearch && matchesYear;
+  });
 
   if (authLoading) {
     return <div className="text-center py-10 dark:text-white">Chargement...</div>;
@@ -149,13 +166,25 @@ export default function AdminWorkshopsDashboard() {
             </button>
           </div>
 
-          <div className="w-full md:w-64">
+          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+            <select
+              value={schoolYear}
+              onChange={(e) => setSchoolYear(e.target.value)}
+              className="px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            >
+              <option value="">Toutes les années</option>
+              {schoolYearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Rechercher..."
-              className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="w-full md:w-64 px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
           </div>
         </div>
