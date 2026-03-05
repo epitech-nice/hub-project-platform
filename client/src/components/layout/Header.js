@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useAuth } from "../../context/AuthContext";
 import { ThemeSwitcher } from '../theme/ThemeSwitcher';
-import { ChristmasToggle } from '../theme/ChristmasToggle';
+import { SpringToggle } from '../theme/SpringToggle';
 
 const Header = () => {
   const { isAuthenticated, user, loading, logout } = useAuth();
@@ -73,7 +73,7 @@ const Header = () => {
 
   if (loading) {
     return (
-      <header className="bg-blue-600 dark:bg-gray-800 christmas:bg-christmas-red text-white shadow-md transition-colors duration-300">
+      <header className="bg-blue-600 dark:bg-gray-800 spring:bg-spring-pink text-white shadow-md transition-colors duration-300">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center">
             <Link href="/">
@@ -88,7 +88,7 @@ const Header = () => {
           </div>
           <div className="flex items-center gap-2">
             <div className="mr-4">Chargement...</div>
-            <ChristmasToggle />
+            <SpringToggle />
             <ThemeSwitcher />
           </div>
         </div>
@@ -122,7 +122,7 @@ const Header = () => {
         <DropdownArrow isOpen={projectsMenuOpen} />
       </button>
       
-      <ul className={`${projectsMenuOpen ? 'block' : 'hidden'} lg:absolute lg:bg-blue-700 lg:dark:bg-gray-700 christmas:lg:bg-christmas-green lg:mt-2 lg:py-2 lg:rounded-md lg:shadow-lg lg:min-w-[200px] lg:z-10 pl-4 lg:pl-0 transition-colors duration-300`}>
+      <ul className={`${projectsMenuOpen ? 'block' : 'hidden'} lg:absolute lg:bg-blue-700 lg:dark:bg-gray-700 spring:lg:bg-spring-green lg:mt-2 lg:py-2 lg:rounded-md lg:shadow-lg lg:min-w-[200px] lg:z-10 pl-4 lg:pl-0 transition-colors duration-300`}>
         <li>
           <Link href="/dashboard">
             <a className={`block py-2 px-4 hover:bg-blue-800 dark:hover:bg-gray-600 ${
@@ -170,7 +170,7 @@ const Header = () => {
         <DropdownArrow isOpen={workshopsMenuOpen} />
       </button>
       
-      <ul className={`${workshopsMenuOpen ? 'block' : 'hidden'} lg:absolute lg:bg-blue-700 lg:dark:bg-gray-700 christmas:lg:bg-christmas-green lg:mt-2 lg:py-2 lg:rounded-md lg:shadow-lg lg:min-w-[200px] lg:z-10 pl-4 lg:pl-0 transition-colors duration-300`}>
+      <ul className={`${workshopsMenuOpen ? 'block' : 'hidden'} lg:absolute lg:bg-blue-700 lg:dark:bg-gray-700 spring:lg:bg-spring-green lg:mt-2 lg:py-2 lg:rounded-md lg:shadow-lg lg:min-w-[200px] lg:z-10 pl-4 lg:pl-0 transition-colors duration-300`}>
         <li>
           <Link href="/workshops/dashboard">
             <a className={`block py-2 px-4 hover:bg-blue-800 dark:hover:bg-gray-600 ${
@@ -218,7 +218,7 @@ const Header = () => {
   );
 
   return (
-    <header className="bg-blue-600 dark:bg-gray-800 christmas:bg-christmas-red text-white shadow-md transition-colors duration-300">
+    <header className="bg-blue-600 dark:bg-gray-800 spring:bg-spring-pink text-white shadow-md transition-colors duration-300">
       <div className="container mx-auto px-4 py-3">
         <div className="flex justify-between items-center">
           <div className="flex items-center">
@@ -281,7 +281,7 @@ const Header = () => {
 
             {/* Theme switchers */}
             <div className="ml-4 flex items-center gap-2">
-              <ChristmasToggle />
+              <SpringToggle />
               <ThemeSwitcher />
             </div>
           </div>

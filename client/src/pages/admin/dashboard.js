@@ -233,7 +233,7 @@ export default function AdminDashboard() {
                 onChange={(e) => setSchoolYear(e.target.value)}
                 className="px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               >
-                <option value="">Toutes les années</option>
+                <option value="">Tout</option>
                 {schoolYearOptions.map((y) => (
                   <option key={y} value={y}>
                     {y}

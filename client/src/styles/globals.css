@@ -97,6 +97,42 @@ html, body {
     }
   }
 
+  /* Spring Theme - Light Mode */
+  :root.spring {
+    --background: 253 251 247; /* Warm cream white */
+    --foreground: 30 41 59;
+    --card: 255 255 255;
+    --card-foreground: 30 41 59;
+    --primary: 236 72 153; /* Spring pink */
+    --primary-foreground: 255 255 255;
+    --secondary: 34 197 94; /* Spring green */
+    --secondary-foreground: 255 255 255;
+    --accent: 251 191 36; /* Sunny yellow */
+    --accent-foreground: 30 41 59;
+    --muted: 240 249 255; /* Light sky */
+    --muted-foreground: 100 116 139;
+    --border: 251 207 232; /* Soft pink border */
+    --spring-sky: 56 189 248;
+  }
+
+  /* Spring Theme - Dark Mode */
+  .dark.spring {
+    --background: 15 23 42;
+    --foreground: 253 251 247;
+    --card: 30 41 59;
+    --card-foreground: 253 251 247;
+    --primary: 244 114 182; /* Bright spring pink */
+    --primary-foreground: 255 255 255;
+    --secondary: 74 222 128; /* Bright spring green */
+    --secondary-foreground: 255 255 255;
+    --accent: 253 224 71; /* Bright yellow */
+    --accent-foreground: 15 23 42;
+    --muted: 51 65 85;
+    --muted-foreground: 148 163 184;
+    --border: 51 65 85;
+    --spring-sky: 125 211 252;
+  }
+
   /* Christmas decorative animations */
   @keyframes snowfall {
     0% { transform: translateY(-10px) translateX(0); }
