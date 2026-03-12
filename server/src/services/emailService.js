@@ -10,44 +10,49 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  * @param {Boolean} isWorkshop - Indique s'il s'agit d'un workshop (true) ou d'un projet (false)
  * @returns {Promise} - Résultat de l'envoi d'email
  */
-exports.sendStatusChangeEmail = async (item, newStatus, isWorkshop = false) => {
+exports.sendStatusChangeEmail = async (item, newStatus, isWorkshop = false, isSimulated = false) => {
   try {
-    // Déterminer s'il s'agit d'un projet ou d'un workshop
-    const itemType = isWorkshop ? 'workshop' : 'project';
-    
+    // Déterminer le type d'élément
+    const itemType = isSimulated ? 'simulated' : isWorkshop ? 'workshop' : 'project';
+
     // Préparer la liste des destinataires selon le type d'élément
     let recipients = [];
-    
-    if (isWorkshop) {
+
+    if (isSimulated) {
+      // Pour un enrollment Simulated : destinataire = l'étudiant
+      if (item.student && item.student.email) {
+        recipients.push(item.student.email);
+      }
+    } else if (isWorkshop) {
       // Pour un workshop, inclure tous les emails liés
-      
+
       // Ajouter les instructeurs
       if (item.instructors && item.instructors.length > 0) {
         recipients.push(...item.instructors.map(instructor => instructor.email));
       }
-      
+
       // Ajouter les emails des instructeurs stockés séparément
       if (item.instructorEmails && item.instructorEmails.length > 0) {
         recipients.push(...item.instructorEmails);
       }
-      
+
       // Ajouter le soumetteur s'il n'est pas déjà inclus
       if (item.submittedBy && item.submittedBy.email && !recipients.includes(item.submittedBy.email)) {
         recipients.push(item.submittedBy.email);
       }
     } else {
       // Pour un projet, inclure tous les emails liés
-      
+
       // Ajouter les membres
       if (item.members && item.members.length > 0) {
         recipients.push(...item.members.map(member => member.email));
       }
-      
+
       // Ajouter les emails des étudiants stockés séparément
       if (item.studentEmails && item.studentEmails.length > 0) {
         recipients.push(...item.studentEmails);
       }
-      
+
       // Ajouter le soumetteur s'il n'est pas déjà inclus
       if (item.submittedBy && item.submittedBy.email && !recipients.includes(item.submittedBy.email)) {
         recipients.push(item.submittedBy.email);
@@ -63,47 +68,54 @@ exports.sendStatusChangeEmail = async (item, newStatus, isWorkshop = false) => {
       console.log(`Aucun destinataire pour l'email (${itemType}), envoi annulé`);
       return { success: false, reason: 'No recipients' };
     }
-    
+
+    // Nom affiché dans l'email selon le type
+    const itemLabel = isSimulated
+      ? `${item.simulatedProject.title} — Cycle n°${item.cycleNumber}`
+      : isWorkshop
+      ? item.title
+      : item.name;
+
     // Définir l'objet et le contenu en fonction du nouveau statut
     let subject = '';
     let statusColor = '';
     let statusEmoji = '';
     let statusMessage = '';
-    
+
     switch (newStatus) {
       case 'approved':
-        subject = `✅ ${isWorkshop ? 'Workshop' : 'Projet'} approuvé : ${isWorkshop ? item.title : item.name}`;
-        statusColor = '#4CAF50'; // Vert
+        subject = `✅ ${isSimulated ? 'Cycle Simulated' : isWorkshop ? 'Workshop' : 'Projet'} approuvé : ${itemLabel}`;
+        statusColor = '#4CAF50';
         statusEmoji = '✅';
-        statusMessage = `Votre ${isWorkshop ? 'workshop' : 'projet'} a été approuvé !`;
+        statusMessage = `Votre ${isSimulated ? 'cycle Simulated' : isWorkshop ? 'workshop' : 'projet'} a été approuvé !`;
         break;
-      
+
       case 'rejected':
-        subject = `⛔ ${isWorkshop ? 'Workshop' : 'Projet'} non retenu : ${isWorkshop ? item.title : item.name}`;
-        statusColor = '#ab1409'; // Rouge
+        subject = `⛔ ${isSimulated ? 'Cycle Simulated' : isWorkshop ? 'Workshop' : 'Projet'} non retenu : ${itemLabel}`;
+        statusColor = '#ab1409';
         statusEmoji = '⛔';
-        statusMessage = `Votre ${isWorkshop ? 'workshop' : 'projet'} n'a pas été retenu`;
+        statusMessage = `Votre ${isSimulated ? 'cycle Simulated' : isWorkshop ? 'workshop' : 'projet'} n'a pas été retenu`;
         break;
-      
+
       case 'pending_changes':
-        subject = `🔄 Modifications demandées : ${isWorkshop ? item.title : item.name}`;
-        statusColor = '#FF9800'; // Orange
+        subject = `🔄 Modifications demandées : ${itemLabel}`;
+        statusColor = '#FF9800';
         statusEmoji = '🔄';
-        statusMessage = `Des modifications sont requises pour votre ${isWorkshop ? 'workshop' : 'projet'}`;
+        statusMessage = `Des modifications sont requises pour votre ${isSimulated ? 'cycle Simulated' : isWorkshop ? 'workshop' : 'projet'}`;
         break;
-      
+
       case 'completed':
-        subject = `🏆 ${isWorkshop ? 'Workshop' : 'Projet'} terminé : ${isWorkshop ? item.title : item.name}`;
-        statusColor = '#9C27B0'; // Violet
+        subject = `🏆 ${isWorkshop ? 'Workshop' : 'Projet'} terminé : ${itemLabel}`;
+        statusColor = '#9C27B0';
         statusEmoji = '🏆';
         statusMessage = `Votre ${isWorkshop ? 'workshop' : 'projet'} est maintenant terminé !`;
         break;
 
       default:
-        subject = `📝 Mise à jour du ${isWorkshop ? 'workshop' : 'projet'} : ${isWorkshop ? item.title : item.name}`;
-        statusColor = '#2196F3'; // Bleu
+        subject = `📝 Mise à jour : ${itemLabel}`;
+        statusColor = '#2196F3';
         statusEmoji = '📝';
-        statusMessage = `Le statut de votre ${isWorkshop ? 'workshop' : 'projet'} a été mis à jour`;
+        statusMessage = `Le statut de votre ${isSimulated ? 'cycle Simulated' : isWorkshop ? 'workshop' : 'projet'} a été mis à jour`;
     }
     
     // Adresse physique pour conformité légale
@@ -132,8 +144,15 @@ exports.sendStatusChangeEmail = async (item, newStatus, isWorkshop = false) => {
 
     // Information spécifique au type d'élément
     let itemSpecificDetails = '';
-    if (isWorkshop) {
-      // Détails pour un workshop
+    if (isSimulated) {
+      itemSpecificDetails = `
+        <p><strong>Projet :</strong> ${item.simulatedProject.title}</p>
+        <p><strong>Cycle n° :</strong> ${item.cycleNumber}${item.isDoubleCycle ? ' (double cycle)' : ''}</p>
+        <p><strong>GitHub Project :</strong> ${item.githubProjectLink || 'Non renseigné'}</p>
+        ${newStatus === 'approved' && item.credits !== null ? `<p><strong>Crédits obtenus :</strong> ${item.credits}</p>` : ''}
+        ${item.defenseDate ? `<p><strong>Date de présentation :</strong> ${new Date(item.defenseDate).toLocaleDateString('fr-FR')}</p>` : ''}
+      `;
+    } else if (isWorkshop) {
       itemSpecificDetails = `
         <p><strong>Titre :</strong> ${item.title}</p>
         <p><strong>Description :</strong> ${item.details}</p>
@@ -142,7 +161,6 @@ exports.sendStatusChangeEmail = async (item, newStatus, isWorkshop = false) => {
         ${item.links && item.links.presentation ? `<p><strong>Présentation :</strong> ${item.links.presentation}</p>` : ''}
       `;
     } else {
-      // Détails pour un projet
       itemSpecificDetails = `
         <p><strong>Nom :</strong> ${item.name}</p>
         <p><strong>Description :</strong> ${item.description}</p>
@@ -174,7 +192,7 @@ exports.sendStatusChangeEmail = async (item, newStatus, isWorkshop = false) => {
             <tr>
               <td style="padding: 20px;">
                 <p>Bonjour,</p>
-                <p>Le statut du ${isWorkshop ? 'workshop' : 'projet'} <strong>${isWorkshop ? item.title : item.name}</strong> a été mis à jour.</p>
+                <p>Le statut de <strong>${itemLabel}</strong> a été mis à jour.</p>
                 <p>
                   <span style="display: inline-block; padding: 8px 16px; background-color: ${statusColor}; color: white; border-radius: 4px; font-weight: bold;">
                     ${statusEmoji} ${newStatus === 'approved' ? 'Approuvé' : newStatus === 'rejected' ? 'Non retenu' : newStatus === 'pending_changes' ? 'Modifications requises' : 'Mis à jour'}
@@ -189,7 +207,7 @@ exports.sendStatusChangeEmail = async (item, newStatus, isWorkshop = false) => {
             <!-- Informations spécifiques -->
             <tr>
               <td style="padding: 20px;">
-                <h2 style="margin-top: 0; color: #444; border-bottom: 1px solid #eee; padding-bottom: 10px;">Détails du ${isWorkshop ? 'workshop' : 'projet'}</h2>
+                <h2 style="margin-top: 0; color: #444; border-bottom: 1px solid #eee; padding-bottom: 10px;">Détails du ${isSimulated ? 'cycle Simulated' : isWorkshop ? 'workshop' : 'projet'}</h2>
                 ${itemSpecificDetails}
                 <p style="margin-top: 25px;">
                   <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/${isWorkshop ? 'workshops/' : ''}dashboard" style="display: inline-block; padding: 10px 20px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">
@@ -219,36 +237,42 @@ exports.sendStatusChangeEmail = async (item, newStatus, isWorkshop = false) => {
     `;
     
     // Créer une version texte simple pour les clients qui ne supportent pas HTML
+    const statusLabel = newStatus === 'approved' ? 'Approuvé' : newStatus === 'rejected' ? 'Non retenu' : newStatus === 'pending_changes' ? 'Modifications requises' : 'Mis à jour';
     const textContent = `
 ${statusMessage}
 
 Bonjour,
 
-Le statut du ${isWorkshop ? 'workshop' : 'projet'} "${isWorkshop ? item.title : item.name}" a été mis à jour.
+Le statut de "${itemLabel}" a été mis à jour.
 
-Statut: ${newStatus === 'approved' ? 'Approuvé' : newStatus === 'rejected' ? 'Non retenu' : newStatus === 'pending_changes' ? 'Modifications requises' : 'Mis à jour'}
+Statut: ${statusLabel}
 
-${item.reviewedBy && item.reviewedBy.comments ? `\nCommentaires de l'évaluateur :\n${item.reviewedBy.comments}\n` : ''}
-
-Détails du ${isWorkshop ? 'workshop' : 'projet'}:
-${isWorkshop ? 
-  `- Titre: ${item.title}
+${item.reviewedBy && item.reviewedBy.comments ? `Commentaires de l'évaluateur :\n${item.reviewedBy.comments}\n` : ''}
+${isSimulated ? `
+Détails du cycle Simulated:
+- Projet: ${item.simulatedProject.title}
+- Cycle n°: ${item.cycleNumber}${item.isDoubleCycle ? ' (double cycle)' : ''}
+- GitHub Project: ${item.githubProjectLink || 'Non renseigné'}
+${newStatus === 'approved' && item.credits !== null ? `- Crédits obtenus: ${item.credits}` : ''}` : isWorkshop ?
+`Détails du workshop:
+- Titre: ${item.title}
 - Description: ${item.details}
 - Nombre d'intervenants: ${item.instructorCount}` :
-  `- Nom: ${item.name}
+`Détails du projet:
+- Nom: ${item.name}
 - Description: ${item.description}
 - Technologies: ${item.technologies.join(', ')}
 - Nombre d'étudiant(s): ${item.studentCount}
 - Nombre de crédit(s) : ${item.credits || 'Non défini'}`}
 
-Pour voir les détails, visitez: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/${isWorkshop ? 'workshops/' : ''}dashboard
+Pour voir les détails, visitez: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/${isSimulated ? 'simulated' : isWorkshop ? 'workshops/dashboard' : 'dashboard'}
 
 ---
-Cet email vous a été envoyé car vous êtes impliqué dans ce ${isWorkshop ? 'workshop' : 'projet'}.
+Cet email vous a été envoyé car vous êtes impliqué dans ce ${isSimulated ? 'projet Simulated' : isWorkshop ? 'workshop' : 'projet'}.
 Pour vous désabonner, contactez-nous à unsubscribe@${process.env.EMAIL_DOMAIN || 'votredomaine.com'}.
 
-{EPITECH} Nice<br>
-131 Boulevard René Cassin<br>
+{EPITECH} Nice
+131 Boulevard René Cassin
 06200 Nice, France
     `.trim();
     
@@ -266,7 +290,7 @@ Pour vous désabonner, contactez-nous à unsubscribe@${process.env.EMAIL_DOMAIN 
       tags: [
         {
           name: 'category',
-          value: isWorkshop ? 'workshop_notification' : 'project_notification'
+          value: isSimulated ? 'simulated_notification' : isWorkshop ? 'workshop_notification' : 'project_notification'
         },
         {
           name: 'status',

@@ -24,6 +24,8 @@ services:
       - db
     ports:
       - "5000:5000"
+    volumes:
+      - uploads_data:/app/uploads
     networks:
       - app-network
     restart: always
@@ -45,6 +47,7 @@ services:
 # Volumes pour persister les données
 volumes:
   mongodb_data:
+  uploads_data:
 
 # Réseau commun pour tous les services
 networks:

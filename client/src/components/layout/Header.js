@@ -13,6 +13,7 @@ const Header = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [projectsMenuOpen, setProjectsMenuOpen] = useState(false);
   const [workshopsMenuOpen, setWorkshopsMenuOpen] = useState(false);
+  const [simulatedMenuOpen, setSimulatedMenuOpen] = useState(false);
 
   // Fonction pour gérer la taille de l'écran
   useEffect(() => {
@@ -37,6 +38,7 @@ const Header = () => {
     setIsMenuOpen(false);
     setProjectsMenuOpen(false);
     setWorkshopsMenuOpen(false);
+    setSimulatedMenuOpen(false);
   }, [router.pathname]);
 
   const toggleMenu = () => {
@@ -45,31 +47,27 @@ const Header = () => {
 
   const toggleProjectsMenu = () => {
     setProjectsMenuOpen(!projectsMenuOpen);
-    if (!projectsMenuOpen && workshopsMenuOpen) {
-      setWorkshopsMenuOpen(false);
-    }
+    if (!projectsMenuOpen) { setWorkshopsMenuOpen(false); setSimulatedMenuOpen(false); }
   };
 
   const toggleWorkshopsMenu = () => {
     setWorkshopsMenuOpen(!workshopsMenuOpen);
-    if (!workshopsMenuOpen && projectsMenuOpen) {
-      setProjectsMenuOpen(false);
-    }
+    if (!workshopsMenuOpen) { setProjectsMenuOpen(false); setSimulatedMenuOpen(false); }
   };
 
-  // Vérifier si la route actuelle appartient à la section Projets
-  const isProjectsRoute = () => {
-    return router.pathname === "/dashboard" || 
-           router.pathname === "/submit-project" || 
-           router.pathname === "/admin/dashboard";
+  const toggleSimulatedMenu = () => {
+    setSimulatedMenuOpen(!simulatedMenuOpen);
+    if (!simulatedMenuOpen) { setProjectsMenuOpen(false); setWorkshopsMenuOpen(false); }
   };
 
-  // Vérifier si la route actuelle appartient à la section Workshops
-  const isWorkshopsRoute = () => {
-    return router.pathname === "/workshops/dashboard" || 
-           router.pathname === "/submit-workshop" || 
-           router.pathname === "/admin/workshops/dashboard";
-  };
+  const isProjectsRoute = () =>
+    ["/dashboard", "/submit-project", "/admin/dashboard"].includes(router.pathname);
+
+  const isWorkshopsRoute = () =>
+    ["/workshops/dashboard", "/submit-workshop", "/admin/workshops/dashboard"].includes(router.pathname);
+
+  const isSimulatedRoute = () =>
+    router.pathname.startsWith("/simulated") || router.pathname.startsWith("/admin/simulated");
 
   if (loading) {
     return (
@@ -148,6 +146,54 @@ const Header = () => {
                 router.pathname === "/admin/dashboard" ? "bg-blue-800 dark:bg-gray-600" : ""
               }`}>
                 Admin projets
+              </a>
+            </Link>
+          </li>
+        )}
+      </ul>
+    </>
+  );
+
+  // Composant pour le menu Simulated
+  const SimulatedMenu = () => (
+    <>
+      <button
+        onClick={toggleSimulatedMenu}
+        className={`flex items-center py-2 lg:py-0 hover:text-blue-200 dark:hover:text-blue-300 ${
+          isSimulatedRoute() ? "text-blue-200 dark:text-blue-300 font-medium" : ""
+        }`}
+        aria-expanded={simulatedMenuOpen}
+      >
+        Simulated
+        <DropdownArrow isOpen={simulatedMenuOpen} />
+      </button>
+
+      <ul className={`${simulatedMenuOpen ? 'block' : 'hidden'} lg:absolute lg:bg-blue-700 lg:dark:bg-gray-700 spring:lg:bg-spring-green lg:mt-2 lg:py-2 lg:rounded-md lg:shadow-lg lg:min-w-[200px] lg:z-10 pl-4 lg:pl-0 transition-colors duration-300`}>
+        <li>
+          <Link href="/simulated">
+            <a className={`block py-2 px-4 hover:bg-blue-800 dark:hover:bg-gray-600 ${
+              router.pathname === "/simulated" ? "bg-blue-800 dark:bg-gray-600" : ""
+            }`}>
+              Choisir un projet
+            </a>
+          </Link>
+        </li>
+        <li>
+          <Link href="/simulated/mes-projets">
+            <a className={`block py-2 px-4 hover:bg-blue-800 dark:hover:bg-gray-600 ${
+              router.pathname === "/simulated/mes-projets" ? "bg-blue-800 dark:bg-gray-600" : ""
+            }`}>
+              Mes projets
+            </a>
+          </Link>
+        </li>
+        {user?.role === "admin" && (
+          <li>
+            <Link href="/admin/simulated">
+              <a className={`block py-2 px-4 hover:bg-blue-800 dark:hover:bg-gray-600 ${
+                router.pathname.startsWith("/admin/simulated") ? "bg-blue-800 dark:bg-gray-600" : ""
+              }`}>
+                Admin Simulated
               </a>
             </Link>
           </li>
@@ -245,6 +291,9 @@ const Header = () => {
                     <li className="relative">
                       <WorkshopsMenu />
                     </li>
+                    <li className="relative">
+                      <SimulatedMenu />
+                    </li>
                     <li>
                       <Link href="/glossaire">
                         <a className={`hover:text-blue-200 dark:hover:text-blue-300 ${
@@ -297,6 +346,9 @@ const Header = () => {
                 </li>
                 <li className="relative mt-2">
                   <WorkshopsMenu />
+                </li>
+                <li className="relative mt-2">
+                  <SimulatedMenu />
                 </li>
                 <li className="mt-2">
                   <Link href="/glossaire">

@@ -92,10 +92,15 @@ passport.use(
   )
 );
 
+// Fichiers statiques — PDF des sujets Simulated
+const path = require("path");
+app.use("/uploads", require("express").static(path.join(__dirname, "../uploads")));
+
 // Routes
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/projects", require("./routes/projects"));
 app.use("/api/workshops", require('./routes/workshops'));
+app.use("/api/simulated", require("./routes/simulated"));
 
 // Route de santé
 app.get("/api/health", (req, res) => {
