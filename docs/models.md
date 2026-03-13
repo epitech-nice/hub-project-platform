@@ -38,7 +38,7 @@ Base de données : **MongoDB** via **Mongoose**.
     other: [String]
   },
 
-  status: String,             // 'pending' | 'pending_changes' | 'approved' | 'rejected' | 'completed'
+  status: String,             // Enum via constants : 'pending' | 'pending_changes' | 'approved' | 'rejected' | 'completed'
   credits: Number,
 
   members: [{
@@ -93,7 +93,7 @@ Base de données : **MongoDB** via **Mongoose**.
     other: [String]
   },
 
-  status: String,             // 'pending' | 'pending_changes' | 'approved' | 'rejected' | 'completed'
+  status: String,             // Enum WORKSHOP_STATUSES : 'pending' | 'pending_changes' | 'approved' | 'rejected' | 'completed'
 
   instructors: [{
     email: String,
@@ -158,7 +158,7 @@ Base de données : **MongoDB** via **Mongoose**.
   secondDefenseDate: Date,
 
   githubProjectLink: String,        // Lien GitHub Project soumis par l'étudiant
-  status: String,                   // 'pending' | 'pending_changes' | 'approved' | 'rejected'
+  status: String,                   // Enum SIMULATED_STATUSES : 'pending' | 'pending_changes' | 'approved' | 'rejected'
   lockedByAdmin: Boolean,           // true : étudiant ne peut plus modifier
 
   // Crédits du cycle courant (remis à null à chaque relance)

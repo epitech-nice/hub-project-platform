@@ -14,6 +14,7 @@ services:
 ```bash
 docker-compose up --build
 ```
+> **Note Dev** : Le `docker-compose.yml` injecte `NODE_ENV=development`. C'est **obligatoire** pour bénéficier d'un Rate Limiter permissif (ex: 2000 requêtes) et ne pas être bloqué lors du développement intensif de l'UI.
 
 ---
 

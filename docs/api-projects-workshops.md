@@ -90,7 +90,10 @@ Quitter un projet (membres non-créateurs uniquement).
 #### `GET /api/projects`
 Récupérer tous les projets.
 
-**Query params** : `?status=pending` (optionnel)
+**Query params** :
+- `status=pending` (optionnel)
+- `page=1` (optionnel, défaut: 1)
+- `limit=10` (optionnel, défaut: 10)
 
 ---
 
@@ -156,7 +159,7 @@ Les workshops suivent la même structure que les projets, sans crédits ni inté
 | `/api/workshops/:id` | PUT | Owner | Modifier workshop |
 | `/api/workshops/:id` | DELETE | Owner/Admin | Supprimer workshop |
 | `/api/workshops/:id/leave` | POST | Instructor | Quitter workshop |
-| `/api/workshops` | GET | Admin | Tous les workshops |
+| `/api/workshops` | GET | Admin | Tous les workshops (avec pagination `page`, `limit`) |
 | `/api/workshops/:id/review` | PATCH | Admin | Approuver/rejeter |
 | `/api/workshops/:id/request-changes` | PATCH | Admin | Demander modifications |
 | `/api/workshops/:id/complete` | PATCH | Admin | Marquer terminé |

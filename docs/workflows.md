@@ -129,6 +129,8 @@ Identique aux projets, sans crédits ni intégration API externe.
 
 `emailService.sendStatusChangeEmail(item, status, isWorkshop, isSimulated)`
 
+> **Performance** : Les envois d'emails sont délégués à une file d'attente en mémoire via `backgroundJobs.js` ("fire-and-forget"). Cela garantit que les temps de réponse de l'API (ex: lors de l'approbation d'un projet) restent instantanés pour l'administrateur, même en cas de latence SMTP.
+
 | Module | Destinataires | Déclencheurs |
 |--------|--------------|--------------|
 | Projets | Membres + soumetteur | approved, rejected, pending_changes, completed |

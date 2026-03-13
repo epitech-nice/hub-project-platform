@@ -4,6 +4,23 @@ Base URL : `http://localhost:5000/api/simulated`
 
 Toutes les routes nécessitent `Authorization: Bearer <JWT>`.
 
+Toutes les routes nécessitent `Authorization: Bearer <JWT>`.
+
+---
+
+## Gestion des Erreurs Globales
+Toutes les validations (express-validator) échouées retournent le format standardisé suivant (géré par `validators.js` et le hook `useApi` côté frontend) :
+```json
+{
+  "success": false,
+  "message": "Le titre est requis | Le lien GitHub doit être une URL",
+  "errors": [
+    { "field": "title", "msg": "Le titre est requis" },
+    { "field": "githubLink", "msg": "Le lien GitHub doit être une URL" }
+  ]
+}
+```
+
 ---
 
 ## Catalogue de projets

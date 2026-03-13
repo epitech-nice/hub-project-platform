@@ -2,6 +2,8 @@
 
 Framework : **Next.js 12** (pages router), **Tailwind CSS**, mode sombre natif via `next-themes`.
 
+> **Note sur la gestion des API** : Tous les appels API de mutation (`POST`, `PUT`, `DELETE`, `PATCH`) utilisent le hook personnalisé `useApi`. Il embarque un intercepteur axios qui extrait de manière garantie le `message` et les `errors` du backend, évitant ainsi les alertes génériques pour afficher les causes exactes (erreurs de validation métier, conflits, etc.).
+
 ---
 
 ## Pages — Projets & Workshops
@@ -56,12 +58,11 @@ Grille de cartes projets (miniature PDF ou placeholder).
   - Phase 2 ouverte → bandeau bleu
   - Aucune fenêtre → bandeau orange
 - **Bouton "Calendrier des cycles"** → ouvre un modal :
-  - Tous les cycles listés (passés / courant / à venir)
-  - Cycle courant mis en évidence (bordure bleue, badge "Phase X en cours")
-  - Cycles passés grisés
-  - 5 dates clés par cycle avec icônes et code couleur
-  - Badge "Double cycle" si applicable
-  - Fermeture par clic en dehors ou bouton ✕
+  - Tous les cycles listés, triés par priorité (1. En cours, 2. À venir, 3. Terminés).
+  - Cycle courant (entre "Ouverture phase 1" et "2ème défense finale") mis en évidence de façon persistante avec bordure bleue.
+  - Badge dynamique en temps réel ("Phase 1 en cours", "Défenses phase 1", "Phase 2...", etc.).
+  - Cycles passés grisés.
+  - Fermeture par clic en dehors ou bouton ✕.
 
 ### `/simulated/[id]` — Détail projet / enrollment
 Page unique qui adapte son affichage selon l'état :
@@ -79,7 +80,7 @@ Affiche aussi le `changeHistory` complet.
 
 ### `/simulated/mes-projets` — Historique étudiant
 Liste de tous les enrollments (actif en premier, puis terminés).
-Enrollment terminé : affiche `totalCredits`.
+Enrollment terminé : affiche `totalCredits` (somme cumulée de toutes les défenses de cet enrollment).
 
 ### `/admin/simulated` — Dashboard admin Simulated
 

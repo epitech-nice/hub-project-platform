@@ -59,11 +59,16 @@ hub-project-platform/
 │   │   │   ├── projects.js
 │   │   │   ├── workshops.js
 │   │   │   ├── users.js
-│   │   │   └── simulated.js
+│   │   │   ├── simulatedProjects.js
+│   │   │   ├── simulatedCycles.js
+│   │   │   └── simulatedEnrollments.js
 │   │   ├── controllers/
 │   │   │   ├── projectController.js
 │   │   │   ├── workshopController.js
-│   │   │   └── simulatedController.js
+│   │   │   └── simulated/
+│   │   │       ├── projectController.js
+│   │   │       ├── cycleController.js
+│   │   │       └── enrollmentController.js
 │   │   ├── models/
 │   │   │   ├── User.js
 │   │   │   ├── Project.js
