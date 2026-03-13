@@ -1,5 +1,5 @@
-// models/Workshop.js
 const mongoose = require("mongoose");
+const { WORKSHOP_STATUSES } = require("../utils/constants");
 
 const WorkshopSchema = new mongoose.Schema({
   title: {
@@ -31,8 +31,8 @@ const WorkshopSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'pending_changes', 'approved', 'rejected', 'completed'],
-    default: 'pending'
+    enum: Object.values(WORKSHOP_STATUSES),
+    default: WORKSHOP_STATUSES.PENDING
   },
   instructors: [
     {
@@ -73,7 +73,7 @@ const WorkshopSchema = new mongoose.Schema({
       {
         status: {
           type: String,
-          enum: ["pending", "pending_changes", "approved", "rejected", "completed"],
+          enum: Object.values(WORKSHOP_STATUSES),
         },
         comments: String,
         reviewer: {

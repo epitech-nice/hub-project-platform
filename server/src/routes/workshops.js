@@ -2,14 +2,32 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken, isAdmin } = require('../middleware/auth');
+const { workshopValidationRules, validate } = require('../middleware/validators');
 const workshopController = require('../controllers/workshopController');
 
-// Routes pour les étudiants
-router.post('/', authenticateToken, workshopController.createWorkshop);
-router.get('/me', authenticateToken, workshopController.getUserWorkshops);
+// Routes pour les administrateurs (Création / Gestion)
+router.post(
+  '/', 
+  authenticateToken, 
+  isAdmin, 
+  workshopValidationRules(), 
+  validate, 
+  workshopController.createWorkshop
+);
+router.get('/', authenticateToken, isAdmin, workshopController.getAllWorkshops);
 router.get('/:id', authenticateToken, workshopController.getWorkshopById);
-router.put('/:id', authenticateToken, workshopController.updateWorkshop);
-router.delete('/:id', authenticateToken, workshopController.deleteWorkshop);
+router.put(
+  '/:id', 
+  authenticateToken, 
+  isAdmin, 
+  workshopValidationRules(), 
+  validate, 
+  workshopController.updateWorkshop
+);
+router.delete('/:id', authenticateToken, isAdmin, workshopController.deleteWorkshop);
+
+// Routes pour les étudiants (Participation)
+router.get('/me', authenticateToken, workshopController.getUserWorkshops);
 router.post('/:id/leave', authenticateToken, workshopController.leaveWorkshop);
 
 // Routes pour les administrateurs

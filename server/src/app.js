@@ -7,13 +7,42 @@ const User = require("./models/User");
 const config = require("./config/auth");
 const { Client } = require('@microsoft/microsoft-graph-client');
 require('isomorphic-fetch');
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const mongoSanitize = require("express-mongo-sanitize");
+const xss = require("xss-clean");
 
 const app = express();
 
-// Middleware
+// Définir que le serveur tourne derrière un proxy (Docker/Nginx)
+app.set('trust proxy', 1);
+
+// Middlewares de sécurité
+app.use(helmet({
+  crossOriginResourcePolicy: false, // Permet de charger les images/PDF depuis une autre origine (le front)
+  crossOriginEmbedderPolicy: false,
+  frameguard: false, // Permet d'afficher les PDF dans des iFrames ou des balises <object>
+})); // Protège les en-têtes HTTP
+app.use(mongoSanitize()); // Prévient les injections NoSQL
+app.use(xss()); // Prévient les attaques XSS
+
+// Fichiers statiques — PDF des sujets Simulated (Doit être avant le rate limiter pour ne pas bloquer les images)
+const path = require("path");
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+
+// Limitation de requêtes (Rate limiting)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === "production" ? 100 : 2000, // 100 en prod, 2000 en dev
+  message: "Trop de requêtes depuis cette IP, veuillez réessayer plus tard.",
+  standardHeaders: true, // Renvoie les headers d'info RateLimit
+  legacyHeaders: false, // Désactive les headers 'X-RateLimit-*'
+});
+app.use('/api', limiter);
+
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 /**
  * Vérifie si un utilisateur est propriétaire de l'application dans Azure AD
@@ -92,15 +121,15 @@ passport.use(
   )
 );
 
-// Fichiers statiques — PDF des sujets Simulated
-const path = require("path");
-app.use("/uploads", require("express").static(path.join(__dirname, "../uploads")));
-
 // Routes
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/projects", require("./routes/projects"));
 app.use("/api/workshops", require('./routes/workshops'));
-app.use("/api/simulated", require("./routes/simulated"));
+app.use("/api/simulated/catalog", require("./routes/simulatedProjects"));
+app.use("/api/simulated/cycles", require("./routes/simulatedCycles"));
+app.use("/api/simulated/enrollments", require("./routes/simulatedEnrollments"));
+// Pour /me, /my-history et /enroll
+app.use("/api/simulated", require("./routes/simulatedEnrollments"));
 
 // Route de santé
 app.get("/api/health", (req, res) => {
@@ -110,10 +139,9 @@ app.get("/api/health", (req, res) => {
 // page users
 app.use('/api/users', require('./routes/users'));
 
-// Gestion des erreurs
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: "Erreur serveur" });
-});
+const errorHandler = require('./middleware/errorHandler');
+
+// Gestion globale des erreurs
+app.use(errorHandler);
 
 module.exports = app;

@@ -26,7 +26,7 @@ const statusLabels = {
 export default function AdminSimulated() {
   const { isAuthenticated, isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
-  const { get, loading: apiLoading } = useApi();
+  const { get, post, put, delete: del, loading: apiLoading } = useApi();
 
   const [activeTab, setActiveTab] = useState("catalogue");
 
@@ -114,7 +114,6 @@ export default function AdminSimulated() {
     }
   };
 
-  // ── Force inscription ──
   const handleForceEnroll = async (e) => {
     e.preventDefault();
     setForceError("");
@@ -125,14 +124,10 @@ export default function AdminSimulated() {
     }
     setIsForceSubmitting(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/simulated/force-enroll`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ projectId: forceForm.projectId, studentEmail: forceForm.studentEmail.trim() }),
+      const data = await post("/api/simulated/force-enroll", {
+        projectId: forceForm.projectId,
+        studentEmail: forceForm.studentEmail.trim()
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
       setForceSuccess(`Étudiant inscrit avec succès sur "${data.data.simulatedProject.title}".`);
       setForceForm({ projectId: "", studentEmail: "" });
       await fetchEnrollments();
@@ -181,7 +176,6 @@ export default function AdminSimulated() {
     }
   };
 
-  // ── Cycles : création ──
   const handleCreateCycle = async (e) => {
     e.preventDefault();
     setCycleError("");
@@ -192,25 +186,15 @@ export default function AdminSimulated() {
     }
     setIsSubmittingCycle(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/simulated/cycles`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          startDate,
-          firstSubmissionDeadline,
-          firstDefenseDate,
-          secondSubmissionDeadline,
-          secondDefenseDate,
-          isDoubleCycle: cycleForm.isDoubleCycle,
-        }),
+      await post("/api/simulated/cycles", {
+        name: name.trim(),
+        startDate,
+        firstSubmissionDeadline,
+        firstDefenseDate,
+        secondSubmissionDeadline,
+        secondDefenseDate,
+        isDoubleCycle: cycleForm.isDoubleCycle,
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
       setCycleForm({ name: "", startDate: "", firstSubmissionDeadline: "", firstDefenseDate: "", secondSubmissionDeadline: "", secondDefenseDate: "", isDoubleCycle: false });
       await fetchCycles();
     } catch (err) {
@@ -220,34 +204,20 @@ export default function AdminSimulated() {
     }
   };
 
-  // ── Cycles : mise à jour ──
   const handleUpdateCycle = async (e) => {
     e.preventDefault();
     if (!editingCycle) return;
     setIsSubmittingCycle(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/simulated/cycles/${editingCycle._id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            name: editingCycle.name,
-            startDate: editingCycle.startDate,
-            firstSubmissionDeadline: editingCycle.firstSubmissionDeadline,
-            firstDefenseDate: editingCycle.firstDefenseDate,
-            secondSubmissionDeadline: editingCycle.secondSubmissionDeadline,
-            secondDefenseDate: editingCycle.secondDefenseDate,
-            isDoubleCycle: editingCycle.isDoubleCycle,
-          }),
-        }
-      );
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
+      await put(`/api/simulated/cycles/${editingCycle._id}`, {
+        name: editingCycle.name,
+        startDate: editingCycle.startDate,
+        firstSubmissionDeadline: editingCycle.firstSubmissionDeadline,
+        firstDefenseDate: editingCycle.firstDefenseDate,
+        secondSubmissionDeadline: editingCycle.secondSubmissionDeadline,
+        secondDefenseDate: editingCycle.secondDefenseDate,
+        isDoubleCycle: editingCycle.isDoubleCycle,
+      });
       setEditingCycle(null);
       await fetchCycles();
     } catch (err) {
@@ -257,18 +227,13 @@ export default function AdminSimulated() {
     }
   };
 
-  // ── Cycles : suppression ──
   const handleDeleteCycle = async (id) => {
     if (!window.confirm("Supprimer ce cycle ? Cette action est irréversible.")) return;
     try {
-      const token = localStorage.getItem("token");
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/simulated/cycles/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await del(`/api/simulated/cycles/${id}`);
       await fetchCycles();
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      setCycleError(err.message || "Erreur lors de la suppression");
     }
   };
 
@@ -300,20 +265,12 @@ export default function AdminSimulated() {
     }
   };
 
-  // ── Import JSON : envoi ──
   const handleImportJson = async () => {
     if (!jsonPreview) return;
     setIsImporting(true);
     setJsonError("");
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/simulated/cycles/import`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ cycles: jsonPreview }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
+      await post("/api/simulated/cycles/import", { cycles: jsonPreview });
       setJsonInput("");
       setJsonPreview(null);
       await fetchCycles();
@@ -360,20 +317,12 @@ export default function AdminSimulated() {
     setGenPreview(preview);
   };
 
-  // ── Génération auto : envoi ──
   const handleConfirmGeneration = async () => {
     if (!genPreview) return;
     setIsGenerating(true);
     setGenError("");
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/simulated/cycles/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(genForm),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
+      await post("/api/simulated/cycles/generate", genForm);
       setGenPreview(null);
       setGenForm({ firstStartDate: "", numberOfCycles: 8, namePrefix: "Cycle" });
       await fetchCycles();
@@ -419,13 +368,12 @@ export default function AdminSimulated() {
     }
   };
 
-  // ── Catalogue : toggle actif/inactif ──
   const handleToggleActive = async (project) => {
     try {
       const token = localStorage.getItem("token");
       const formData = new FormData();
       formData.append("isActive", String(!project.isActive));
-      await fetch(
+      const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/simulated/catalog/${project._id}`,
         {
           method: "PUT",
@@ -433,23 +381,25 @@ export default function AdminSimulated() {
           body: formData,
         }
       );
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
       await fetchCatalog();
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      setCatalogError(err.message || "Erreur lors de la mise à jour du statut");
     }
   };
 
-  // ── Catalogue : mise à jour du titre / PDF ──
   const handleUpdateProject = async (e) => {
     e.preventDefault();
     if (!editingProject) return;
+    setCatalogError("");
     setIsSubmittingCatalog(true);
     try {
       const token = localStorage.getItem("token");
       const formData = new FormData();
       formData.append("title", editingProject.title.trim());
       if (editingProject.newFile) formData.append("subjectFile", editingProject.newFile);
-      await fetch(
+      const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/simulated/catalog/${editingProject._id}`,
         {
           method: "PUT",
@@ -457,28 +407,32 @@ export default function AdminSimulated() {
           body: formData,
         }
       );
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
       setEditingProject(null);
       if (editFileInputRef.current) editFileInputRef.current.value = "";
       await fetchCatalog();
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      setCatalogError(err.message || "Erreur lors de la mise à jour");
     } finally {
       setIsSubmittingCatalog(false);
     }
   };
 
-  // ── Catalogue : suppression ──
   const handleDeleteProject = async (id) => {
     if (!window.confirm("Supprimer ce projet du catalogue ? Cette action est irréversible.")) return;
+    setCatalogError("");
     try {
       const token = localStorage.getItem("token");
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/simulated/catalog/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/simulated/catalog/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
       await fetchCatalog();
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      setCatalogError(err.message || "Erreur lors de la suppression du projet");
     }
   };
 
@@ -906,9 +860,9 @@ export default function AdminSimulated() {
                           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusColors[enrollment.status]}`}>
                             {statusLabels[enrollment.status]}
                           </span>
-                          {enrollment.credits !== null && ["approved", "completed"].includes(enrollment.status) && (
+                          {enrollment.totalCredits > 0 && ["approved", "completed"].includes(enrollment.status) && (
                             <span className="ml-2 text-xs text-green-700 dark:text-green-400 font-medium">
-                              {enrollment.credits} cr.
+                              {enrollment.totalCredits} cr. total
                             </span>
                           )}
                         </td>

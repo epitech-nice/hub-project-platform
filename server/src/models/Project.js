@@ -1,5 +1,5 @@
-// models/Project.js
 const mongoose = require("mongoose");
+const { PROJECT_STATUSES } = require("../utils/constants");
 
 const ProjectSchema = new mongoose.Schema({
   name: {
@@ -39,8 +39,8 @@ const ProjectSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'pending_changes', 'approved', 'rejected', 'completed'],
-    default: 'pending'
+    enum: Object.values(PROJECT_STATUSES),
+    default: PROJECT_STATUSES.PENDING
   },
   credits: {
     type: Number,
@@ -98,7 +98,7 @@ const ProjectSchema = new mongoose.Schema({
       {
         status: {
           type: String,
-          enum: ["pending", "pending_changes", "approved", "rejected", "completed"],
+          enum: Object.values(PROJECT_STATUSES),
         },
         comments: String,
         reviewer: {

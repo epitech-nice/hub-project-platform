@@ -1,5 +1,5 @@
-// models/SimulatedEnrollment.js
 const mongoose = require("mongoose");
+const { SIMULATED_STATUSES } = require("../utils/constants");
 
 // Crédits valides selon le type de cycle
 // Cycle normal  : 0, 0.5, 1, 1.5
@@ -77,8 +77,8 @@ const SimulatedEnrollmentSchema = new mongoose.Schema({
   // --- Statut (même logique que Project existant) ---
   status: {
     type: String,
-    enum: ["pending", "pending_changes", "approved", "rejected", "completed"],
-    default: "pending",
+    enum: Object.values(SIMULATED_STATUSES),
+    default: SIMULATED_STATUSES.PENDING,
   },
 
   // --- Crédits de la phase 1 (attribués quand l'admin valide la phase 1) ---
@@ -141,7 +141,7 @@ const SimulatedEnrollmentSchema = new mongoose.Schema({
       {
         status: {
           type: String,
-          enum: ["pending", "pending_changes", "approved", "rejected", "completed"],
+          enum: Object.values(SIMULATED_STATUSES),
         },
         comments: String,
         reviewer: {

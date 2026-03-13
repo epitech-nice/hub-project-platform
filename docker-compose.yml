@@ -22,7 +22,7 @@ services:
     depends_on:
       - db
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       MONGODB_URI: mongodb://mongo:mongo@db:27017/hub_project_db?authSource=admin
       PORT: 5000
     ports:

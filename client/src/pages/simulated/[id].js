@@ -18,7 +18,7 @@ export default function SimulatedProjectDetail() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
   const { id } = router.query;
-  const { get, loading: apiLoading } = useApi();
+  const { get, post, put, loading: apiLoading } = useApi();
 
   const [project, setProject] = useState(null);
   const [myEnrollment, setMyEnrollment] = useState(null); // enrollment actif (pending/pending_changes/approved)
@@ -94,14 +94,10 @@ export default function SimulatedProjectDetail() {
     if (!githubLink.trim()) { setError("Le lien GitHub Project est requis."); return; }
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/simulated/enroll`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ projectId: id, githubProjectLink: githubLink }),
+      const data = await post("/api/simulated/enroll", {
+        projectId: id,
+        githubProjectLink: githubLink
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
       setSuccessMsg("Projet soumis avec succès ! En attente de validation.");
       setMyEnrollment(data.data);
       await fetchData();
@@ -118,17 +114,10 @@ export default function SimulatedProjectDetail() {
     if (!githubLink.trim()) { setError("Le lien GitHub Project est requis."); return; }
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/simulated/enrollments/${myEnrollment._id}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ githubProjectLink: githubLink }),
-        }
+      const data = await put(
+        `/api/simulated/enrollments/${myEnrollment._id}`,
+        { githubProjectLink: githubLink }
       );
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
       setSuccessMsg(
         myEnrollment.phase === 2
           ? "Lien mis à jour pour la phase 2 !"

@@ -3,74 +3,70 @@ const Project = require("../models/Project");
 const User = require("../models/User");
 const { sendExternalRequest } = require("../services/externalService");
 const emailService = require('../services/emailService');
+const projectService = require('../services/projectService');
 const axios = require('axios');
+const NodeCache = require("node-cache");
+const ErrorResponse = require('../utils/errorResponse');
+const { PROJECT_STATUSES } = require('../utils/constants');
+const backgroundJobs = require('../utils/backgroundJobs');
+const asyncHandler = require('../middleware/asyncHandler');
+
+const githubCache = new NodeCache({ stdTTL: 3600 }); // Cache d'une heure
 
 // Valider qu'un dépôt GitHub est public et existant
-exports.validateGithubRepo = async (req, res) => {
+exports.validateGithubRepo = asyncHandler(async (req, res, next) => {
   const { url } = req.query;
 
   if (!url) {
-    return res.status(400).json({ success: false, message: 'URL manquante' });
+    return next(new ErrorResponse('URL manquante', 400));
   }
 
   const githubRegex = /^https:\/\/github\.com\/[\w-]+\/[\w-]+\/?$/;
   if (!githubRegex.test(url)) {
-    return res.status(400).json({ success: false, message: 'URL GitHub invalide (ex: https://github.com/username/repo)' });
+    return next(new ErrorResponse('URL GitHub invalide (ex: https://github.com/username/repo)', 400));
   }
 
-  try {
-    const apiUrl = url.replace('https://github.com/', 'https://api.github.com/repos/').replace(/\/$/, '');
-    const headers = { Accept: 'application/vnd.github+json' };
-    if (process.env.GITHUB_TOKEN) {
-      headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
-    }
-
-    const response = await axios.get(apiUrl, { headers, validateStatus: null });
-
-    if (response.status === 200) {
-      return res.json({ success: true, valid: true });
-    } else if (response.status === 404) {
-      return res.json({ success: true, valid: false, message: "Ce dépôt n'existe pas ou est privé" });
-    } else if (response.status === 403 || response.status === 429) {
-      return res.status(503).json({ success: false, message: 'Limite de requêtes GitHub atteinte, réessayez dans quelques instants' });
-    } else {
-      return res.status(502).json({ success: false, message: 'Erreur lors de la vérification GitHub' });
-    }
-  } catch (error) {
-    console.error('Erreur validateGithubRepo:', error.message);
-    return res.status(502).json({ success: false, message: 'Erreur de connexion à GitHub' });
+  // Vérifier d'abord dans le cache
+  if (githubCache.has(url)) {
+    return res.json(githubCache.get(url));
   }
-};
+
+  const apiUrl = url.replace('https://github.com/', 'https://api.github.com/repos/').replace(/\/$/, '');
+  const headers = { Accept: 'application/vnd.github+json' };
+  if (process.env.GITHUB_TOKEN) {
+    headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
+  }
+
+  const response = await axios.get(apiUrl, { headers, validateStatus: null });
+
+  if (response.status === 200) {
+    const result = { success: true, valid: true };
+    githubCache.set(url, result);
+    return res.json(result);
+  } else if (response.status === 404) {
+    const result = { success: true, valid: false, message: "Ce dépôt n'existe pas ou est privé" };
+    githubCache.set(url, result);
+    return res.json(result);
+  } else if (response.status === 403 || response.status === 429) {
+    return next(new ErrorResponse('Limite de requêtes GitHub atteinte, réessayez dans quelques instants', 503));
+  } else {
+    return next(new ErrorResponse('Erreur lors de la vérification GitHub', 502));
+  }
+});
 
 // Créer un nouveau projet
-exports.createProject = async (req, res) => {
-  try {
-    const {
-      name,
-      description,
-      objectives,
-      technologies,
-      studentCount,
-      studentEmails,
-      links,
-    } = req.body;
+exports.createProject = asyncHandler(async (req, res, next) => {
+  const {
+    name,
+    description,
+    objectives,
+    technologies,
+    studentCount,
+    studentEmails,
+    links,
+  } = req.body;
 
-    // Vérifier que les liens GitHub sont fournis
-    if (!links.github || !links.projectGithub) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Les liens GitHub personnel et de projet sont obligatoires' 
-      });
-    }
-    
-    // Vérifier le format des liens GitHub
-    const githubRegex = /^https:\/\/github\.com\/[\w-]+\/[\w-]+\/?$/;
-    if (!githubRegex.test(links.github)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Le lien GitHub personnel doit être au format https://github.com/username/repo' 
-      });
-    }
+    // La validation est gérée par express-validator (voir routes/projects.js)
 
     // Créer la liste des membres (le créateur + les emails fournis)
     const members = [
@@ -83,348 +79,299 @@ exports.createProject = async (req, res) => {
 
     // Ajouter les autres membres du groupe
     if (studentEmails && studentEmails.length > 0) {
-      for (const email of studentEmails) {
-        // Vérifier si l'utilisateur existe déjà
-        const existingUser = await User.findOne({ email });
+      // Résolution N+1: Récupération en une seule requête de tous les utilisateurs
+      const existingUsers = await User.find({ email: { $in: studentEmails } }).lean();
+      const usersByEmail = existingUsers.reduce((acc, user) => {
+        acc[user.email] = user._id;
+        return acc;
+      }, {});
 
+      for (const email of studentEmails) {
         members.push({
           email: email,
-          userId: existingUser ? existingUser._id : null,
+          userId: usersByEmail[email] || null,
           isCreator: false,
         });
       }
     }
 
-    const project = new Project({
-      name,
-      description,
-      objectives,
-      technologies,
-      studentCount,
-      studentEmails,
-      links,
-      members,
-      submittedBy: {
-        userId: req.user._id,
-        name: req.user.name,
-        email: req.user.email,
-      },
-    });
+  const project = new Project({
+    name,
+    description,
+    objectives,
+    technologies,
+    studentCount,
+    studentEmails,
+    links,
+    members,
+    status: PROJECT_STATUSES.PENDING,
+    submittedBy: {
+      userId: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+    },
+  });
 
-    await project.save();
-    res.status(201).json({ success: true, data: project });
-  } catch (error) {
-    console.error("Erreur lors de la création du projet:", error);
-    res.status(400).json({ success: false, message: error.message });
+  await project.save();
+  res.status(201).json({ success: true, data: project });
+});
+
+// Récupérer tous les projets (pour admin) avec pagination
+exports.getAllProjects = asyncHandler(async (req, res, next) => {
+  const { status, page = 1, limit = 20 } = req.query;
+
+  const query = {};
+  if (status) {
+    query.status = status;
   }
-};
 
-// Récupérer tous les projets (pour admin)
-exports.getAllProjects = async (req, res) => {
-  try {
-    const { status } = req.query;
+  // Convertir page et limit en entiers
+  const pageNum = parseInt(page, 10);
+  const limitNum = parseInt(limit, 10);
+  const skip = (pageNum - 1) * limitNum;
 
-    const query = {};
-    if (status) {
-      query.status = status;
-    }
+  // Récupérer à la fois le nombre total et la liste paginée pour l'affichage frontal
+  const [projects, total] = await Promise.all([
+    Project.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean(),
+    Project.countDocuments(query)
+  ]);
 
-    const projects = await Project.find(query).sort({ createdAt: -1 });
-    res
-      .status(200)
-      .json({ success: true, count: projects.length, data: projects });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-};
+  res.status(200).json({ 
+    success: true, 
+    count: projects.length, 
+    total,
+    page: pageNum,
+    totalPages: Math.ceil(total / limitNum),
+    data: projects 
+  });
+});
 
 // Récupérer les projets d'un étudiant
-exports.getUserProjects = async (req, res) => {
-  try {
-    // Trouver tous les projets où l'utilisateur est le créateur OU un membre
-    const projects = await Project.find({
-      $or: [
-        { "submittedBy.userId": req.user._id },
+exports.getUserProjects = asyncHandler(async (req, res, next) => {
+  // Trouver tous les projets où l'utilisateur est le créateur OU un membre
+  const projects = await Project.find({
+    $or: [
+      { "submittedBy.userId": req.user._id },
         { "members.email": req.user.email },
       ],
     }).sort({ createdAt: -1 });
 
-    // Pour chaque projet, ajouter une propriété indiquant si l'utilisateur est le créateur
-    const projectsWithRole = projects.map((project) => {
-      const isCreator =
-        project.submittedBy.userId.toString() === req.user._id.toString();
-      return {
-        ...project.toObject(),
-        isCreator: isCreator,
-      };
-    });
+  // Pour chaque projet, ajouter une propriété indiquant si l'utilisateur est le créateur
+  const projectsWithRole = projects.map((project) => {
+    const isCreator =
+      project.submittedBy.userId.toString() === req.user._id.toString();
+    return {
+      ...project.toObject(),
+      isCreator: isCreator,
+    };
+  });
 
-    res
-      .status(200)
-      .json({ success: true, count: projects.length, data: projectsWithRole });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-};
+  res
+    .status(200)
+    .json({ success: true, count: projects.length, data: projectsWithRole });
+});
 
 // Récupérer un projet par ID
-exports.getProjectById = async (req, res) => {
-  try {
-    const project = await Project.findById(req.params.id);
+exports.getProjectById = asyncHandler(async (req, res, next) => {
+  const project = await Project.findById(req.params.id);
 
-    if (!project) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Projet non trouvé" });
-    }
-
-    // Vérifier que l'utilisateur est admin, le créateur du projet ou un membre
-    const isOwner =
-      project.submittedBy.userId.toString() === req.user._id.toString();
-    const isMember = project.members.some(
-      (member) => member.email === req.user.email
-    );
-    const isAdmin = req.user.role === "admin";
-
-    if (!isOwner && !isAdmin && !isMember) {
-      return res.status(403).json({ success: false, message: "Non autorisé" });
-    }
-
-    res.status(200).json({ success: true, data: project });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+  if (!project) {
+    return next(new ErrorResponse("Projet non trouvé", 404));
   }
-};
+
+  // Vérifier que l'utilisateur est admin, le créateur du projet ou un membre
+  const isOwner =
+    project.submittedBy.userId.toString() === req.user._id.toString();
+  const isMember = project.members.some(
+    (member) => member.email === req.user.email
+  );
+  const isAdmin = req.user.role === "admin";
+
+  if (!isOwner && !isAdmin && !isMember) {
+    return next(new ErrorResponse("Non autorisé", 403));
+  }
+
+  res.status(200).json({ success: true, data: project });
+});
 
 // Mettre à jour les informations additionnelles (pour étudiant)
-exports.updateAdditionalInfo = async (req, res) => {
-  try {
-    const { personalGithub, projectGithub, documents } = req.body;
+exports.updateAdditionalInfo = asyncHandler(async (req, res, next) => {
+  const { personalGithub, projectGithub, documents } = req.body;
 
-    const project = await Project.findById(req.params.id);
+  const project = await Project.findById(req.params.id);
 
-    if (!project) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Projet non trouvé" });
-    }
-
-    // Vérifier que l'utilisateur est le propriétaire du projet
-    if (project.submittedBy.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, message: "Non autorisé" });
-    }
-
-    // Vérifier que le projet est approuvé
-    if (project.status !== "approved") {
-      return res.status(400).json({
-        success: false,
-        message: "Seuls les projets approuvés peuvent être mis à jour",
-      });
-    }
-
-    project.additionalInfo = {
-      personalGithub,
-      projectGithub,
-      documents,
-    };
-    project.updatedAt = Date.now();
-
-    await project.save();
-    res.status(200).json({ success: true, data: project });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+  if (!project) {
+    return next(new ErrorResponse("Projet non trouvé", 404));
   }
-};
 
-exports.completeProject = async (req, res) => {
-  try {
-    const project = await Project.findById(req.params.id);
-    
-    if (!project) {
-      return res.status(404).json({ success: false, message: 'Projet non trouvé' });
-    }
-    
-    // Vérifier que l'utilisateur est administrateur
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Non autorisé' });
-    }
-    
-    // Vérifier que le projet était précédemment approuvé
-    if (project.status !== 'approved') {
-      return res.status(400).json({ success: false, message: 'Seuls les projets approuvés peuvent être marqués comme terminés' });
-    }
-    
-    // Changer le statut et ajouter les commentaires
-    project.status = 'completed';
-    if (req.body.comments) {
-      project.reviewedBy = {
-        userId: req.user._id,
-        name: req.user.name,
-        comments: req.body.comments
-      };
-    }
-    project.updatedAt = Date.now();
-    
-    // Ajouter à l'historique si existe
-    if (project.changeHistory) {
-      project.changeHistory.push({
-        status: 'completed',
-        comments: req.body.comments || 'Projet marqué comme terminé',
-        reviewer: {
-          userId: req.user._id,
-          name: req.user.name
-        },
-        date: new Date()
-      });
-    }
-    
-    await project.save();
-    
-    // Envoyer un email de notification
-    try {
-      await emailService.sendStatusChangeEmail(project, 'completed');
-    } catch (emailError) {
-      console.error('Erreur lors de l\'envoi de l\'email de notification:', emailError);
-    }
-    
-    res.status(200).json({ success: true, data: project });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+  // Vérifier que l'utilisateur est le propriétaire du projet
+  if (project.submittedBy.userId.toString() !== req.user._id.toString()) {
+    return next(new ErrorResponse("Non autorisé", 403));
   }
-};
 
+  // Vérifier que le projet est approuvé
+  if (project.status !== PROJECT_STATUSES.APPROVED) {
+    return next(new ErrorResponse("Seuls les projets approuvés peuvent être mis à jour", 400));
+  }
 
-// Approuver ou refuser un projet ou demande de modifications (pour admin)
-exports.reviewProject = async (req, res) => {
-  try {
-    const { status, comments, credits } = req.body;
-    
-    if (!['approved', 'rejected', 'pending_changes'].includes(status)) {
-      return res.status(400).json({ success: false, message: 'Statut invalide' });
-    }
-    
-    const project = await Project.findById(req.params.id);
-    
-    if (!project) {
-      return res.status(404).json({ success: false, message: 'Projet non trouvé' });
-    }
-    
-    // Vérifier si les crédits sont fournis pour un projet approuvé
-    if (status === 'approved') {
-      if (credits === undefined || credits === null) {
-        return res.status(400).json({ success: false, message: 'Le champ crédits est requis pour approuver un projet' });
-      }
-      
-      // Mettre à jour les crédits
-      project.credits = credits;
-    }
+  project.additionalInfo = {
+    personalGithub,
+    projectGithub,
+    documents,
+  };
+  project.updatedAt = Date.now();
 
-    // Enregistrer l'ancien statut pour vérifier s'il y a eu un changement
-    const oldStatus = project.status;
+  await project.save();
+  res.status(200).json({ success: true, data: project });
+});
+
+exports.completeProject = asyncHandler(async (req, res, next) => {
+  const project = await Project.findById(req.params.id);
+  
+  if (!project) {
+    return next(new ErrorResponse('Projet non trouvé', 404));
+  }
+  
+  // Vérifier que l'utilisateur est administrateur
+  if (req.user.role !== 'admin') {
+    return next(new ErrorResponse('Non autorisé', 403));
+  }
+  
+  // Vérifier que le projet était précédemment approuvé
+  if (project.status !== PROJECT_STATUSES.APPROVED) {
+    return next(new ErrorResponse('Seuls les projets approuvés peuvent être marqués comme terminés', 400));
+  }
     
-    // Ajouter l'entrée dans l'historique des modifications
-    if (project.changeHistory) {
-      project.changeHistory.push({
-        status: status,
-        comments: comments,
-        reviewer: {
-          userId: req.user._id,
-          name: req.user.name
-        },
-        date: new Date()
-      });
-    }
-    
-    // Mettre à jour le statut et l'évaluateur actuels
-    project.status = status;
+  // Changer le statut et ajouter les commentaires
+  project.status = PROJECT_STATUSES.COMPLETED;
+  if (req.body.comments) {
     project.reviewedBy = {
       userId: req.user._id,
       name: req.user.name,
-      comments: comments
+      comments: req.body.comments
     };
-    project.updatedAt = Date.now();
-    
-    // Si le projet est approuvé, envoyer la requête externe
-    const externalSiteUrl = "https://intra.epitech.eu/module/2025/G-INN-020/NCE-0-1/#!/create";
-    if (status === 'approved') {
-      try {
-        const response = await sendExternalRequest(project);
-        
-        project.externalRequestStatus = {
-          sent: true,
-          sentAt: Date.now(),
-          response: response
-        };
-      } catch (error) {
-        console.error('Erreur lors de l\'envoi de la requête externe:', error);
-        // On continue même si la requête externe échoue
-      }
-    }
-    
-    await project.save();
-    
-    // Envoyer un email si le statut a changé
-    if (oldStatus !== status) {
-      try {
-        await emailService.sendStatusChangeEmail(project, status);
-        console.log(`Notification envoyée pour le changement de statut du projet ${project._id}`);
-      } catch (emailError) {
-        console.error('Erreur lors de l\'envoi de l\'email de notification:', emailError);
-        // On continue même si l'envoi d'email échoue
-      }
-    }
-    
-    const responseData = {
-      success: true,
-      data: project
-    };
-    
-    if (status === 'approved') {
-      responseData.externalSiteUrl = externalSiteUrl;
-    }
-    res.status(200).json(responseData);
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
   }
-};
+  project.updatedAt = Date.now();
+  
+  // Ajouter à l'historique si existe
+  if (project.changeHistory) {
+    project.changeHistory.push({
+      status: PROJECT_STATUSES.COMPLETED,
+      comments: req.body.comments || 'Projet marqué comme terminé',
+      reviewer: {
+        userId: req.user._id,
+        name: req.user.name
+      },
+      date: new Date()
+    });
+  }
+  
+  await project.save();
+  
+  // Envoi différé de l'email via la Queue asynchrone pour ne pas bloquer l'UI
+  backgroundJobs.addJob('sendStatusEmail', { project, status: PROJECT_STATUSES.COMPLETED });
+  
+  res.status(200).json({ success: true, data: project });
+});
+
+// Approuver ou refuser un projet ou demande de modifications (pour admin)
+exports.reviewProject = asyncHandler(async (req, res, next) => {
+  const { status, comments, credits } = req.body;
+  
+  if (!Object.values(PROJECT_STATUSES).includes(status)) {
+    return next(new ErrorResponse('Statut invalide', 400));
+  }
+  
+  const project = await Project.findById(req.params.id);
+  
+  if (!project) {
+    return next(new ErrorResponse('Projet non trouvé', 404));
+  }
+    
+  // Vérifier si les crédits sont fournis pour un projet approuvé
+  if (status === PROJECT_STATUSES.APPROVED) {
+    if (credits === undefined || credits === null) {
+      return next(new ErrorResponse('Le champ crédits est requis pour approuver un projet', 400));
+    }
+    
+    // Mettre à jour les crédits
+    project.credits = credits;
+  }
+
+  // Enregistrer l'ancien statut pour vérifier s'il y a eu un changement
+  const oldStatus = project.status;
+  
+  // Ajouter l'entrée dans l'historique des modifications
+  if (project.changeHistory) {
+    project.changeHistory.push({
+      status: status,
+      comments: comments,
+      reviewer: {
+        userId: req.user._id,
+        name: req.user.name
+      },
+      date: new Date()
+    });
+  }
+  
+  // Mettre à jour le statut et l'évaluateur actuels
+  project.status = status;
+  project.reviewedBy = {
+    userId: req.user._id,
+    name: req.user.name,
+    comments: comments
+  };
+  project.updatedAt = Date.now();
+  
+  // Si le projet est approuvé, traitement en tâche de fond de la requête externe
+  const externalSiteUrl = "https://intra.epitech.eu/module/2025/G-INN-020/NCE-0-1/#!/create";
+  if (status === PROJECT_STATUSES.APPROVED) {
+    backgroundJobs.addJob('sendExternalRequest', { project });
+  }
+    
+  await project.save();
+  
+  // Envoi différé de l'email si le statut a changé
+  if (oldStatus !== status) {
+    backgroundJobs.addJob('sendStatusEmail', { project, status });
+  }
+  
+  const responseData = {
+    success: true,
+    data: project
+  };
+  
+  if (status === PROJECT_STATUSES.APPROVED) {
+    responseData.externalSiteUrl = externalSiteUrl;
+  }
+  res.status(200).json(responseData);
+});
 
 // Mettre à jour un projet
-exports.updateProject = async (req, res) => {
-  try {
-    const { name, description, objectives, technologies, studentCount, studentEmails, links } = req.body;
+exports.updateProject = asyncHandler(async (req, res, next) => {
+  const { name, description, objectives, technologies, studentCount, studentEmails, links } = req.body;
+  
+  const project = await Project.findById(req.params.id);
+  
+  if (!project) {
+    return next(new ErrorResponse('Projet non trouvé', 404));
+  }
+  
+  // Vérifier que l'utilisateur est le propriétaire du projet
+  if (project.submittedBy.userId.toString() !== req.user._id.toString()) {
+    return next(new ErrorResponse('Non autorisé à modifier ce projet', 403));
+  }
+  
+  // Vérifier que le projet est en attente ou en attente de modifications
+  if (project.status !== PROJECT_STATUSES.PENDING && project.status !== PROJECT_STATUSES.PENDING_CHANGES) {
+    return next(new ErrorResponse('Seuls les projets en attente ou en attente de modifications peuvent être modifiés', 400));
+  }
     
-    const project = await Project.findById(req.params.id);
-    
-    if (!project) {
-      return res.status(404).json({ success: false, message: 'Projet non trouvé' });
-    }
-    
-    // Vérifier que l'utilisateur est le propriétaire du projet
-    if (project.submittedBy.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, message: 'Non autorisé à modifier ce projet' });
-    }
-    
-    // Vérifier que le projet est en attente ou en attente de modifications
-    if (project.status !== 'pending' && project.status !== 'pending_changes') {
-      return res.status(400).json({ success: false, message: 'Seuls les projets en attente ou en attente de modifications peuvent être modifiés' });
-    }
-    
-    // Vérifier que les liens GitHub sont fournis
-    if (!links.github || !links.projectGithub) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Les liens GitHub personnel et de projet sont obligatoires' 
-      });
-    }
-    
-    // Vérifier le format des liens GitHub
-    const githubRegex = /^https:\/\/github\.com\/[\w-]+\/[\w-]+\/?$/;
-    if (!githubRegex.test(links.github)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Le lien GitHub personnel doit être au format https://github.com/username/repo' 
-      });
-    }
+    // La validation des liens est gérée par express-validator
 
     // Mettre à jour la liste des membres
     // Commencez par le créateur du projet (qui ne change pas)
@@ -438,137 +385,47 @@ exports.updateProject = async (req, res) => {
     
     // Ajouter les autres membres du groupe
     if (studentEmails && studentEmails.length > 0) {
+      // Résolution N+1: Récupération en une seule requête de tous les utilisateurs
+      const existingUsers = await User.find({ email: { $in: studentEmails } }).lean();
+      const usersByEmail = existingUsers.reduce((acc, user) => {
+        acc[user.email] = user._id;
+        return acc;
+      }, {});
+      
       for (const email of studentEmails) {
-        // Vérifier si l'utilisateur existe déjà
-        const existingUser = await User.findOne({ email });
-        
         members.push({
           email: email,
-          userId: existingUser ? existingUser._id : null,
+          userId: usersByEmail[email] || null,
           isCreator: false
         });
       }
     }
     
-    // Mettre à jour les champs
-    project.name = name;
-    project.description = description;
-    project.objectives = objectives;
-    project.technologies = technologies;
-    project.studentCount = studentCount;
-    project.studentEmails = studentEmails || [];
-    project.links = links;
-    project.members = members;
-    project.updatedAt = Date.now();
-    
-    // Si le projet était en attente de modifications, le remettre en attente
-    if (project.status === 'pending_changes') {
-      project.status = 'pending';
-      // Ajouter une note indiquant que l'étudiant a effectué les modifications demandées
-      project.reviewedBy = {
-        ...project.reviewedBy,
-        comments: project.reviewedBy.comments + "\n\n[Modifications effectuées par l'étudiant le " + new Date().toLocaleDateString() + "]"
-      };
-      
-      // Ajouter à l'historique que l'étudiant a effectué les modifications
-      if (project.changeHistory) {
-        project.changeHistory.push({
-          status: 'pending',
-          comments: `Modifications effectuées par l'étudiant`,
-          reviewer: {
-            userId: req.user._id,
-            name: req.user.name
-          },
-          date: new Date()
-        });
-      }
-    }
-    
-    await project.save();
-    res.status(200).json({ success: true, data: project });
-  } catch (error) {
-    console.error('Erreur lors de la mise à jour du projet:', error);
-    res.status(400).json({ success: false, message: error.message });
-  }
-};
-
-// Demander des modifications à un projet
-exports.requestChanges = async (req, res) => {
-  try {
-    const { comments } = req.body;
-
-    const project = await Project.findById(req.params.id);
-
-    if (!project) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Projet non trouvé" });
-    }
-
-    // Vérifier que l'utilisateur est administrateur
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ success: false, message: "Non autorisé" });
-    }
-
-    // Changer le statut et ajouter les commentaires
-    project.status = "pending_changes";
+  // Mettre à jour les champs
+  project.name = name;
+  project.description = description;
+  project.objectives = objectives;
+  project.technologies = technologies;
+  project.studentCount = studentCount;
+  project.studentEmails = studentEmails || [];
+  project.links = links;
+  project.members = members;
+  project.updatedAt = Date.now();
+  
+  // Si le projet était en attente de modifications, le remettre en attente
+  if (project.status === PROJECT_STATUSES.PENDING_CHANGES) {
+    project.status = PROJECT_STATUSES.PENDING;
+    // Ajouter une note indiquant que l'étudiant a effectué les modifications demandées
     project.reviewedBy = {
-      userId: req.user._id,
-      name: req.user.name,
-      comments: comments || "Des modifications sont requises.",
+      ...project.reviewedBy,
+      comments: project.reviewedBy.comments + "\n\n[Modifications effectuées par l'étudiant le " + new Date().toLocaleDateString() + "]"
     };
-    project.updatedAt = Date.now();
-
-    await project.save();
-    res.status(200).json({ success: true, data: project });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-};
-
-// Quitter un projet pour un membre non-créateur
-exports.leaveProject = async (req, res) => {
-  try {
-    const project = await Project.findById(req.params.id);
     
-    if (!project) {
-      return res.status(404).json({ success: false, message: 'Projet non trouvé' });
-    }
-    
-    // Vérifier que l'utilisateur est un membre mais pas le créateur
-    const isCreator = project.submittedBy.userId.toString() === req.user._id.toString();
-    const isMember = project.members.some(member => member.email === req.user.email);
-    
-    if (isCreator) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Le créateur du projet ne peut pas quitter le projet' 
-      });
-    }
-    
-    if (!isMember) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Vous n\'êtes pas membre de ce projet' 
-      });
-    }
-    
-    // Supprimer l'utilisateur des membres
-    project.members = project.members.filter(member => member.email !== req.user.email);
-    
-    // Supprimer l'email de la liste des emails d'étudiants si présent
-    if (project.studentEmails && project.studentEmails.includes(req.user.email)) {
-      project.studentEmails = project.studentEmails.filter(email => email !== req.user.email);
-    }
-    
-    // Mettre à jour le nombre d'étudiants si nécessaire
-    project.studentCount = project.members.length;
-    
-    // Ajouter à l'historique si existe
+    // Ajouter à l'historique que l'étudiant a effectué les modifications
     if (project.changeHistory) {
       project.changeHistory.push({
-        status: project.status,
-        comments: `${req.user.name} (${req.user.email}) a quitté le projet`,
+        status: PROJECT_STATUSES.PENDING,
+        comments: `Modifications effectuées par l'étudiant`,
         reviewer: {
           userId: req.user._id,
           name: req.user.name
@@ -576,155 +433,164 @@ exports.leaveProject = async (req, res) => {
         date: new Date()
       });
     }
-    
-    project.updatedAt = Date.now();
-    await project.save();
-    
-    res.status(200).json({ 
-      success: true, 
-      message: 'Vous avez quitté le projet avec succès',
-      data: project 
-    });
-  } catch (error) {
-    console.error('Erreur lors du départ du projet:', error);
-    res.status(400).json({ success: false, message: error.message });
   }
-};
+  
+  await project.save();
+  res.status(200).json({ success: true, data: project });
+});
+
+// Demander des modifications à un projet
+exports.requestChanges = asyncHandler(async (req, res, next) => {
+  const { comments } = req.body;
+
+  const project = await Project.findById(req.params.id);
+
+  if (!project) {
+    return next(new ErrorResponse("Projet non trouvé", 404));
+  }
+
+  // Vérifier que l'utilisateur est administrateur
+  if (req.user.role !== "admin") {
+    return next(new ErrorResponse("Non autorisé", 403));
+  }
+
+  // Changer le statut et ajouter les commentaires
+  project.status = PROJECT_STATUSES.PENDING_CHANGES;
+  project.reviewedBy = {
+    userId: req.user._id,
+    name: req.user.name,
+    comments: comments || "Des modifications sont requises.",
+  };
+  project.updatedAt = Date.now();
+
+  await project.save();
+  res.status(200).json({ success: true, data: project });
+});
+
+// Quitter un projet pour un membre non-créateur
+exports.leaveProject = asyncHandler(async (req, res, next) => {
+  const project = await Project.findById(req.params.id);
+  
+  if (!project) {
+    return next(new ErrorResponse('Projet non trouvé', 404));
+  }
+  
+  // Vérifier que l'utilisateur est un membre mais pas le créateur
+  const isCreator = project.submittedBy.userId.toString() === req.user._id.toString();
+  const isMember = project.members.some(member => member.email === req.user.email);
+  
+  if (isCreator) {
+    return next(new ErrorResponse('Le créateur du projet ne peut pas quitter le projet', 400));
+  }
+  
+  if (!isMember) {
+    return next(new ErrorResponse('Vous n\'êtes pas membre de ce projet', 400));
+  }
+    
+  // Supprimer l'utilisateur des membres
+  project.members = project.members.filter(member => member.email !== req.user.email);
+  
+  // Supprimer l'email de la liste des emails d'étudiants si présent
+  if (project.studentEmails && project.studentEmails.includes(req.user.email)) {
+    project.studentEmails = project.studentEmails.filter(email => email !== req.user.email);
+  }
+  
+  // Mettre à jour le nombre d'étudiants si nécessaire
+  project.studentCount = project.members.length;
+  
+  // Ajouter à l'historique si existe
+  if (project.changeHistory) {
+    project.changeHistory.push({
+      status: project.status, // Peut être stocké en dur si non modif, ou convertit à une constante s'il gère les statuts.
+      comments: `${req.user.name} (${req.user.email}) a quitté le projet`,
+      reviewer: {
+        userId: req.user._id,
+        name: req.user.name
+      },
+      date: new Date()
+    });
+  }
+  
+  project.updatedAt = Date.now();
+  await project.save();
+  
+  res.status(200).json({ 
+    success: true, 
+    message: 'Vous avez quitté le projet avec succès',
+    data: project 
+  });
+});
 
 // Supprimer un projet
-exports.deleteProject = async (req, res) => {
-  try {
-    const project = await Project.findById(req.params.id);
+exports.deleteProject = asyncHandler(async (req, res, next) => {
+  const project = await Project.findById(req.params.id);
 
-    if (!project) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Projet non trouvé" });
-    }
-
-    // Vérifier si l'utilisateur est un administrateur
-    const isAdmin = req.user.role === "admin";
-
-    // Vérifier que l'utilisateur est le propriétaire du projet ou un administrateur
-    if (project.submittedBy.userId.toString() !== req.user._id.toString() && !isAdmin) {
-      return res.status(403).json({
-        success: false,
-        message: "Non autorisé à supprimer ce projet",
-      });
-    }
-
-    // Si l'utilisateur est le propriétaire (et non administrateur), vérifier que le projet est en attente
-    if (!isAdmin && project.status !== "pending" && project.status !== "pending_changes") {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Seuls les projets en attente ou en attente de modifications peuvent être supprimés par leur propriétaire",
-      });
-    }
-
-    await Project.findByIdAndDelete(req.params.id);
-    res.status(200).json({
-      success: true,
-      message: "Projet supprimé avec succès",
-      data: {}
-    });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+  if (!project) {
+    return next(new ErrorResponse("Projet non trouvé", 404));
   }
-};
+
+  // Vérifier si l'utilisateur est un administrateur
+  const isAdmin = req.user.role === "admin";
+
+  // Vérifier que l'utilisateur est le propriétaire du projet ou un administrateur
+  if (project.submittedBy.userId.toString() !== req.user._id.toString() && !isAdmin) {
+    return next(new ErrorResponse("Non autorisé à supprimer ce projet", 403));
+  }
+
+  // Si l'utilisateur est le propriétaire (et non administrateur), vérifier que le projet est en attente
+  if (!isAdmin && project.status !== PROJECT_STATUSES.PENDING && project.status !== PROJECT_STATUSES.PENDING_CHANGES) {
+    return next(new ErrorResponse("Seuls les projets en attente ou en attente de modifications peuvent être supprimés par leur propriétaire", 400));
+  }
+
+  await Project.findByIdAndDelete(req.params.id);
+  res.status(200).json({
+    success: true,
+    message: "Projet supprimé avec succès",
+    data: {}
+  });
+});
 
 // Exporter les projets terminés en CSV avec filtre de date
-exports.exportCompletedProjectsCSV = async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
+exports.exportCompletedProjectsCSV = asyncHandler(async (req, res, next) => {
+  const { startDate, endDate } = req.query;
 
-    // Construire la requête pour les projets terminés
-    const query = { status: 'completed' };
+  // Construire la requête pour les projets terminés
+  const query = { status: PROJECT_STATUSES.COMPLETED };
 
-    // Ajouter le filtre de date si fourni
-    if (startDate || endDate) {
-      query.updatedAt = {};
+  // Ajouter le filtre de date si fourni
+  if (startDate || endDate) {
+    query.updatedAt = {};
 
-      if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0); // Début de la journée
-        query.updatedAt.$gte = start;
-      }
-
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999); // Fin de la journée
-        query.updatedAt.$lte = end;
-      }
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0); // Début de la journée
+      query.updatedAt.$gte = start;
     }
 
-    // Récupérer les projets terminés
-    const projects = await Project.find(query).sort({ updatedAt: -1 });
-
-    if (projects.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Aucun projet terminé trouvé pour la période spécifiée'
-      });
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // Fin de la journée
+      query.updatedAt.$lte = end;
     }
-
-    // Créer un objet pour agréger les crédits par email
-    const emailCreditsMap = {};
-
-    // Parcourir tous les projets et leurs emails d'étudiants
-    projects.forEach(project => {
-      const projectCredits = project.credits || 0;
-      let emails = [];
-
-      // Si studentCount est 1, utiliser l'email de submittedBy
-      if (project.studentCount === 1) {
-        if (project.submittedBy && project.submittedBy.email) {
-          emails = [project.submittedBy.email];
-        }
-      } else {
-        // Sinon, utiliser studentEmails
-        emails = project.studentEmails || [];
-      }
-
-      emails.forEach(email => {
-        if (email && email.trim()) {
-          const normalizedEmail = email.trim().toLowerCase();
-          if (!emailCreditsMap[normalizedEmail]) {
-            emailCreditsMap[normalizedEmail] = {
-              originalEmail: email.trim(),
-              totalCredits: 0,
-              projectCount: 0
-            };
-          }
-          emailCreditsMap[normalizedEmail].totalCredits += projectCredits;
-          if (projectCredits > 0) {
-            emailCreditsMap[normalizedEmail].projectCount += 1;
-          }
-        }
-      });
-    });
-
-    // Générer les lignes CSV
-    const csvHeader = 'login;grade;credits;number project\n';
-    const csvRows = Object.values(emailCreditsMap).map(({ originalEmail, totalCredits, projectCount }) => {
-      const grade = totalCredits > 0 ? 'Acquis' : '-';
-      return `${originalEmail};${grade};${totalCredits};${projectCount}`;
-    }).join('\n');
-
-    const csvContent = csvHeader + csvRows;
-
-    // Définir les en-têtes de réponse pour télécharger le fichier CSV
-    const filename = `completed_projects_${startDate || 'all'}_to_${endDate || 'all'}.csv`;
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-
-    // Ajouter le BOM UTF-8 pour une meilleure compatibilité avec Excel
-    res.write('\uFEFF');
-    res.write(csvContent);
-    res.end();
-
-  } catch (error) {
-    console.error('Erreur lors de l\'export CSV:', error);
-    res.status(500).json({ success: false, message: error.message });
   }
-};
+
+  // Récupérer les projets terminés avec .lean() pour sauver de la RAM et accélérer l'exécution
+  const projects = await Project.find(query).sort({ updatedAt: -1 }).lean();
+
+  if (projects.length === 0) {
+    return next(new ErrorResponse('Aucun projet terminé trouvé pour la période spécifiée', 404));
+  }
+
+  // Formater les données CSV via le service approprié
+  const csvContent = projectService.formatCompletedProjectsForCSV(projects);
+
+  // Définir les en-têtes de réponse pour télécharger le fichier CSV
+  const filename = `completed_projects_${startDate || 'all'}_to_${endDate || 'all'}.csv`;
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+  // Ajouter le BOM UTF-8 pour une meilleure compatibilité avec Excel
+  res.write('\uFEFF');
+  res.write(csvContent);
+  res.end();
+});

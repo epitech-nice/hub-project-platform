@@ -132,18 +132,47 @@ export default function SimulatedCatalog() {
                     Aucun cycle planifié pour le moment.
                   </p>
                 ) : (
-                  allCycles.map((c) => {
-                    const now = new Date();
+                  [...allCycles]
+                    .sort((a, b) => {
+                      const now = new Date();
+                      const getPrio = (cycle) => {
+                        const isPast = new Date(cycle.secondDefenseDate) < now;
+                        const isFuture = new Date(cycle.startDate) > now;
+                        if (!isPast && !isFuture) return 1; // En cours
+                        if (isFuture) return 2; // À venir
+                        return 3; // Terminé
+                      };
+                      const prioA = getPrio(a);
+                      const prioB = getPrio(b);
+                      
+                      // Trier par priorité d'abord
+                      if (prioA !== prioB) return prioA - prioB;
+                      
+                      // Si même priorité, on trie par date
+                      // Pour les cycles passés, on affiche le plus récent en premier (descendant)
+                      if (prioA === 3) return new Date(b.startDate) - new Date(a.startDate);
+                      // Pour les cycles à venir ou en cours, on affiche le plus proche en premier (ascendant)
+                      return new Date(a.startDate) - new Date(b.startDate);
+                    })
+                    .map((c) => {
+                      const now = new Date();
                     const isPhase1Open = new Date(c.startDate) <= now && now <= new Date(c.firstSubmissionDeadline);
                     const isPhase2Open = new Date(c.firstDefenseDate) <= now && now <= new Date(c.secondSubmissionDeadline);
                     const isPast = new Date(c.secondDefenseDate) < now;
-                    const isCurrent = isPhase1Open || isPhase2Open;
+                    const isFuture = new Date(c.startDate) > now;
+                    const isCurrentCycle = !isPast && !isFuture;
 
-                    const borderColor = isCurrent
+                    const borderColor = isCurrentCycle
                       ? "border-blue-400 dark:border-blue-500"
                       : isPast
                       ? "border-gray-200 dark:border-gray-700"
                       : "border-gray-200 dark:border-gray-700";
+
+                    let badgeText = "Cycle en cours";
+                    if (isPhase1Open) badgeText = "Phase 1 en cours";
+                    else if (isPhase2Open) badgeText = "Phase 2 en cours";
+                    else if (now > new Date(c.firstSubmissionDeadline) && now <= new Date(c.firstDefenseDate)) badgeText = "Défenses phase 1";
+                    else if (now > new Date(c.secondSubmissionDeadline) && now <= new Date(c.secondDefenseDate)) badgeText = "Défenses finales";
 
                     const fmtDate = (d) =>
                       new Date(d).toLocaleDateString("fr-FR", {
@@ -154,7 +183,7 @@ export default function SimulatedCatalog() {
                       <div
                         key={c._id}
                         className={`rounded-lg border-2 ${borderColor} ${
-                          isCurrent ? "bg-blue-50 dark:bg-blue-900/20" : isPast ? "bg-gray-50 dark:bg-gray-800/50 opacity-60" : "bg-white dark:bg-gray-800"
+                          isCurrentCycle ? "bg-blue-50 dark:bg-blue-900/20" : isPast ? "bg-gray-50 dark:bg-gray-800/50 opacity-60" : "bg-white dark:bg-gray-800"
                         } p-4`}
                       >
                         {/* Titre du cycle */}
@@ -167,9 +196,9 @@ export default function SimulatedCatalog() {
                               </span>
                             )}
                           </div>
-                          {isCurrent && (
+                          {isCurrentCycle && (
                             <span className="text-xs font-semibold bg-blue-600 text-white px-2 py-0.5 rounded-full">
-                              {isPhase1Open ? "Phase 1 en cours" : "Phase 2 en cours"}
+                              {badgeText}
                             </span>
                           )}
                           {isPast && (
@@ -183,35 +212,35 @@ export default function SimulatedCatalog() {
                             icon="▶"
                             label="Ouverture phase 1"
                             date={fmtDate(c.startDate)}
-                            active={isPhase1Open}
+                            active={now <= new Date(c.firstSubmissionDeadline)}
                             colorClass="text-green-600 dark:text-green-400"
                           />
                           <TimelineRow
                             icon="⏱"
                             label="Deadline dépôt phase 1"
                             date={fmtDate(c.firstSubmissionDeadline)}
-                            active={isPhase1Open}
+                            active={now <= new Date(c.firstSubmissionDeadline)}
                             colorClass="text-yellow-600 dark:text-yellow-400"
                           />
                           <TimelineRow
                             icon="🎤"
                             label="1ère défense"
                             date={fmtDate(c.firstDefenseDate)}
-                            active={false}
+                            active={now <= new Date(c.firstDefenseDate)}
                             colorClass="text-blue-600 dark:text-blue-400"
                           />
                           <TimelineRow
                             icon="⏱"
                             label="Deadline dépôt phase 2"
                             date={fmtDate(c.secondSubmissionDeadline)}
-                            active={isPhase2Open}
+                            active={now <= new Date(c.secondSubmissionDeadline)}
                             colorClass="text-yellow-600 dark:text-yellow-400"
                           />
                           <TimelineRow
                             icon="🎤"
                             label="2ème défense (finale)"
                             date={fmtDate(c.secondDefenseDate)}
-                            active={false}
+                            active={now <= new Date(c.secondDefenseDate)}
                             colorClass="text-blue-600 dark:text-blue-400"
                           />
                         </div>

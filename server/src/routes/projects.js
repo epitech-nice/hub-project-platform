@@ -3,16 +3,17 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken, isAdmin } = require('../middleware/auth');
 const projectController = require('../controllers/projectController');
+const { projectValidationRules, validate } = require('../middleware/validators');
 
 // Validation GitHub (avant /:id pour éviter les conflits de route)
 router.get('/validate-github', authenticateToken, projectController.validateGithubRepo);
 
 // Routes pour les étudiants
-router.post('/', authenticateToken, projectController.createProject);
+router.post('/', authenticateToken, projectValidationRules(), validate, projectController.createProject);
 router.get('/me', authenticateToken, projectController.getUserProjects);
 router.get('/:id', authenticateToken, projectController.getProjectById);
 router.patch('/:id/additional-info', authenticateToken, projectController.updateAdditionalInfo);
-router.put('/:id', authenticateToken, projectController.updateProject);
+router.put('/:id', authenticateToken, projectValidationRules(), validate, projectController.updateProject);
 router.delete('/:id', authenticateToken, projectController.deleteProject);
 router.post('/:id/leave', authenticateToken, projectController.leaveProject);
 

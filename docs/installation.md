@@ -26,7 +26,7 @@ PORT=5000
 NODE_ENV=development
 
 # Base de données
-MONGODB_URI=mongodb://mongo:mongo@db:27017/hub_project_db
+MONGODB_URI=mongodb://xxxx:xxxx@db:xxxx/hub_project_db
 
 # Microsoft OAuth
 MICROSOFT_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -45,9 +45,6 @@ EXTERNAL_API_KEY=votre-api-key
 EMAIL_FROM=Hub Projets <noreply@votredomaine.eu>
 RESEND_API_KEY=re_xxxxxxxxxxxx
 EMAIL_DOMAIN=votredomaine.eu
-
-# Admins (séparés par virgule)
-APP_OWNER_EMAILS=admin@epitech.eu,admin2@epitech.eu
 
 # JWT
 JWT_SECRET=une-chaine-aleatoire-longue-et-securisee

@@ -20,14 +20,21 @@ export const useApi = () => {
     return config;
   });
 
-  // Gérer les erreurs API
+  // Intercepteur d'erreurs — enrichit l'erreur avec le détail des champs invalides
   api.interceptors.response.use(
     (response) => response,
-    (error) => {
-      console.error("API Error:", error.response?.data || error.message);
-      throw new Error(
-        error.response?.data?.message || "Une erreur est survenue"
+    (axiosError) => {
+      const data = axiosError.response?.data;
+      console.error("API Error:", data || axiosError.message);
+
+      // Créer une erreur enrichie avec les détails de validation
+      const err = new Error(
+        data?.message || data?.error || "Une erreur est survenue"
       );
+      err.status = axiosError.response?.status;
+      // `errors` = tableau [{champ: message}, ...] renvoyé par express-validator
+      err.errors = data?.errors || [];
+      throw err;
     }
   );
 

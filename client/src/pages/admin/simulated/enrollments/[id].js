@@ -29,7 +29,7 @@ export default function AdminEnrollmentDetail() {
   const { isAuthenticated, isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
   const { id } = router.query;
-  const { get, patch, delete: deleteRequest, loading: apiLoading } = useApi();
+  const { get, post, patch, delete: deleteRequest, loading: apiLoading } = useApi();
 
   const [enrollment, setEnrollment] = useState(null);
   const [reviewForm, setReviewForm] = useState({ status: "", comments: "" });
@@ -165,18 +165,9 @@ export default function AdminEnrollmentDetail() {
     setError("");
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/simulated/enrollments/${id}/relaunch`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        }
-      );
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
-      setEnrollment(data.data);
-      setSuccessMsg(`Cycle n°${data.data.cycleNumber} lancé. L'étudiant peut maintenant soumettre son GitHub Project.`);
+      const res = await post(`/api/simulated/enrollments/${id}/relaunch`, {});
+      setEnrollment(res.data);
+      setSuccessMsg(`Cycle n°${res.data.cycleNumber} lancé. L'étudiant peut maintenant soumettre son GitHub Project.`);
     } catch (err) {
       setError(err.message || "Une erreur est survenue.");
     } finally {
