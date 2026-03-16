@@ -101,4 +101,9 @@ const WorkshopSchema = new mongoose.Schema({
   },
 });
 
+// Index pour les requêtes fréquentes
+WorkshopSchema.index({ status: 1, createdAt: -1 });
+WorkshopSchema.index({ "submittedBy.userId": 1 });
+WorkshopSchema.index({ "instructors.email": 1 });
+
 module.exports = mongoose.model("Workshop", WorkshopSchema);

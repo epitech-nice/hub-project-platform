@@ -180,6 +180,11 @@ const SimulatedEnrollmentSchema = new mongoose.Schema({
   },
 });
 
+// Index pour les requêtes fréquentes
+SimulatedEnrollmentSchema.index({ "student.userId": 1, status: 1 });
+SimulatedEnrollmentSchema.index({ "simulatedProject.projectId": 1 });
+SimulatedEnrollmentSchema.index({ status: 1, submittedAt: -1 });
+
 // Export des constantes pour les réutiliser dans le controller
 SimulatedEnrollmentSchema.statics.VALID_CREDITS_NORMAL = VALID_CREDITS_NORMAL;
 SimulatedEnrollmentSchema.statics.VALID_CREDITS_DOUBLE = VALID_CREDITS_DOUBLE;

@@ -30,4 +30,7 @@ const SimulatedCycleSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+// Index pour getCurrentCycle (requête la plus fréquente sur ce modèle)
+SimulatedCycleSchema.index({ startDate: 1, firstSubmissionDeadline: 1 });
+
 module.exports = mongoose.model("SimulatedCycle", SimulatedCycleSchema);

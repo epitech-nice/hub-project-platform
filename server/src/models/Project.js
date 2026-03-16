@@ -126,4 +126,9 @@ const ProjectSchema = new mongoose.Schema({
   },
 });
 
+// Index pour les requêtes fréquentes
+ProjectSchema.index({ status: 1, createdAt: -1 });
+ProjectSchema.index({ "members.email": 1 });
+ProjectSchema.index({ "submittedBy.userId": 1 });
+
 module.exports = mongoose.model("Project", ProjectSchema);

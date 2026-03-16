@@ -3,7 +3,6 @@ const SimulatedProject = require("../../models/SimulatedProject");
 const SimulatedEnrollment = require("../../models/SimulatedEnrollment");
 const SimulatedCycle = require("../../models/SimulatedCycle");
 const User = require("../../models/User");
-const emailService = require("../../services/emailService");
 const { SIMULATED_STATUSES } = require("../../utils/constants");
 const asyncHandler = require("../../middleware/asyncHandler");
 const ErrorResponse = require("../../utils/errorResponse");
@@ -191,14 +190,15 @@ exports.forceEnroll = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse(`L'étudiant a déjà un projet en cours : "${activeEnrollment.simulatedProject.title}"`, 400));
   }
 
-  // Vérifier que ce projet n'est pas déjà complété par cet étudiant
+  // Vérifier que ce projet n'a pas déjà été effectué par cet étudiant (phase 2 approuvée ou terminée)
   const alreadyDone = await SimulatedEnrollment.findOne({
     "student.userId": student._id,
     "simulatedProject.projectId": projectId,
-    status: SIMULATED_STATUSES.COMPLETED,
+    phase: 2,
+    status: { $in: [SIMULATED_STATUSES.APPROVED, SIMULATED_STATUSES.COMPLETED] },
   });
   if (alreadyDone) {
-    return next(new ErrorResponse("L'étudiant a déjà complété ce projet", 400));
+    return next(new ErrorResponse("L'étudiant a déjà effectué ce projet", 400));
   }
 
   // Déterminer le numéro de cycle
@@ -360,13 +360,7 @@ exports.reviewEnrollment = asyncHandler(async (req, res, next) => {
   await enrollment.save();
 
   if (oldStatus !== status) {
-    backgroundJobs.addJob(async () => {
-      try {
-        await emailService.sendStatusChangeEmail(enrollment, status, false, true);
-      } catch (emailError) {
-        console.error("Erreur envoi email simulated:", emailError);
-      }
-    });
+    backgroundJobs.addJob('sendStatusEmail', { project: enrollment, status, isSimulated: true });
   }
 
   res.status(200).json({ success: true, data: enrollment });
@@ -455,13 +449,7 @@ exports.defendEnrollment = asyncHandler(async (req, res, next) => {
   enrollment.updatedAt = Date.now();
   await enrollment.save();
 
-  backgroundJobs.addJob(async () => {
-    try {
-      await emailService.sendStatusChangeEmail(enrollment, enrollment.status, false, true);
-    } catch (emailError) {
-      console.error("Erreur envoi email défense simulated:", emailError);
-    }
-  });
+  backgroundJobs.addJob('sendStatusEmail', { project: enrollment, status: enrollment.status, isSimulated: true });
 
   res.status(200).json({ success: true, data: enrollment });
 });

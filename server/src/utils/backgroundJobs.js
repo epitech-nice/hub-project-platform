@@ -13,7 +13,12 @@ const addJob = (jobName, payload) => {
   setImmediate(async () => {
     try {
       if (jobName === 'sendStatusEmail') {
-        await emailService.sendStatusChangeEmail(payload.project, payload.status);
+        await emailService.sendStatusChangeEmail(
+          payload.project,
+          payload.status,
+          payload.isWorkshop ?? false,
+          payload.isSimulated ?? false
+        );
         console.log(`[Background Job] Email envoyé avec succès pour le projet ${payload.project._id}`);
       }
 
