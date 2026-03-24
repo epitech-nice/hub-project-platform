@@ -21,7 +21,7 @@ const ProjectForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [githubError, setGithubError] = useState('');
-  
+
   // Fonction pour valider le lien GitHub via le backend
   const validateGithubUrl = async (url) => {
     if (!url) {
@@ -56,10 +56,10 @@ const ProjectForm = () => {
     const timeoutId = setTimeout(validatePersonalGithub, 1500);
     return () => clearTimeout(timeoutId);
   }, [formData.links.github]);
-  
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     if (name.includes('.')) {
       const [parent, child] = name.split('.');
       setFormData({
@@ -85,16 +85,16 @@ const ProjectForm = () => {
     try {
       // Valider le lien GitHub personnel avant de soumettre
       const isGithubValid = await validateGithubUrl(formData.links.github);
-      
+
       if (!isGithubValid) {
         throw new Error('Veuillez corriger les erreurs dans le lien GitHub personnel');
       }
-      
+
       // Vérification des champs obligatoires
       if (!formData.links.projectGithub) {
-        throw new Error('Le lien GitHub du projet est obligatoire');
+        throw new Error('Le lien GitHub project est obligatoire');
       }
-      
+
       // Validation des emails si studentCount > 1
       if (formData.studentCount > 1 && !formData.studentEmails.trim()) {
         throw new Error('Veuillez indiquer les adresses e-mail des étudiants lorsque le projet implique plusieurs personnes');
@@ -123,13 +123,13 @@ const ProjectForm = () => {
   return (
     <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
       <h2 className="text-2xl font-bold mb-6 dark:text-white">Soumettre un nouveau projet</h2>
-      
+
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400 px-4 py-3 rounded mb-4">
           {error}
         </div>
       )}
-      
+
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="name">
@@ -145,7 +145,7 @@ const ProjectForm = () => {
             required
           />
         </div>
-        
+
         <div className="mb-4">
           <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="description">
             Description détaillée *
@@ -160,7 +160,7 @@ const ProjectForm = () => {
             required
           />
         </div>
-        
+
         <div className="mb-4">
           <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="objectives">
             Objectifs *
@@ -175,7 +175,7 @@ const ProjectForm = () => {
             required
           />
         </div>
-        
+
         <div className="mb-4">
           <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="technologies">
             Technologies utilisées * (séparées par des virgules)
@@ -191,7 +191,7 @@ const ProjectForm = () => {
             required
           />
         </div>
-        
+
         <div className="mb-4">
           <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="studentCount">
             Nombre d'étudiants impliqués *
@@ -207,7 +207,7 @@ const ProjectForm = () => {
             required
           />
         </div>
-        
+
         {/* Champ conditionnel pour les emails des étudiants */}
         {formData.studentCount > 1 && (
           <div className="mb-4">
@@ -229,7 +229,7 @@ const ProjectForm = () => {
             </p>
           </div>
         )}
-        
+
         <div className="mb-4">
           <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="links.github">
             Lien GitHub personnel *
@@ -251,10 +251,10 @@ const ProjectForm = () => {
             Le lien vers votre dépôt GitHub personnel (doit être public)
           </p>
         </div>
-        
+
         <div className="mb-4">
           <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="links.projectGithub">
-            Lien GitHub du projet *
+            Lien GitHub project *
           </label>
           <input
             type="url"
@@ -270,7 +270,7 @@ const ProjectForm = () => {
             Le lien vers le dépôt GitHub du projet
           </p>
         </div>
-        
+
         <div className="mb-6">
           <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="links.other">
             Autres liens (séparés par des virgules)
@@ -285,7 +285,7 @@ const ProjectForm = () => {
             placeholder="https://example.com, https://another-site.com"
           />
         </div>
-        
+
         <div className="flex justify-end">
           <button
             type="submit"
