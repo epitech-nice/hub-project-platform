@@ -1,5 +1,5 @@
 // pages/admin/dashboard.js
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -12,6 +12,9 @@ export default function AdminDashboard() {
   const router = useRouter();
   const { get, loading: apiLoading } = useApi();
   const [projects, setProjects] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [filter, setFilter] = useState("pending");
   const [searchTerm, setSearchTerm] = useState("");
   const [schoolYear, setSchoolYear] = useState("");
@@ -20,29 +23,63 @@ export default function AdminDashboard() {
   const [endDate, setEndDate] = useState("");
   const [isExporting, setIsExporting] = useState(false);
 
+  const prevSearchTermRef = useRef("");
+  const ITEMS_PER_PAGE = 20;
+
   useEffect(() => {
-    // Rediriger si non authentifié ou non admin
     if (!authLoading && (!isAuthenticated || !isAdmin)) {
       router.push("/");
     }
   }, [isAuthenticated, isAdmin, authLoading, router]);
 
   useEffect(() => {
-    const fetchProjects = async () => {
-      if (isAuthenticated && isAdmin) {
-        try {
-          const response = await get("/api/projects", {
-            status: filter !== "all" ? filter : undefined,
-          });
-          setProjects(response.data);
-        } catch (error) {
-          console.error("Erreur lors de la récupération des projets:", error);
-        }
+    if (!isAuthenticated || !isAdmin) return;
+
+    const searchChanged = prevSearchTermRef.current !== searchTerm;
+    prevSearchTermRef.current = searchTerm;
+
+    const fetchData = async (page) => {
+      try {
+        const params = { page, limit: ITEMS_PER_PAGE };
+        if (filter !== "all") params.status = filter;
+        if (searchTerm) params.search = searchTerm;
+        if (schoolYear) params.schoolYear = schoolYear;
+
+        const response = await get("/api/projects", params);
+        setProjects(response.data);
+        setCurrentPage(response.page || page);
+        setTotalPages(response.totalPages || 1);
+        setTotal(response.total || 0);
+      } catch (error) {
+        console.error("Erreur lors de la récupération des projets:", error);
       }
     };
 
-    fetchProjects();
-  }, [isAuthenticated, isAdmin, filter]);
+    if (searchChanged) {
+      const timer = setTimeout(() => fetchData(1), 300);
+      return () => clearTimeout(timer);
+    } else {
+      fetchData(1);
+    }
+  }, [filter, schoolYear, searchTerm, isAuthenticated, isAdmin]);
+
+  const handlePageChange = async (newPage) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    try {
+      const params = { page: newPage, limit: ITEMS_PER_PAGE };
+      if (filter !== "all") params.status = filter;
+      if (searchTerm) params.search = searchTerm;
+      if (schoolYear) params.schoolYear = schoolYear;
+
+      const response = await get("/api/projects", params);
+      setProjects(response.data);
+      setCurrentPage(response.page || newPage);
+      setTotalPages(response.totalPages || 1);
+      setTotal(response.total || 0);
+    } catch (error) {
+      console.error("Erreur lors du changement de page:", error);
+    }
+  };
 
   // Générer les options d'années scolaires (de 2020 jusqu'à l'année en cours)
   const currentYear = new Date().getFullYear();
@@ -51,29 +88,22 @@ export default function AdminDashboard() {
     schoolYearOptions.push(`${y}-${y + 1}`);
   }
 
-  // Filtrer par année scolaire (1 sept → 31 août)
-  const isInSchoolYear = (date, yearLabel) => {
-    if (!yearLabel) return true;
-    const startYear = parseInt(yearLabel.split("-")[0], 10);
-    const start = new Date(startYear, 8, 1); // 1 septembre
-    const end = new Date(startYear + 1, 7, 31, 23, 59, 59); // 31 août
-    const d = new Date(date);
-    return d >= start && d <= end;
+  const getPaginationPages = () => {
+    const pages = [];
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || Math.abs(i - currentPage) <= 1) {
+        pages.push(i);
+      }
+    }
+    const result = [];
+    let prev = null;
+    for (const p of pages) {
+      if (prev !== null && p - prev > 1) result.push("...");
+      result.push(p);
+      prev = p;
+    }
+    return result;
   };
-
-  // Filtrer les projets en fonction du terme de recherche et de l'année scolaire
-  const filteredProjects = projects.filter((project) => {
-    const matchesSearch =
-      !searchTerm ||
-      project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.submittedBy.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (project.members &&
-        project.members.some((member) =>
-          member.email.toLowerCase().includes(searchTerm.toLowerCase())
-        ));
-    const matchesYear = isInSchoolYear(project.createdAt, schoolYear);
-    return matchesSearch && matchesYear;
-  });
 
   // Fonction pour exporter les projets terminés en CSV
   const handleExportCSV = async () => {
@@ -267,7 +297,7 @@ export default function AdminDashboard() {
 
         {apiLoading ? (
           <div className="text-center py-10 dark:text-white">Chargement des projets...</div>
-        ) : filteredProjects.length === 0 ? (
+        ) : projects.length === 0 ? (
           <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 text-center">
             <h3 className="text-xl font-bold mb-3 dark:text-white">Aucun projet à afficher</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
@@ -285,47 +315,92 @@ export default function AdminDashboard() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full bg-white dark:bg-gray-800 shadow-md rounded-lg">
-              <thead className="bg-gray-100 dark:bg-gray-700">
-                <tr>
-                  <th className="px-4 py-3 text-left dark:text-gray-200">Nom du projet</th>
-                  <th className="px-4 py-3 text-left dark:text-gray-200">Soumis par</th>
-                  <th className="px-4 py-3 text-left dark:text-gray-200">Date de soumission</th>
-                  <th className="px-4 py-3 text-left dark:text-gray-200">Statut</th>
-                  <th className="px-4 py-3 text-center dark:text-gray-200">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProjects.map((project) => (
-                  <tr key={project._id} className="border-t dark:border-gray-700">
-                    <td className="px-4 py-3 dark:text-white">
-                      <span className="font-medium">{project.name}</span>
-                    </td>
-                    <td className="px-4 py-3 dark:text-gray-300">{project.submittedBy.name}</td>
-                    <td className="px-4 py-3 dark:text-gray-300">
-                      {new Date(project.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          statusColors[project.status]
+          <div>
+            <div className="overflow-x-auto">
+              <table className="w-full bg-white dark:bg-gray-800 shadow-md rounded-lg">
+                <thead className="bg-gray-100 dark:bg-gray-700">
+                  <tr>
+                    <th className="px-4 py-3 text-left dark:text-gray-200">Nom du projet</th>
+                    <th className="px-4 py-3 text-left dark:text-gray-200">Soumis par</th>
+                    <th className="px-4 py-3 text-left dark:text-gray-200">Date de soumission</th>
+                    <th className="px-4 py-3 text-left dark:text-gray-200">Statut</th>
+                    <th className="px-4 py-3 text-center dark:text-gray-200">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projects.map((project) => (
+                    <tr key={project._id} className="border-t dark:border-gray-700">
+                      <td className="px-4 py-3 dark:text-white">
+                        <span className="font-medium">{project.name}</span>
+                      </td>
+                      <td className="px-4 py-3 dark:text-gray-300">{project.submittedBy.name}</td>
+                      <td className="px-4 py-3 dark:text-gray-300">
+                        {new Date(project.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            statusColors[project.status]
+                          }`}
+                        >
+                          {statusLabels[project.status]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Link href={`/admin/projects/${project._id}`}>
+                          <a className="bg-blue-600 dark:bg-blue-700 text-white px-3 py-1 rounded hover:bg-blue-700 dark:hover:bg-blue-800 text-sm">
+                            Détails
+                          </a>
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {searchTerm
+                  ? `${total} résultat${total !== 1 ? "s" : ""} trouvé${total !== 1 ? "s" : ""}`
+                  : `Affichage ${(currentPage - 1) * ITEMS_PER_PAGE + 1}–${Math.min(currentPage * ITEMS_PER_PAGE, total)} sur ${total} projet${total !== 1 ? "s" : ""}`}
+              </p>
+              {!searchTerm && totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 rounded border dark:border-gray-600 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white"
+                  >
+                    ‹
+                  </button>
+                  {getPaginationPages().map((p, i) =>
+                    p === "..." ? (
+                      <span key={`ellipsis-${i}`} className="px-2 dark:text-gray-400">…</span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => handlePageChange(p)}
+                        className={`px-3 py-1 rounded border ${
+                          p === currentPage
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white"
                         }`}
                       >
-                        {statusLabels[project.status]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Link href={`/admin/projects/${project._id}`}>
-                        <a className="bg-blue-600 dark:bg-blue-700 text-white px-3 py-1 rounded hover:bg-blue-700 dark:hover:bg-blue-800 text-sm">
-                          Détails
-                        </a>
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        {p}
+                      </button>
+                    )
+                  )}
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 rounded border dark:border-gray-600 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white"
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

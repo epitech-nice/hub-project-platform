@@ -116,37 +116,60 @@ exports.createProject = asyncHandler(async (req, res, next) => {
   res.status(201).json({ success: true, data: project });
 });
 
-// Récupérer tous les projets (pour admin) avec pagination
+// Récupérer tous les projets (pour admin) avec pagination et recherche
 exports.getAllProjects = asyncHandler(async (req, res, next) => {
-  const { status, page = 1, limit = 20 } = req.query;
+  const { status, page = 1, limit = 20, search, schoolYear } = req.query;
 
   const query = {};
-  if (status) {
-    query.status = status;
+  if (status) query.status = status;
+
+  if (search) {
+    const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    query.$or = [
+      { name: regex },
+      { 'submittedBy.name': regex },
+      { 'submittedBy.email': regex },
+      { 'members.email': regex },
+    ];
   }
 
-  // Convertir page et limit en entiers
+  if (schoolYear) {
+    const startYear = parseInt(schoolYear.split('-')[0], 10);
+    query.createdAt = {
+      $gte: new Date(startYear, 8, 1),
+      $lte: new Date(startYear + 1, 7, 31, 23, 59, 59),
+    };
+  }
+
+  // Si recherche active : retourner tous les résultats sans pagination
+  if (search) {
+    const projects = await Project.find(query).sort({ createdAt: -1 }).lean();
+    return res.status(200).json({
+      success: true,
+      count: projects.length,
+      total: projects.length,
+      page: 1,
+      totalPages: 1,
+      data: projects,
+    });
+  }
+
   const pageNum = parseInt(page, 10);
   const limitNum = parseInt(limit, 10);
   const skip = (pageNum - 1) * limitNum;
 
-  // Récupérer à la fois le nombre total et la liste paginée pour l'affichage frontal
   const [projects, total] = await Promise.all([
-    Project.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum)
-      .lean(),
-    Project.countDocuments(query)
+    Project.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
+    Project.countDocuments(query),
   ]);
 
-  res.status(200).json({ 
-    success: true, 
-    count: projects.length, 
+  res.status(200).json({
+    success: true,
+    count: projects.length,
     total,
     page: pageNum,
     totalPages: Math.ceil(total / limitNum),
-    data: projects 
+    data: projects,
   });
 });
 

@@ -22,6 +22,7 @@ app.use(helmet({
   crossOriginResourcePolicy: false, // Permet de charger les images/PDF depuis une autre origine (le front)
   crossOriginEmbedderPolicy: false,
   frameguard: false, // Permet d'afficher les PDF dans des iFrames ou des balises <object>
+  contentSecurityPolicy: false, // Permet l'embedding des PDF dans des iframes cross-origin
 })); // Protège les en-têtes HTTP
 app.use(mongoSanitize()); // Prévient les injections NoSQL
 app.use(xss()); // Prévient les attaques XSS
@@ -130,6 +131,8 @@ app.use("/api/simulated/cycles", require("./routes/simulatedCycles"));
 app.use("/api/simulated/enrollments", require("./routes/simulatedEnrollments"));
 // Pour /me, /my-history et /enroll
 app.use("/api/simulated", require("./routes/simulatedEnrollments"));
+
+app.use("/api/tools", require("./routes/tools"));
 
 // Route de santé
 app.get("/api/health", (req, res) => {

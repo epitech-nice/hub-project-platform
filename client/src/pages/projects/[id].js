@@ -39,11 +39,11 @@ export default function ProjectDetail() {
 
           // Vérifier si l'utilisateur est le créateur ou membre
           if (user) {
-            const isProjectCreator = 
+            const isProjectCreator =
               response.data.submittedBy.userId === user._id ||
               response.data.submittedBy.userId.toString() === user._id.toString();
             setIsCreator(isProjectCreator);
-            
+
             const isMemberOfProject = response.data.members.some(
               member => member.email === user.email
             );
@@ -98,7 +98,7 @@ export default function ProjectDetail() {
     } catch (err) {
       setError(
         err.message ||
-          "Une erreur est survenue lors de la mise à jour des informations"
+        "Une erreur est survenue lors de la mise à jour des informations"
       );
     } finally {
       setIsSubmitting(false);
@@ -119,7 +119,7 @@ export default function ProjectDetail() {
       } catch (err) {
         setError(
           err.message ||
-            "Une erreur est survenue lors de la tentative de quitter le projet"
+          "Une erreur est survenue lors de la tentative de quitter le projet"
         );
         setIsSubmitting(false);
       }
@@ -173,7 +173,7 @@ export default function ProjectDetail() {
             &larr; Retour
           </button>
         </div>
-          
+
         {/* Bouton pour quitter le projet (visible uniquement pour les membres non-créateurs) */}
         {isMember && !isCreator && (
           <div className="mb-6 p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700">
@@ -202,9 +202,8 @@ export default function ProjectDetail() {
               {project.name}
             </h1>
             <span
-              className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                statusColors[project.status]
-              }`}
+              className={`px-3 py-1 rounded-full text-sm font-semibold ${statusColors[project.status]
+                }`}
             >
               {statusLabels[project.status]}
             </span>
@@ -399,27 +398,26 @@ export default function ProjectDetail() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
                             className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
-                            ${
-                              history.status === "pending"
+                            ${history.status === "pending"
                                 ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-800/20 dark:text-yellow-300"
                                 : history.status === "pending_changes"
-                                ? "bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-300"
-                                : history.status === "approved"
-                                ? "bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-300"
-                                : history.status === "completed"
-                                ? "bg-purple-100 text-purple-800 dark:bg-purple-800/20 dark:text-purple-300"
-                                : "bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-300"
-                            }`}
+                                  ? "bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-300"
+                                  : history.status === "approved"
+                                    ? "bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-300"
+                                    : history.status === "completed"
+                                      ? "bg-purple-100 text-purple-800 dark:bg-purple-800/20 dark:text-purple-300"
+                                      : "bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-300"
+                              }`}
                           >
                             {history.status === "pending"
                               ? "En attente"
                               : history.status === "pending_changes"
-                              ? "Modifications requises"
-                              : history.status === "approved"
-                              ? "Approuvé"
-                              : history.status === "completed"
-                              ? "Terminé"
-                              : "Refusé"}
+                                ? "Modifications requises"
+                                : history.status === "approved"
+                                  ? "Approuvé"
+                                  : history.status === "completed"
+                                    ? "Terminé"
+                                    : "Refusé"}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
@@ -495,7 +493,7 @@ export default function ProjectDetail() {
                     className="block text-gray-700 dark:text-gray-300 font-bold mb-2"
                     htmlFor="projectGithub"
                   >
-                    Lien GitHub du projet
+                    Lien GitHub project
                   </label>
                   <input
                     type="url"
@@ -563,7 +561,7 @@ export default function ProjectDetail() {
 
                 <div className="mb-4">
                   <p className="font-semibold dark:text-white">
-                    Lien GitHub du projet:
+                    Lien GitHub project:
                   </p>
                   {project.additionalInfo?.projectGithub ? (
                     <a
@@ -586,7 +584,7 @@ export default function ProjectDetail() {
                     Documents complémentaires:
                   </p>
                   {project.additionalInfo?.documents &&
-                  project.additionalInfo.documents.length > 0 ? (
+                    project.additionalInfo.documents.length > 0 ? (
                     <ul className="list-disc list-inside ml-2">
                       {project.additionalInfo.documents.map((doc, index) => (
                         <li key={index}>

@@ -267,7 +267,7 @@ const ProjectForm = () => {
             required
           />
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Le lien vers le dépôt GitHub du projet
+            Le lien vers le Github Project
           </p>
         </div>
 

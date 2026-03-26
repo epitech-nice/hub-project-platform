@@ -178,7 +178,7 @@ export default function EditProject() {
 
       // Vérification des champs obligatoires
       if (!formData.links.projectGithub) {
-        throw new Error("Le lien GitHub du projet est obligatoire");
+        throw new Error("Le lien GitHub project est obligatoire");
       }
 
       // Validation des emails si studentCount > 1
@@ -212,7 +212,7 @@ export default function EditProject() {
     } catch (err) {
       setError(
         err.message ||
-          "Une erreur est survenue lors de la mise à jour du projet"
+        "Une erreur est survenue lors de la mise à jour du projet"
       );
     } finally {
       setIsSubmitting(false);
@@ -387,9 +387,8 @@ export default function EditProject() {
                   name="links.github"
                   value={formData.links.github}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg ${
-                    githubError ? "border-red-500 dark:border-red-800" : ""
-                  }`}
+                  className={`w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg ${githubError ? "border-red-500 dark:border-red-800" : ""
+                    }`}
                   placeholder="https://github.com/username/repo"
                   required
                 />
