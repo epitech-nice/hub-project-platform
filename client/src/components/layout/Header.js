@@ -1,5 +1,5 @@
 // components/layout/Header.js
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useAuth } from "../../context/AuthContext";
@@ -13,6 +13,7 @@ const Header = () => {
   const [isMobile, setIsMobile]         = useState(false);
   const [submitMenuOpen, setSubmitMenuOpen] = useState(false);
   const [hubMenuOpen, setHubMenuOpen]   = useState(false);
+  const headerRef = useRef(null);
 
   useEffect(() => {
     const checkScreenSize = () => setIsMobile(window.innerWidth < 1024);
@@ -27,6 +28,18 @@ const Header = () => {
     setSubmitMenuOpen(false);
     setHubMenuOpen(false);
   }, [router.pathname]);
+
+  // Fermer les dropdowns au clic en dehors du header
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (headerRef.current && !headerRef.current.contains(e.target)) {
+        setSubmitMenuOpen(false);
+        setHubMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
 
@@ -193,7 +206,7 @@ const Header = () => {
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
   return (
-    <header className="bg-blue-600 dark:bg-gray-800 spring:bg-spring-pink text-white shadow-md transition-colors duration-300">
+    <header ref={headerRef} className="bg-blue-600 dark:bg-gray-800 spring:bg-spring-pink text-white shadow-md transition-colors duration-300">
       <div className="container mx-auto px-4 py-3">
         <div className="flex justify-between items-center">
           {/* Logo */}
