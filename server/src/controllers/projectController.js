@@ -68,6 +68,15 @@ exports.createProject = asyncHandler(async (req, res, next) => {
 
     // La validation est gérée par express-validator (voir routes/projects.js)
 
+    // Limite : max 5 projets en attente par utilisateur pour éviter le spam
+    const pendingCount = await Project.countDocuments({
+      'submittedBy.userId': req.user._id,
+      status: { $in: [PROJECT_STATUSES.PENDING, PROJECT_STATUSES.PENDING_CHANGES] },
+    });
+    if (pendingCount >= 5) {
+      return next(new ErrorResponse('Vous avez atteint le maximum de 5 projets en attente. Attendez qu\'un projet soit traité avant d\'en soumettre un nouveau.', 429));
+    }
+
     // Créer la liste des membres (le créateur + les emails fournis)
     const members = [
       {

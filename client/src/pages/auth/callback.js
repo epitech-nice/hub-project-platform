@@ -8,21 +8,16 @@ export default function AuthCallback() {
   const { token, loading } = useAuth();
   
   useEffect(() => {
-    // Fonction pour gérer la redirection
-    const handleAuthRedirect = () => {
-      if (!router.isReady) return;
-      
-      const { redirectTo } = router.query;
-      
-      // Si l'utilisateur est authentifié, rediriger vers la page appropriée
-      if (!loading && token) {
-        // Utiliser le chemin de redirection fourni par le serveur ou tomber sur dashboard par défaut
-        router.push(redirectTo || '/dashboard');
-      }
-    };
-    
-    handleAuthRedirect();
-  }, [token, loading, router, router.isReady, router.query]);
+    if (!router.isReady) return;
+
+    // Si un fragment OAuth est présent, c'est AuthContext qui gère la redirection (ne rien faire pour éviter une race condition).
+    if (typeof window !== 'undefined' && window.location.hash) return;
+
+    // Cas edge : utilisateur déjà connecté qui arrive sur /auth/callback sans fragment.
+    if (!loading && token) {
+      router.push('/dashboard');
+    }
+  }, [token, loading, router.isReady]);
   
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">

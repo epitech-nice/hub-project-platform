@@ -17,6 +17,9 @@ const app = express();
 // Définir que le serveur tourne derrière un proxy (Docker/Nginx)
 app.set('trust proxy', 1);
 
+// Masquer les informations de version/framework dans les headers HTTP
+app.disable('x-powered-by');
+
 // Middlewares de sécurité
 app.use(helmet({
   crossOriginResourcePolicy: false, // Permet de charger les images/PDF depuis une autre origine (le front)
@@ -41,7 +44,23 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-app.use(cors());
+// CORS : restreindre aux origines connues (frontend + localhost en dev)
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Autoriser les requêtes sans origin (ex: curl, Postman en dev) uniquement en dehors de prod
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS: origine non autorisée'));
+    }
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
