@@ -47,18 +47,12 @@ router.get(
       );
 
       // Déterminer la page de redirection en fonction du rôle
-      let redirectPath = "/dashboard"; // Par défaut
-      if (req.user.role === "admin") {
-        redirectPath = "/admin/dashboard";
-      }
+      // Whitelist explicite — jamais de valeur arbitraire dans le fragment
+      const redirectPath = req.user.role === "admin" ? "/admin/dashboard" : "/dashboard";
 
-      console.log(
-        "Redirection vers:",
-        `${process.env.FRONTEND_URL}/auth/callback?token=${token}&redirectTo=${redirectPath}`
-      );
-
-      // Rediriger vers le frontend avec le token et le chemin de redirection
-      res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&redirectTo=${redirectPath}`);
+      // Le token est transmis via le fragment (#) : il n'apparaît pas dans les logs nginx
+      // et n'est pas envoyé au serveur lors de futures navigations
+      res.redirect(`${process.env.FRONTEND_URL}/auth/callback#token=${token}&redirectTo=${encodeURIComponent(redirectPath)}`);
     } catch (error) {
       console.error("Erreur dans le callback:", error);
       res.status(500).send("Erreur interne du serveur");

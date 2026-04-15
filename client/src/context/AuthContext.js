@@ -68,47 +68,61 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
   
-  // Intercepter le token dans le callback OAuth
+  // Intercepter le token dans le callback OAuth (transmis via fragment #)
   useEffect(() => {
-    if (router.pathname === '/auth/callback' && router.query.token) {
-      const { token } = router.query;
-            
-      if (token) {
-        localStorage.setItem('token', token);
-        setToken(token);
-        
-        // Décodage immédiat du token pour obtenir les informations de base
-        try {
-          const decoded = jwtDecode(token);
-          
-          // Définir les informations de l'utilisateur à partir du token
-          setUser({
-            _id: decoded.id,
-            role: decoded.role || 'student' // Valeur par défaut
-          });
-          
-          // Récupération complète des informations utilisateur depuis l'API
-          const fetchUserInfo = async () => {
-            try {
-              const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me`, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              
-              setUser(response.data.data);
-            } catch (error) {
-              console.error('Erreur lors du chargement des informations utilisateur:', error);
-            }
-          };
-          
-          fetchUserInfo();
-        } catch (decodeError) {
-          console.error("Erreur lors du décodage du token:", decodeError);
-        }
-        
-        router.push('/dashboard');
+    if (router.pathname !== '/auth/callback') return;
+
+    // Le token est dans le fragment (#token=...&redirectTo=...) — jamais envoyé au serveur
+    const hash = typeof window !== 'undefined' ? window.location.hash.slice(1) : '';
+    if (!hash) return;
+
+    const params = new URLSearchParams(hash);
+    const token = params.get('token');
+    const redirectTo = params.get('redirectTo');
+
+    if (token) {
+      // Effacer le fragment de l'URL immédiatement pour éviter toute exposition
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', window.location.pathname);
       }
+
+      localStorage.setItem('token', token);
+      setToken(token);
+
+      // Décodage immédiat du token pour obtenir les informations de base
+      try {
+        const decoded = jwtDecode(token);
+        setUser({
+          _id: decoded.id,
+          role: decoded.role || 'student'
+        });
+
+        // Récupération complète des informations utilisateur depuis l'API
+        const fetchUserInfo = async () => {
+          try {
+            const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            setUser(response.data.data);
+          } catch (error) {
+            console.error('Erreur lors du chargement des informations utilisateur:', error);
+          }
+        };
+        fetchUserInfo();
+      } catch (decodeError) {
+        console.error("Erreur lors du décodage du token:", decodeError);
+      }
+
+      // Redirection sécurisée — uniquement vers des chemins internes
+      const safePath =
+        redirectTo &&
+        redirectTo.startsWith('/') &&
+        !redirectTo.startsWith('//')
+          ? decodeURIComponent(redirectTo)
+          : '/dashboard';
+      router.push(safePath);
     }
-  }, [router.pathname, router.query, router]);
+  }, [router.pathname]);
   
   // Déconnexion
   const logout = () => {

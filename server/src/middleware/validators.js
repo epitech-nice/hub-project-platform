@@ -25,19 +25,30 @@ exports.projectValidationRules = () => {
       .matches(/^https:\/\/github\.com\/[\w-]+\/[\w-]+.*$/)
       .withMessage('Le lien GitHub project doit être une URL GitHub valide'),
 
-    // Si des emails étudiants sont fournis, vérifier qu'ils sont valides
+    check('studentCount')
+      .optional()
+      .isInt({ min: 1 }).withMessage('Le nombre d\'étudiants doit être au moins 1'),
+
+    // Si des emails étudiants sont fournis, vérifier qu'ils sont valides et du bon domaine
     check('studentEmails')
       .optional()
-      .isArray().withMessage('Les emails étudiants doivent être un tableau')
+      .isArray({ max: 9 }).withMessage('Le groupe ne peut pas dépasser 9 membres supplémentaires')
       .custom((emails) => {
         if (!emails) return true;
         for (const email of emails) {
           if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
             throw new Error(`L'email ${email} est invalide`);
           }
+          if (!email.endsWith('@epitech.eu')) {
+            throw new Error(`L'email ${email} doit être un email Epitech (@epitech.eu)`);
+          }
         }
         return true;
-      })
+      }),
+
+    check('technologies')
+      .optional()
+      .isArray({ max: 20 }).withMessage('Le nombre de technologies ne peut pas dépasser 20'),
   ];
 };
 
