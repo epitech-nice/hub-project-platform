@@ -1,5 +1,5 @@
-// models/Loan.js
 const mongoose = require('mongoose');
+const { LOAN_STATUS } = require('../utils/constants');
 
 const loanSchema = new mongoose.Schema(
   {
@@ -21,10 +21,10 @@ const loanSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ['borrowed', 'returned'],
+        values: Object.values(LOAN_STATUS),
         message: 'Statut invalide : {VALUE}',
       },
-      default: 'borrowed',
+      default: LOAN_STATUS.BORROWED,
     },
     borrowedAt: {
       type: Date,
@@ -50,7 +50,7 @@ loanSchema.statics.resolveReturn = async function(toolId, userId, quantityToRetu
   const activeLoans = await this.find({
     tool: toolId,
     user: userId,
-    status: 'borrowed'
+    status: LOAN_STATUS.BORROWED
   }).sort({ borrowedAt: 1 });
 
   const totalBorrowed = activeLoans.reduce((sum, loan) => sum + loan.quantity, 0);
@@ -67,7 +67,7 @@ loanSchema.statics.resolveReturn = async function(toolId, userId, quantityToRetu
     if (loan.quantity <= remaining) {
       // Cas A : On rend la totalité de ce prêt spécifique
       remaining -= loan.quantity;
-      loan.status = 'returned';
+      loan.status = LOAN_STATUS.RETURNED;
       loan.returnedAt = Date.now();
       await loan.save();
     } else {
@@ -81,7 +81,7 @@ loanSchema.statics.resolveReturn = async function(toolId, userId, quantityToRetu
         tool: toolId,
         user: userId,
         quantity: remaining,
-        status: 'returned',
+        status: LOAN_STATUS.RETURNED,
         borrowedAt: loan.borrowedAt,
         returnedAt: Date.now()
       });

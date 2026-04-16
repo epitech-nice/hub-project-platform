@@ -11,6 +11,9 @@ node_modules/
 .env.test.local
 .env.production.local
 
+# Tests
+server/coverage/
+
 # Fichiers de build
 client/build/
 client/.next/

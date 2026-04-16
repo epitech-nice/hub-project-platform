@@ -1,5 +1,5 @@
-// models/Tool.js
 const mongoose = require('mongoose');
+const { TOOL_STATUS, LOAN_STATUS } = require('../utils/constants');
 
 const toolSchema = new mongoose.Schema(
   {
@@ -43,10 +43,10 @@ const toolSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ['available', 'borrowed', 'maintenance'],
+        values: Object.values(TOOL_STATUS),
         message: 'Statut invalide : {VALUE}',
       },
-      default: 'available',
+      default: TOOL_STATUS.AVAILABLE,
     },
   },
   {
@@ -66,7 +66,7 @@ toolSchema.statics.processBorrow = async function(toolId, userId, quantity, maxB
   // 1. PERFORMANCE : Vérification de la limite personnelle via AGGREGATION (plus scalable que find + reduce JS)
   if (maxBorrowPerUser !== null) {
     const activeAggregation = await Loan.aggregate([
-      { $match: { tool: new mongoose.Types.ObjectId(toolId), user: new mongoose.Types.ObjectId(userId), status: 'borrowed' } },
+      { $match: { tool: new mongoose.Types.ObjectId(toolId), user: new mongoose.Types.ObjectId(userId), status: LOAN_STATUS.BORROWED } },
       { $group: { _id: null, total: { $sum: "$quantity" } } }
     ]);
     
@@ -81,7 +81,7 @@ toolSchema.statics.processBorrow = async function(toolId, userId, quantity, maxB
   const updatedTool = await this.findOneAndUpdate(
     {
       _id: toolId,
-      status: { $ne: 'maintenance' },
+      status: { $ne: TOOL_STATUS.MAINTENANCE },
       $expr: {
         $gte: [
           { $subtract: ["$quantity", "$borrowedCount"] },
@@ -105,7 +105,7 @@ toolSchema.statics.processBorrow = async function(toolId, userId, quantity, maxB
       tool: toolId,
       user: userId,
       quantity: quantity,
-      status: 'borrowed'
+      status: LOAN_STATUS.BORROWED
     });
     return { tool: updatedTool, loan };
   } catch (error) {
