@@ -146,9 +146,20 @@ export default function ScanPage() {
                 <span className="block text-2xl font-bold dark:text-white">{availableQuantity}</span>
              </div>
              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-center">
-                <span className="block text-sm text-gray-500 dark:text-gray-400">Limite d'emprunt</span>
-                <span className="block text-2xl font-bold dark:text-white">{tool.maxBorrowPerUser || 'Illimité'}</span>
+                <span className="block text-sm text-gray-500 dark:text-gray-400">Limite / utilisateur</span>
+                <span className="block text-2xl font-bold dark:text-white">{tool.maxBorrowPerUser || '∞'}</span>
              </div>
+             {tool.currentUserBorrowCount > 0 && (
+               <div className="col-span-2 bg-blue-100 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-center">
+                  <span className="block text-sm text-blue-600 dark:text-blue-300 font-semibold mb-1">Votre emprunt actuel</span>
+                  <span className="block text-3xl font-extrabold text-blue-700 dark:text-blue-200">{tool.currentUserBorrowCount}</span>
+                  {tool.maxBorrowPerUser && (
+                    <span className="block text-xs text-blue-500 dark:text-blue-400 mt-2 italic">
+                      Capacité d'emprunt restante : {tool.maxBorrowPerUser - tool.currentUserBorrowCount}
+                    </span>
+                  )}
+               </div>
+             )}
           </div>
 
           {error && <div className="mb-4 text-red-500 text-center text-sm">{error}</div>}

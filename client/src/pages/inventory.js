@@ -393,6 +393,19 @@ export default function InventoryPage() {
                       <p className="font-mono text-sm font-semibold dark:text-white">{selectedTool.rfid}</p>
                     </div>
                   )}
+                  {selectedTool.currentUserBorrowCount > 0 && (
+                    <div className="col-span-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg p-3">
+                      <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold mb-1">Votre emprunt actuel</p>
+                      <p className="text-xl font-bold text-blue-700 dark:text-blue-300">
+                        {selectedTool.currentUserBorrowCount} {selectedTool.currentUserBorrowCount > 1 ? 'exemplaires' : 'exemplaire'}
+                      </p>
+                      {selectedTool.maxBorrowPerUser && (
+                        <p className="text-xs text-blue-500 dark:text-blue-400 mt-1">
+                          Capacité restante : {selectedTool.maxBorrowPerUser - selectedTool.currentUserBorrowCount}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Actions */}

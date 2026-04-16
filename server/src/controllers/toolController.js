@@ -34,6 +34,26 @@ exports.getAllTools = asyncHandler(async (req, res, next) => {
     Tool.countDocuments(query),
   ]);
 
+  // Enrichissement optionnel pour l'utilisateur courant (capacités d'emprunt)
+  if (req.user && tools.length > 0) {
+    const activeLoans = await Loan.find({
+      user: req.user.id,
+      status: 'borrowed',
+      tool: { $in: tools.map(t => t._id) }
+    }).lean();
+
+    // Map des quantités par ID d'outil
+    const loanMap = activeLoans.reduce((acc, loan) => {
+      const toolId = loan.tool.toString();
+      acc[toolId] = (acc[toolId] || 0) + loan.quantity;
+      return acc;
+    }, {});
+
+    tools.forEach(tool => {
+      tool.currentUserBorrowCount = loanMap[tool._id.toString()] || 0;
+    });
+  }
+
   res.status(200).json({
     success: true,
     count: tools.length,
@@ -52,10 +72,21 @@ exports.getAllTags = asyncHandler(async (req, res, next) => {
 
 // GET /api/tools/:id
 exports.getToolById = asyncHandler(async (req, res, next) => {
-  const tool = await Tool.findById(req.params.id);
+  const tool = await Tool.findById(req.params.id).lean();
   if (!tool) {
     return next(new ErrorResponse('Outil non trouvé', 404));
   }
+
+  // Si l'utilisateur est authentifié, on ajoute son quota actuel d'emprunt pour cet objet
+  if (req.user) {
+    const activeLoans = await Loan.find({
+      tool: tool._id,
+      user: req.user.id,
+      status: 'borrowed'
+    });
+    tool.currentUserBorrowCount = activeLoans.reduce((sum, l) => sum + l.quantity, 0);
+  }
+
   res.status(200).json({ success: true, data: tool });
 });
 
