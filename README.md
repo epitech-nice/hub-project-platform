@@ -27,8 +27,9 @@ Application full-stack permettant aux étudiants de soumettre et gérer leurs pr
 | [docs/models.md](docs/models.md) | Modèles Mongoose (User, Project, Workshop, Simulated*) |
 | [docs/api-projects-workshops.md](docs/api-projects-workshops.md) | Routes API projets, workshops, users, health |
 | [docs/api-simulated.md](docs/api-simulated.md) | Routes API Simulated (catalogue, enrollments, cycles) |
+| [docs/inventory.md](docs/inventory.md) | Système d'inventaire matériel, emprunt par QR Code |
 | [docs/frontend.md](docs/frontend.md) | Pages frontend et composants réutilisables |
-| [docs/workflows.md](docs/workflows.md) | Workflows étudiant et admin (projets, workshops, simulated) |
+| [docs/workflows.md](docs/workflows.md) | Workflows étudiant et admin (projets, workshops, simulated, inventory) |
 | [docs/docker.md](docs/docker.md) | Configuration Docker dev/prod, volumes persistants |
 
 ---

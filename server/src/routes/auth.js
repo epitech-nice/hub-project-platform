@@ -8,10 +8,16 @@ const config = require("../config/auth");
 // Route pour initier l'authentification Microsoft
 router.get(
   "/microsoft",
-  passport.authenticate("microsoft", {
-    prompt: "select_account",
-    session: false,
-  })
+  (req, res, next) => {
+    // Si un redirectTo est fourni, on l'encode en hexadécimal dans le paramètre state 
+    // (pour éviter les problèmes de caractères réservés Base64 comme '+' ou '=')
+    const state = req.query.redirectTo ? Buffer.from(req.query.redirectTo).toString('hex') : undefined;
+    passport.authenticate("microsoft", {
+      prompt: "select_account",
+      session: false,
+      state, // le state sera renvoyé tel quel lors du callback
+    })(req, res, next);
+  }
 );
 
 // Callback après authentification Microsoft
@@ -46,9 +52,21 @@ router.get(
         }
       );
 
-      // Déterminer la page de redirection en fonction du rôle
-      // Whitelist explicite — jamais de valeur arbitraire dans le fragment
-      const redirectPath = req.user.role === "admin" ? "/admin/dashboard" : "/dashboard";
+      // Déterminer la page de redirection
+      let redirectPath = req.user.role === "admin" ? "/admin/dashboard" : "/dashboard";
+
+      // Si un objet "state" (notre redirecTo encodé) est présent dans la requête
+      if (req.query.state) {
+        try {
+          const decodedState = Buffer.from(req.query.state, 'hex').toString('utf8');
+          // Sécurité additionnelle : on s'assure qu'on redirige bien vers un lien interne au site
+          if (decodedState.startsWith('/')) {
+            redirectPath = decodedState;
+          }
+        } catch (e) {
+          console.error("Erreur de décodage du state OAuth", e);
+        }
+      }
 
       // Le token est transmis via le fragment (#) : il n'apparaît pas dans les logs nginx
       // et n'est pas envoyé au serveur lors de futures navigations

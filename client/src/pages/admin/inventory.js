@@ -27,6 +27,7 @@ const EMPTY_FORM = {
   rfid:         '',
   quantity:     1,
   borrowedCount: 0,
+  maxBorrowPerUser: '',
   status:       'available',
 };
 
@@ -141,6 +142,7 @@ export default function AdminInventoryPage() {
       rfid:         tool.rfid || '',
       quantity:     tool.quantity,
       borrowedCount: tool.borrowedCount || 0,
+      maxBorrowPerUser: tool.maxBorrowPerUser !== null ? tool.maxBorrowPerUser : '',
       status:       tool.status,
     });
     setTagInput('');
@@ -184,6 +186,7 @@ export default function AdminInventoryPage() {
         name:         form.name.trim(),
         quantity:     parseInt(form.quantity, 10) || 1,
         borrowedCount: parseInt(form.borrowedCount, 10) || 0,
+        maxBorrowPerUser: form.maxBorrowPerUser === '' ? null : parseInt(form.maxBorrowPerUser, 10),
       };
       if (modalMode === 'add') {
         await post('/api/tools', payload);
@@ -461,6 +464,16 @@ export default function AdminInventoryPage() {
                     <td className="px-4 py-3 text-center">
                       <div className="flex justify-center gap-2">
                         <button
+                          onClick={() => {
+                            const url = `${window.location.origin}/inventory/scan/${tool._id}`;
+                            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
+                            window.open(qrUrl, '_blank');
+                          }}
+                          className="bg-purple-600 dark:bg-purple-700 text-white px-3 py-1 rounded hover:bg-purple-700 dark:hover:bg-purple-800 text-sm"
+                        >
+                          QR Code
+                        </button>
+                        <button
                           onClick={() => openEditModal(tool)}
                           className="bg-blue-600 dark:bg-blue-700 text-white px-3 py-1 rounded hover:bg-blue-700 dark:hover:bg-blue-800 text-sm"
                         >
@@ -611,6 +624,19 @@ export default function AdminInventoryPage() {
                     min="0"
                     value={form.quantity}
                     onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">
+                    Max / Étudiant
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.maxBorrowPerUser}
+                    onChange={(e) => setForm((f) => ({ ...f, maxBorrowPerUser: e.target.value }))}
+                    placeholder="Illimité"
                     className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>

@@ -39,6 +39,9 @@ export default function InventoryPage() {
   const [activeTag, setActiveTag]   = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedTool, setSelectedTool] = useState(null);
+  const [activeTab, setActiveTab]       = useState('inventory'); // 'inventory' | 'history'
+  const [loans, setLoans]               = useState([]);
+  const [loansLoading, setLoansLoading] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/');
@@ -66,7 +69,18 @@ export default function InventoryPage() {
         .catch(console.error);
     }, 300);
     return () => clearTimeout(timer);
-  }, [isAuthenticated, search, activeTag, statusFilter]);
+  }, [isAuthenticated, search, activeTag, statusFilter, activeTab]);
+
+  // Chargement de l'historique quand on change d'onglet
+  useEffect(() => {
+    if (isAuthenticated && activeTab === 'history') {
+      setLoansLoading(true);
+      get('/api/tools/loans/history')
+        .then((r) => setLoans(r.data))
+        .catch(console.error)
+        .finally(() => setLoansLoading(false));
+    }
+  }, [isAuthenticated, activeTab]);
 
   if (authLoading) {
     return <div className="text-center py-10 dark:text-white">Chargement...</div>;
@@ -82,15 +96,41 @@ export default function InventoryPage() {
 
       <main className="container mx-auto px-4 py-8">
         {/* En-tête */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold dark:text-white mb-1">Inventaire du Hub</h1>
-          <p className="text-gray-500 dark:text-gray-400">
-            Matériel disponible dans la salle
-          </p>
+        <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold dark:text-white mb-1">Inventaire du Hub</h1>
+            <p className="text-gray-500 dark:text-gray-400">
+              Matériel disponible dans la salle
+            </p>
+          </div>
+          <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+            <button
+              onClick={() => setActiveTab('inventory')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'inventory'
+                  ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              Matériel
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'history'
+                  ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              Historique des emprunts
+            </button>
+          </div>
         </div>
 
-        {/* Barre de recherche */}
-        <div className="mb-4">
+        {activeTab === 'inventory' ? (
+          <>
+            {/* Barre de recherche */}
+            <div className="mb-4">
           <input
             type="text"
             value={search}
@@ -219,6 +259,60 @@ export default function InventoryPage() {
             </div>
           </>
         )}
+        </>
+      ) : (
+          /* ── Onglet Historique ────────────────────────────────────────────────── */
+          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+            {loansLoading ? (
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400">Chargement...</div>
+            ) : loans.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400">Aucun emprunt enregistré.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100 dark:bg-gray-700 border-b dark:border-gray-600">
+                      <th className="px-4 py-3 text-sm font-semibold dark:text-gray-200">Utilisateur</th>
+                      <th className="px-4 py-3 text-sm font-semibold dark:text-gray-200">Outil</th>
+                      <th className="px-4 py-3 text-sm font-semibold dark:text-gray-200">Date d'emprunt</th>
+                      <th className="px-4 py-3 text-sm font-semibold dark:text-gray-200">Date de retour</th>
+                      <th className="px-4 py-3 text-sm font-semibold dark:text-gray-200">Statut</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loans.map(loan => (
+                      <tr key={loan._id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td className="px-4 py-3 text-sm text-gray-800 dark:text-gray-200">
+                          {loan.user?.name || 'Inconnu'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-800 dark:text-gray-200">
+                          {loan.tool?.name || 'Outil supprimé'} <span className="text-gray-500 text-xs">x{loan.quantity}</span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                          {new Date(loan.borrowedAt).toLocaleDateString('fr-FR', {
+                            hour: '2-digit', minute: '2-digit'
+                          })}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                          {loan.returnedAt ? new Date(loan.returnedAt).toLocaleDateString('fr-FR', {
+                            hour: '2-digit', minute: '2-digit'
+                          }) : '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          {loan.status === 'borrowed' ? (
+                            <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">En cours</span>
+                          ) : (
+                            <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Rendu</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       {/* ── Modal : Détail outil ─────────────────────────────────────────────── */}
@@ -299,6 +393,20 @@ export default function InventoryPage() {
                       <p className="font-mono text-sm font-semibold dark:text-white">{selectedTool.rfid}</p>
                     </div>
                   )}
+                </div>
+
+                {/* Actions */}
+                <div className="pt-4 mt-2 border-t dark:border-gray-700">
+                  <button
+                    onClick={() => router.push(`/inventory/scan/${selectedTool._id}`)}
+                    className="w-full justify-center flex items-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                      <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                    </svg>
+                    Emprunter ou Rendre
+                  </button>
                 </div>
               </div>
             </div>

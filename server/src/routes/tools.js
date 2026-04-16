@@ -12,16 +12,22 @@ const {
   deleteTool,
   bulkImport,
   exportInventoryCSV,
+  borrowTool,
+  returnTool,
+  getLoanHistory,
 } = require('../controllers/toolController');
 
 // IMPORTANT : routes spécifiques avant /:id pour éviter les collisions de nommage
 router.get('/tags', authenticateToken, getAllTags);
+router.get('/loans/history', authenticateToken, getLoanHistory);
 router.get('/export/csv', authenticateToken, isAdmin, exportInventoryCSV);
 router.post('/bulk-import', authenticateToken, isAdmin, bulkImportValidationRules(), validate, bulkImport);
 
 // Routes accessibles aux utilisateurs authentifiés (students + admin)
 router.get('/', authenticateToken, getAllTools);
 router.get('/:id', authenticateToken, getToolById);
+router.post('/:id/borrow', authenticateToken, borrowTool);
+router.post('/:id/return', authenticateToken, returnTool);
 
 // Routes admin uniquement
 router.post('/', authenticateToken, isAdmin, toolValidationRules(), validate, createTool);
