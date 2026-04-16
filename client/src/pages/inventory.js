@@ -258,7 +258,9 @@ export default function InventoryPage() {
               })}
             </div>
           </>
-        ) : (
+        )}
+        </>
+      ) : (
           /* ── Onglet Historique ────────────────────────────────────────────────── */
           <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
             {loansLoading ? (
