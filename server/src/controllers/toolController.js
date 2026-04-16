@@ -215,115 +215,59 @@ exports.bulkImport = asyncHandler(async (req, res, next) => {
 // POST /api/tools/:id/borrow
 // body: { quantity: number }
 exports.borrowTool = asyncHandler(async (req, res, next) => {
+  // Sécurité: Forcer une quantité entière strictement positive pour éviter les hacks (-5)
+  const requestedQuantity = Math.max(1, parseInt(req.body.quantity, 10) || 1);
+
   const tool = await Tool.findById(req.params.id);
   if (!tool) {
     return next(new ErrorResponse('Outil non trouvé', 404));
   }
 
-  const requestedQuantity = parseInt(req.body.quantity, 10) || 1;
-
-  if (tool.status === 'maintenance') {
-    return next(new ErrorResponse('Cet outil est en maintenance', 400));
-  }
-
-  const availableQuantity = tool.quantity - tool.borrowedCount;
-  if (requestedQuantity > availableQuantity) {
-    return next(new ErrorResponse(`Stock insuffisant. Seulement ${availableQuantity} disponible(s)`, 400));
-  }
-
-  // Vérification de la limite par étudiant
-  if (tool.maxBorrowPerUser !== null) {
-    // Calcul de ce que l'utilisateur a déjà emprunté et n'a pas rendu
-    const activeLoans = await Loan.find({
-      tool: tool._id,
-      user: req.user.id,
-      status: 'borrowed'
+  try {
+    // Appel de la logique métier encapsulée dans le modèle
+    const { loan } = await Tool.processBorrow(tool._id, req.user.id, requestedQuantity, tool.maxBorrowPerUser);
+    
+    res.status(200).json({
+      success: true,
+      data: loan
     });
-
-    const alreadyBorrowedQuantity = activeLoans.reduce((sum, loan) => sum + loan.quantity, 0);
-
-    if (alreadyBorrowedQuantity + requestedQuantity > tool.maxBorrowPerUser) {
-      return next(new ErrorResponse(`Limite atteinte. Vous pouvez emprunter au maximum ${tool.maxBorrowPerUser} exemplaire(s) au total, vous en avez déjà ${alreadyBorrowedQuantity}.`, 400));
+  } catch (error) {
+    if (error.message.startsWith('LIMITE_ATTEINTE')) {
+      const parts = error.message.split(':');
+      return next(new ErrorResponse(`Limite atteinte. Vous pouvez emprunter au maximum ${parts[1]} exemplaire(s) au total, vous en avez déjà ${parts[2]}.`, 400));
     }
+    if (error.message === 'STOCK_INSUFFISANT_OU_MAINTENANCE') {
+      return next(new ErrorResponse('Stock insuffisant ou objet en maintenance. Quelqu\'un d\'autre vient peut-être de le prendre.', 400));
+    }
+    throw error;
   }
-
-  // Création de l'emprunt
-  const loan = await Loan.create({
-    tool: tool._id,
-    user: req.user.id,
-    quantity: requestedQuantity,
-    status: 'borrowed'
-  });
-
-  // Mise à jour de l'outil
-  tool.borrowedCount += requestedQuantity;
-  await tool.save();
-
-  res.status(200).json({
-    success: true,
-    data: loan
-  });
 });
 
 // POST /api/tools/:id/return
 // body: { quantity: number }
 exports.returnTool = asyncHandler(async (req, res, next) => {
+  // Sécurité: Forcer une quantité entière strictement positive 
+  const returnedQuantity = Math.max(1, parseInt(req.body.quantity, 10) || 1);
+
   const tool = await Tool.findById(req.params.id);
   if (!tool) {
     return next(new ErrorResponse('Outil non trouvé', 404));
   }
 
-  const returnedQuantity = parseInt(req.body.quantity, 10) || 1;
+  try {
+    // Appel de la logique métier encapsulée
+    await Tool.processReturn(tool._id, req.user.id, returnedQuantity);
 
-  // Trouver tous les emprunts actifs de cet utilisateur pour cet outil
-  const activeLoans = await Loan.find({
-    tool: tool._id,
-    user: req.user.id,
-    status: 'borrowed'
-  }).sort({ borrowedAt: 1 }); // Rendre les plus anciens en premier
-
-  const totalBorrowed = activeLoans.reduce((sum, loan) => sum + loan.quantity, 0);
-
-  if (activeLoans.length === 0 || returnedQuantity > totalBorrowed) {
-    return next(new ErrorResponse("Vous n'avez pas emprunté cette quantité de cet outil", 400));
-  }
-
-  let remainingToReturn = returnedQuantity;
-  
-  for (const loan of activeLoans) {
-    if (remainingToReturn <= 0) break;
-
-    if (loan.quantity <= remainingToReturn) {
-      // Le prêt complet est retourné
-      remainingToReturn -= loan.quantity;
-      loan.status = 'returned';
-      loan.returnedAt = Date.now();
-      await loan.save();
-    } else {
-      // Retour partiel (le prêt courant couvre plus que ce qu'on veut rendre)
-      loan.quantity -= remainingToReturn;
-      await loan.save();
-      
-      // On crée un registre de ce qui a été rendu pour garder la trace de la transaction
-      await Loan.create({
-        tool: tool._id,
-        user: req.user.id,
-        quantity: remainingToReturn,
-        status: 'returned',
-        borrowedAt: loan.borrowedAt,
-        returnedAt: Date.now()
-      });
-      break;
+    res.status(200).json({
+      success: true,
+      message: `${returnedQuantity} exemplaire(s) retourné(s) avec succès.`
+    });
+  } catch (error) {
+    if (error.message === 'RETOUR_INVALIDE') {
+      return next(new ErrorResponse("Vous n'avez pas emprunté cette quantité de cet outil", 400));
     }
+    throw error;
   }
-
-  tool.borrowedCount = Math.max(0, tool.borrowedCount - returnedQuantity);
-  await tool.save();
-
-  res.status(200).json({
-    success: true,
-    message: `${returnedQuantity} exemplaire(s) retourné(s) avec succès.`
-  });
 });
 
 // GET /api/tools/loans/history
