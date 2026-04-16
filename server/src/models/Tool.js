@@ -35,6 +35,11 @@ const toolSchema = new mongoose.Schema(
       default: 0,
       min: [0, 'La quantité empruntée ne peut pas être négative'],
     },
+    maxBorrowPerUser: {
+      type: Number,
+      default: null, // null signifie pas de limite
+      min: [1, 'La limite par étudiant doit être d\'au moins 1'],
+    },
     status: {
       type: String,
       enum: {

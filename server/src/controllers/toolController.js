@@ -1,5 +1,5 @@
-// controllers/toolController.js
 const Tool = require('../models/Tool');
+const Loan = require('../models/Loan');
 const ErrorResponse = require('../utils/errorResponse');
 const asyncHandler = require('../middleware/asyncHandler');
 
@@ -61,7 +61,7 @@ exports.getToolById = asyncHandler(async (req, res, next) => {
 
 // POST /api/tools — admin uniquement
 exports.createTool = asyncHandler(async (req, res, next) => {
-  const { name, description, tags, rfid, quantity, borrowedCount, status } = req.body;
+  const { name, description, tags, rfid, quantity, borrowedCount, status, maxBorrowPerUser } = req.body;
 
   const tool = new Tool({
     name,
@@ -70,6 +70,7 @@ exports.createTool = asyncHandler(async (req, res, next) => {
     rfid: rfid ? rfid.trim().toUpperCase() : undefined,
     quantity: quantity ?? 1,
     borrowedCount: borrowedCount ?? 0,
+    maxBorrowPerUser: maxBorrowPerUser !== undefined ? maxBorrowPerUser : null,
     status: status || 'available',
   });
 
@@ -94,6 +95,7 @@ exports.updateTool = asyncHandler(async (req, res, next) => {
   if (req.body.tags !== undefined) setData.tags = req.body.tags;
   if (req.body.quantity !== undefined) setData.quantity = req.body.quantity;
   if (req.body.borrowedCount !== undefined) setData.borrowedCount = req.body.borrowedCount;
+  if (req.body.maxBorrowPerUser !== undefined) setData.maxBorrowPerUser = req.body.maxBorrowPerUser;
   if (req.body.status !== undefined) setData.status = req.body.status;
 
   if (Object.prototype.hasOwnProperty.call(req.body, 'rfid')) {
@@ -209,3 +211,144 @@ exports.bulkImport = asyncHandler(async (req, res, next) => {
     },
   });
 });
+
+// POST /api/tools/:id/borrow
+// body: { quantity: number }
+exports.borrowTool = asyncHandler(async (req, res, next) => {
+  const tool = await Tool.findById(req.params.id);
+  if (!tool) {
+    return next(new ErrorResponse('Outil non trouvé', 404));
+  }
+
+  const requestedQuantity = parseInt(req.body.quantity, 10) || 1;
+
+  if (tool.status === 'maintenance') {
+    return next(new ErrorResponse('Cet outil est en maintenance', 400));
+  }
+
+  const availableQuantity = tool.quantity - tool.borrowedCount;
+  if (requestedQuantity > availableQuantity) {
+    return next(new ErrorResponse(`Stock insuffisant. Seulement ${availableQuantity} disponible(s)`, 400));
+  }
+
+  // Vérification de la limite par étudiant
+  if (tool.maxBorrowPerUser !== null) {
+    // Calcul de ce que l'utilisateur a déjà emprunté et n'a pas rendu
+    const activeLoans = await Loan.find({
+      tool: tool._id,
+      user: req.user.id,
+      status: 'borrowed'
+    });
+
+    const alreadyBorrowedQuantity = activeLoans.reduce((sum, loan) => sum + loan.quantity, 0);
+
+    if (alreadyBorrowedQuantity + requestedQuantity > tool.maxBorrowPerUser) {
+      return next(new ErrorResponse(`Limite atteinte. Vous pouvez emprunter au maximum ${tool.maxBorrowPerUser} exemplaire(s) au total, vous en avez déjà ${alreadyBorrowedQuantity}.`, 400));
+    }
+  }
+
+  // Création de l'emprunt
+  const loan = await Loan.create({
+    tool: tool._id,
+    user: req.user.id,
+    quantity: requestedQuantity,
+    status: 'borrowed'
+  });
+
+  // Mise à jour de l'outil
+  tool.borrowedCount += requestedQuantity;
+  await tool.save();
+
+  res.status(200).json({
+    success: true,
+    data: loan
+  });
+});
+
+// POST /api/tools/:id/return
+// body: { quantity: number }
+exports.returnTool = asyncHandler(async (req, res, next) => {
+  const tool = await Tool.findById(req.params.id);
+  if (!tool) {
+    return next(new ErrorResponse('Outil non trouvé', 404));
+  }
+
+  const returnedQuantity = parseInt(req.body.quantity, 10) || 1;
+
+  // Trouver tous les emprunts actifs de cet utilisateur pour cet outil
+  const activeLoans = await Loan.find({
+    tool: tool._id,
+    user: req.user.id,
+    status: 'borrowed'
+  }).sort({ borrowedAt: 1 }); // Rendre les plus anciens en premier
+
+  const totalBorrowed = activeLoans.reduce((sum, loan) => sum + loan.quantity, 0);
+
+  if (activeLoans.length === 0 || returnedQuantity > totalBorrowed) {
+    return next(new ErrorResponse("Vous n'avez pas emprunté cette quantité de cet outil", 400));
+  }
+
+  let remainingToReturn = returnedQuantity;
+  
+  for (const loan of activeLoans) {
+    if (remainingToReturn <= 0) break;
+
+    if (loan.quantity <= remainingToReturn) {
+      // Le prêt complet est retourné
+      remainingToReturn -= loan.quantity;
+      loan.status = 'returned';
+      loan.returnedAt = Date.now();
+      await loan.save();
+    } else {
+      // Retour partiel (le prêt courant couvre plus que ce qu'on veut rendre)
+      loan.quantity -= remainingToReturn;
+      await loan.save();
+      
+      // On crée un registre de ce qui a été rendu pour garder la trace de la transaction
+      await Loan.create({
+        tool: tool._id,
+        user: req.user.id,
+        quantity: remainingToReturn,
+        status: 'returned',
+        borrowedAt: loan.borrowedAt,
+        returnedAt: Date.now()
+      });
+      break;
+    }
+  }
+
+  tool.borrowedCount = Math.max(0, tool.borrowedCount - returnedQuantity);
+  await tool.save();
+
+  res.status(200).json({
+    success: true,
+    message: `${returnedQuantity} exemplaire(s) retourné(s) avec succès.`
+  });
+});
+
+// GET /api/tools/loans/history
+exports.getLoanHistory = asyncHandler(async (req, res, next) => {
+  const { status, limit = 100 } = req.query;
+  
+  const query = {};
+  if (status) { // 'borrowed' ou 'returned'
+    query.status = status;
+  }
+
+  // Si pas admin, on peut soit limiter à ses propres emprunts, soit laisser public.
+  // La demande était "un log accessible à tous de qui a emprunté".
+  
+  const loans = await Loan.find(query)
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit, 10))
+    .populate('tool', 'name rfid')
+    .populate('user', 'name email microsoftId')
+    .lean();
+
+  res.status(200).json({
+    success: true,
+    count: loans.length,
+    data: loans
+  });
+});
+
