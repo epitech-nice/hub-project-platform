@@ -1,4 +1,5 @@
 const { check, validationResult } = require('express-validator');
+const { TOOL_STATUS } = require('../utils/constants');
 
 // Validateur pour la création et la mise à jour des projets
 exports.projectValidationRules = () => {
@@ -146,8 +147,8 @@ exports.toolValidationRules = () => {
 
     check('status')
       .optional({ nullable: true, checkFalsy: true })
-      .isIn(['available', 'borrowed', 'maintenance'])
-      .withMessage("Statut invalide. Valeurs acceptées : available, borrowed, maintenance"),
+      .isIn(Object.values(TOOL_STATUS))
+      .withMessage(`Statut invalide. Valeurs acceptées : ${Object.values(TOOL_STATUS).join(', ')}`),
   ];
 };
 

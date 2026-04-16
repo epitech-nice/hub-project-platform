@@ -4,7 +4,7 @@ Ce document décrit le système de gestion d'inventaire, d'emprunt et de retour 
 
 ---
 
-## 🏗 Architecture globale
+## Architecture globale
 
 Le système permet de référencer le matériel physique (câbles, Raspberry Pi, capteurs, etc.) et de proposer une interface pour que les étudiants puissent emprunter des éléments en autonomie via leur smartphone en scannant un QR code posé sur l'objet.
 
@@ -24,7 +24,7 @@ Le système permet de référencer le matériel physique (câbles, Raspberry Pi,
 
 ---
 
-## 🗄 Modèles de Base de Données
+## Modèles de Base de Données
 
 ### Tool (Outil / Composant)
 Le modèle gérant le matériel en stock.
@@ -59,7 +59,7 @@ Le modèle gardant une trace immuable des activités d'emprunts et de retours.
 
 ---
 
-## 🌐 Routes API (Backend)
+## Routes API (Backend)
 
 ### `GET /api/tools`
 - **Requis** : Token Auth
