@@ -9,8 +9,9 @@ const config = require("../config/auth");
 router.get(
   "/microsoft",
   (req, res, next) => {
-    // Si un redirectTo est fourni, on l'encode dans le paramètre state
-    const state = req.query.redirectTo ? Buffer.from(req.query.redirectTo).toString('base64') : undefined;
+    // Si un redirectTo est fourni, on l'encode en hexadécimal dans le paramètre state 
+    // (pour éviter les problèmes de caractères réservés Base64 comme '+' ou '=')
+    const state = req.query.redirectTo ? Buffer.from(req.query.redirectTo).toString('hex') : undefined;
     passport.authenticate("microsoft", {
       prompt: "select_account",
       session: false,
@@ -57,7 +58,7 @@ router.get(
       // Si un objet "state" (notre redirecTo encodé) est présent dans la requête
       if (req.query.state) {
         try {
-          const decodedState = Buffer.from(req.query.state, 'base64').toString('ascii');
+          const decodedState = Buffer.from(req.query.state, 'hex').toString('utf8');
           // Sécurité additionnelle : on s'assure qu'on redirige bien vers un lien interne au site
           if (decodedState.startsWith('/')) {
             redirectPath = decodedState;
