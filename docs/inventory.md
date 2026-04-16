@@ -24,20 +24,34 @@ Le système permet de référencer le matériel physique (câbles, Raspberry Pi,
 
 ---
 
+## Architecture Elite (Fat Model, Skinny Controller)
+
+Le système a été refactorisé pour déplacer la logique métier critique directement dans les modèles Mongoose, garantissant une cohérence absolue et une sécurité renforcée.
+
+### 1. Atomicité et Concurrence
+Toutes les opérations de stock (`processBorrow`, `processReturn`) utilisent des requêtes atomiques MongoDB (`findOneAndUpdate` avec `$expr` et `$inc`). Cela prévient les "Race Conditions" (sur-emprunt) sans nécessiter de transactions lourdes, garantissant l'intégrité du stock même lors de pics d'utilisation simultanés.
+
+### 2. Sécurité et Validation
+- **Protection CSV** : Les exports d'inventaire sont protégés contre l'injection de formules Excel via un mécanisme d'assainissement des caractères de contrôle (`=`, `+`, `-`, `@`).
+- **Validation Strict** : Utilisation systématique de `Math.max(1, ...)` pour bloquer toute tentative d'injection de quantités négatives ou nulles.
+- **Constantes Centralisées** : Suppression des Magic Strings au profit d'un fichier `constants.js` central pour tous les statuts (`available`, `borrowed`, etc.).
+
+---
+
 ## Modèles de Base de Données
 
 ### Tool (Outil / Composant)
 Le modèle gérant le matériel en stock.
 ```javascript
 {
-  name: String,               // Nom de l'outil
-  description: String,        // Description facultative
-  tags: [String],             // Catégories (ex: "IOT", "Câbles")
-  rfid: String,               // Code puce RFID (optionnel)
-  quantity: Number,           // Stock physique total enregistré
-  borrowedCount: Number,      // Nombre d'exemplaires actuellement en cours d'emprunt
-  maxBorrowPerUser: Number,   // Limite maximale d'emprunt par étudiant (null = illimité)
-  status: String,             // 'available' | 'borrowed' | 'maintenance' (influe l'état global)
+  name: String,               
+  description: String,        
+  tags: [String],             
+  rfid: String,               // Index unique sparse
+  quantity: Number,           
+  borrowedCount: Number,      
+  maxBorrowPerUser: Number,   // Limite par étudiant (null = illimité)
+  status: String,             // Statut (constants.js)
   createdAt: Date,
   updatedAt: Date
 }
@@ -47,15 +61,14 @@ Le modèle gérant le matériel en stock.
 Le modèle gardant une trace immuable des activités d'emprunts et de retours.
 ```javascript
 {
-  tool: ObjectId,             // Référence vers le Tool
-  user: ObjectId,             // Référence vers l'utilisateur (student/admin)
-  quantity: Number,           // Quantité empruntée / retournée
-  status: String,             // 'borrowed' (emprunt en cours) | 'returned' (rendu)
-  borrowedAt: Date,           // Date du clic "Emprunter"
-  returnedAt: Date            // Date du clic "Rendre", ou du retour complet
+  tool: ObjectId,             
+  user: ObjectId,             
+  quantity: Number,           
+  status: String,             // Statut (constants.js)
+  borrowedAt: Date,           
+  returnedAt: Date            
 }
 ```
-> **Mécanisme des emprunts partiels** : Si un étudiant emprunte 3 câbles (créant un objet `Loan{quantity: 3, status: 'borrowed'}`) et n'en rend que 2 le lendemain : le back-end déduira la quantité du flux original et créera un *nouveau* document `Loan{quantity: 2, status: 'returned'}` pour inscrire ce retour partiel dans l'historique complet, sans perturber le câble restant toujours `borrowed`.
 
 ---
 
@@ -63,28 +76,15 @@ Le modèle gardant une trace immuable des activités d'emprunts et de retours.
 
 ### `GET /api/tools`
 - **Requis** : Token Auth
-- **Admin** : Accède à tous les champs.
-- **Étudiants** : Vue filtrée.
-- **Query** : `search` (nom/description), `tags` (array), `status`.
-
-### `GET /api/tools/loans/history`
-- **Requis** : Token Auth
-- **Fonction** : Récupère le registre public avec l'identité des étudiants.
-- **Query** : `status` ('borrowed' | 'returned'), `limit`.
+- **Enrichissement** : Injecte `currentUserBorrowCount` pour chaque outil, permettant au front-end d'afficher dynamiquement la capacité d'emprunt restante de l'utilisateur.
+- **Filtrage** : Recherche plein texte et filtrage par tags/statut via un moteur de requête unifié.
 
 ### `POST /api/tools/:id/borrow`
-- **Requis** : Token Auth (Student/Admin)
-- **Body** : `{ quantity: Number }`
-- **Fonction** : Valide le stock, valide la règle `maxBorrowPerUser`, incrémente `Tool.borrowedCount` et génère un model `Loan` au statut `borrowed`.
+- **Validation** : Vérifie l'atomicité du stock et le respect des quotas utilisateurs via `Tool.processBorrow`.
 
 ### `POST /api/tools/:id/return`
-- **Requis** : Token Auth (Student/Admin)
-- **Body** : `{ quantity: Number }`
-- **Fonction** : Calcule tous les emprunts non rendus de l'utilisateur pour cet outil, résout le volume rendu dynamiquement (clôture des `Loan` ou scindement en cas de retour partiel), et décrémente `Tool.borrowedCount`.
+- **Résolution** : Utilise `Loan.resolveReturn` pour gérer intelligemment les retours partiels (clôture ou scindement de prêts) selon une logique FIFO.
 
 ### (Admin Uniquement)
-- `POST /api/tools` : Création de matériel.
-- `PUT /api/tools/:id` : Modification (dont l'ajout du *Max Borrow*).
-- `DELETE /api/tools/:id` : Suppression.
-- `POST /api/tools/bulk-import` : Synchronisation des scans de lecteurs RFID par lots.
-- `GET /api/tools/export/csv` : Export au format dactylo-friendly.
+- `GET /api/tools/export/csv` : Export sécurisé de l'inventaire avec protection contre les injections de formules.
+- `POST /api/tools/bulk-import` : Traitement par lots des scans RFID.
