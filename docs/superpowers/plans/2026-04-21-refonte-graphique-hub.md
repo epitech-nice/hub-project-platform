@@ -322,7 +322,7 @@ cp client/src/styles/globals.css client/src/styles/globals.css.bak
     --border-strong: 203 213 225;
     --text: 15 23 42;
     --text-muted: 71 85 105;
-    --text-dim: 148 163 184;
+    --text-dim: 100 116 139;
 
     /* Status — LIGHT */
     --status-pending-bg: 239 246 255;
@@ -356,7 +356,7 @@ cp client/src/styles/globals.css client/src/styles/globals.css.bak
     --border-strong: 42 52 73;
     --text: 241 245 249;
     --text-muted: 148 163 184;
-    --text-dim: 100 116 139;
+    --text-dim: 148 163 184;
 
     --status-pending-bg: 30 58 138;
     --status-pending-text: 147 197 253;

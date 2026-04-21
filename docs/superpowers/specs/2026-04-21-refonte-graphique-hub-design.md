@@ -55,7 +55,7 @@ Moderniser l'interface tout en améliorant la hiérarchie d'information (choix *
 | `border-strong` | `#CBD5E1` | `#2A3449` |
 | `text` | `#0F172A` | `#F1F5F9` |
 | `text-muted` | `#475569` | `#94A3B8` |
-| `text-dim` | `#94A3B8` | `#64748B` |
+| `text-dim` | `#64748B` | `#94A3B8` |
 
 ### Couleurs status
 
