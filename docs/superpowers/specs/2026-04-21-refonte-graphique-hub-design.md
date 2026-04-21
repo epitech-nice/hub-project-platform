@@ -112,6 +112,57 @@ lg  0 14px 28px rgba(16,24,40,.10), 0 4px 8px ...         → 0 20px 45px rgba(0
 
 Tout élément interactif reçoit : `ring 2px rgba(59,130,246,.5)` + offset 2px en focus-visible.
 
+### Responsive & mobile
+
+Même si la part mobile des utilisateurs est faible, le site doit rester utilisable et lisible sur téléphone. Tailwind étant mobile-first, on conçoit les composants dans cet ordre puis on enrichit aux breakpoints supérieurs.
+
+**Breakpoints** (alignés sur Tailwind par défaut) :
+
+| Nom | Largeur | Cible |
+|---|---|---|
+| base | `< 640px` | téléphone portrait |
+| `sm` | `≥ 640px` | téléphone paysage / petite tablette |
+| `md` | `≥ 768px` | tablette |
+| `lg` | `≥ 1024px` | petit laptop |
+| `xl` | `≥ 1280px` | desktop standard |
+
+**Tailles de référence à tester** : 375, 640, 768, 1024, 1280, 1440 px.
+
+**Touch targets** : tout élément interactif (bouton, chip, icône cliquable, lien de nav) expose une zone tactile minimale de **44×44px** sur mobile (via padding ou `min-height`/`min-width`). Les `IconButton` en taille `sm` restent au-dessus de ce seuil.
+
+**Typographie mobile** :
+- Body à `15-16px` minimum sur mobile (jamais sous `14px` pour du texte de contenu)
+- Titres `4xl` (44px) descendent à `3xl` (32px) sous `md`
+- Titres `3xl` (32px) descendent à `2xl` (24px) sous `md`
+- Line-length naturellement contraint par le viewport — pas de limite manuelle sous `md`
+
+**Layout & composants** :
+- `AppHeader` : nav complète ≥ `lg` · menu burger plein écran < `lg` (panel slide depuis la droite, même tokens visuels)
+- `BentoGrid` : 6 colonnes `xl`, 4 colonnes `lg`, 2 colonnes `md`, 1 colonne en base — cartes `2×2` deviennent `1×1` sous `md`
+- `DataTable` : tableau horizontalement scrollable sous `lg` (`overflow-x-auto`) avec la colonne clé (titre / nom) en `sticky left-0`. Pas de transformation en cartes empilées : les pages `admin/*` et `inventory/*` sont déclarées **desktop-first en usage** (mobile = lecture secondaire).
+- `TableToolbar` : search et chips passent en stack vertical sous `md`, scrollable horizontalement si les chips débordent
+- `FormActions` : sticky bottom sur mobile (`< md`), inline à droite dès `md`
+- `FormSection` : 2 colonnes ≥ `md`, 1 colonne en base
+- `Modal` / `Dialog` : fullscreen sous `sm`, fenêtre centrée au-dessus
+- `NavDropdown` : bascule en accordéon dans le burger menu mobile (pas de dropdown flottant)
+- `CycleTimeline` : horizontale ≥ `md`, verticale en base
+
+**Sécurité mobile** :
+- `viewport` meta : `width=device-width, initial-scale=1` vérifié dans `_document.js`
+- Aucun scroll horizontal non-intentionnel (audit visuel sur chaque page migrée)
+- Images et SVG responsives (`max-width: 100%`, pas de largeur fixe en px)
+- Inputs type correct (`type="email"`, `type="tel"`, `type="date"`) pour faire apparaître le bon clavier
+- Désactivation du zoom auto iOS : `font-size: 16px` minimum sur inputs (évite le zoom involontaire au focus)
+
+**Dark mode mobile** :
+- Tokens `bg #0A0E1A` et `surface #111726` compatibles OLED (pas de noir absolu pour limiter l'effet halo)
+- Même ratio de contraste que desktop (WCAG AA garanti)
+
+**Perf mobile** :
+- `SeasonalLayer` réduit la densité de particules sous `md` (voir section 6)
+- `next/font` avec `display: swap` pour éviter le FOIT
+- Pas d'animation coûteuse (box-shadow, filter blur lourd) déclenchée sur hover côté mobile — on se rabat sur `:active`
+
 ---
 
 ## 4. Bibliothèque de composants
@@ -418,9 +469,10 @@ seasonal-bg-tint       rgba(236,72,153,.02)
 ### Validation qualité avant PR
 
 - **Manuel** : chaque page en light + dark + Noël + Printemps
-- **Responsive** : 375, 768, 1024, 1440
+- **Responsive** : 375, 640, 768, 1024, 1280, 1440 — vérifier absence de scroll horizontal involontaire et lisibilité des tables scrollables
+- **Mobile** : burger menu fonctionnel, touch targets ≥ 44px, inputs natifs déclenchent le bon clavier, pas de zoom auto iOS sur focus input
 - **A11y** : Lighthouse + navigation clavier + VoiceOver sanity check
-- **Perf** : Lighthouse ≥ 90 sur pages publiques
+- **Perf** : Lighthouse ≥ 90 sur pages publiques (desktop et mobile)
 
 ### PR & merge
 
