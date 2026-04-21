@@ -36,3 +36,9 @@ Thumbs.db
 .vscode/
 *.sublime-project
 *.sublime-workspace
+
+# Claude Code session state
+.claude/
+
+# Superpowers brainstorming sessions
+.superpowers/
