@@ -26,7 +26,7 @@ export default function Badge({ variant = 'neutral', size = 'md', dot = false, c
       {dot && (
         <span
           className={cn(
-            'h-1.5 w-1.5 rounded-full flex-shrink-0',
+            'h-2 w-2 rounded-full flex-shrink-0',
             variant === 'new' && 'animate-pulse'
           )}
           style={{ backgroundColor: `rgb(var(--status-${v}-text))` }}
