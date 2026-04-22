@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import AppHeader from "../components/layout/AppHeader";
 import Footer from "../components/layout/Footer";
@@ -86,7 +85,7 @@ export default function Dashboard() {
         {/* Bento navigation */}
         <section className="container mx-auto px-4 py-8 max-w-container">
           <BentoGrid cols={3} gap="md">
-            <BentoCard span="wide" variant="highlight" as="a" href="/dashboard">
+            <BentoCard span="wide" variant="highlight" as="a" href="/dashboard" aria-label="Mes projets">
               <p className="text-xs font-medium text-primary/70 uppercase tracking-wide mb-1">
                 Mes projets
               </p>
@@ -98,28 +97,28 @@ export default function Dashboard() {
               </p>
             </BentoCard>
 
-            <BentoCard as="a" href="/submit-project">
+            <BentoCard as="a" href="/submit-project" aria-label="Soumettre un projet">
               <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">
                 Soumettre
               </p>
               <p className="text-sm text-text-dim">Nouveau projet</p>
             </BentoCard>
 
-            <BentoCard as="a" href="/workshops/dashboard">
+            <BentoCard as="a" href="/workshops/dashboard" aria-label="Workshops">
               <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">
                 Workshops
               </p>
               <p className="text-sm text-text-dim">Mes ateliers</p>
             </BentoCard>
 
-            <BentoCard span="wide" variant="highlight" as="a" href="/simulated">
+            <BentoCard span="wide" variant="highlight" as="a" href="/simulated" aria-label="Travaux pratiques Simulated">
               <p className="text-xs font-medium text-primary/70 uppercase tracking-wide mb-1">
                 Simulated
               </p>
               <p className="text-sm text-text-muted">Travail professionnel simulé</p>
             </BentoCard>
 
-            <BentoCard as="a" href="/inventory">
+            <BentoCard as="a" href="/inventory" aria-label="Inventaire du matériel">
               <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">
                 Inventaire
               </p>
@@ -132,11 +131,9 @@ export default function Dashboard() {
         <section className="container mx-auto px-4 pb-12 max-w-container">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-text">Mes projets</h2>
-            <Link href="/submit-project">
-              <Button variant="primary" size="sm" as="a">
-                Soumettre un projet
-              </Button>
-            </Link>
+            <Button variant="primary" size="sm" as="a" href="/submit-project">
+              Soumettre un projet
+            </Button>
           </div>
 
           <FilterChips
@@ -169,11 +166,9 @@ export default function Dashboard() {
               }
               action={
                 filter === "all" ? (
-                  <Link href="/submit-project">
-                    <Button variant="primary" as="a">
-                      Soumettre mon premier projet
-                    </Button>
-                  </Link>
+                  <Button variant="primary" as="a" href="/submit-project">
+                    Soumettre mon premier projet
+                  </Button>
                 ) : null
               }
             />
