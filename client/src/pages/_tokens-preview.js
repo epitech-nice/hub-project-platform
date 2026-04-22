@@ -2,6 +2,12 @@ import { useTheme } from 'next-themes';
 import { useState, useEffect } from 'react';
 import Modal from '../components/ui/Modal';
 import Dialog from '../components/ui/Dialog';
+import Tooltip from '../components/ui/Tooltip';
+import Progress from '../components/ui/Progress';
+import Skeleton from '../components/ui/Skeleton';
+import Tabs from '../components/ui/Tabs';
+import Pagination from '../components/ui/Pagination';
+import Breadcrumb from '../components/ui/Breadcrumb';
 import Button from '../components/ui/Button';
 import IconButton from '../components/ui/IconButton';
 import Input from '../components/ui/Input';
@@ -242,6 +248,69 @@ export default function TokensPreview() {
               <FileInput accept="image/*" maxSize={2000000} preview onChange={(f) => console.log('img:', f)} />
             </div>
           </div>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Tooltip</h2>
+          <div className="flex flex-wrap gap-6 py-6">
+            {['top', 'bottom', 'left', 'right'].map((p) => (
+              <Tooltip key={p} content={`Tooltip ${p}`} placement={p}>
+                <Button variant="outline" size="sm">{p}</Button>
+              </Tooltip>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Progress</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
+            <Progress value={70} max={100} label="Progression" />
+            <Progress value={30} max={100} label="Partiel" />
+            <Progress value={70} max={100} variant="circular" label="Score" />
+            <Progress value={100} max={100} variant="circular" />
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Skeleton</h2>
+          <div className="space-y-3 max-w-sm">
+            <Skeleton variant="text" width="80%" />
+            <Skeleton variant="text" width="60%" />
+            <div className="flex items-center gap-3">
+              <Skeleton variant="circle" width={40} height={40} />
+              <div className="flex-1 space-y-2">
+                <Skeleton variant="text" width="70%" />
+                <Skeleton variant="text" width="50%" />
+              </div>
+            </div>
+            <Skeleton variant="rect" width="100%" height={80} />
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Tabs</h2>
+          <Tabs
+            defaultValue="a"
+            items={[
+              { id: 'a', label: 'Onglet A', content: <p className="text-text-muted text-sm">Contenu A</p> },
+              { id: 'b', label: 'Onglet B', content: <p className="text-text-muted text-sm">Contenu B</p> },
+              { id: 'c', label: 'Onglet C', content: <p className="text-text-muted text-sm">Contenu C</p> },
+            ]}
+          />
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Pagination</h2>
+          <Pagination page={3} totalPages={10} onChange={(p) => console.log('page:', p)} />
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Breadcrumb</h2>
+          <Breadcrumb items={[
+            { label: 'Accueil', href: '/' },
+            { label: 'Projets', href: '/projects' },
+            { label: 'Mon projet' },
+          ]} />
         </section>
 
         <section>
