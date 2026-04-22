@@ -314,9 +314,9 @@ export default function AdminWorkshopDetail() {
           <div className="mt-6 lg:mt-0 space-y-4">
             {workshop.status !== "pending" && (
               <Card>
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-3">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-3">
                   Évaluation actuelle
-                </h3>
+                </h2>
                 <div className="space-y-2">
                   <div>
                     <StatusBadge status={workshop.status} dot />
@@ -343,9 +343,9 @@ export default function AdminWorkshopDetail() {
 
             {workshop.status !== "completed" && (
               <Card>
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-4">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-4">
                   Formulaire d'évaluation
-                </h3>
+                </h2>
 
                 {error && (
                   <div className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
@@ -413,9 +413,9 @@ export default function AdminWorkshopDetail() {
 
             {workshop.status === "approved" && (
               <Card>
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-2">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-2">
                   Marquer comme terminé
-                </h3>
+                </h2>
                 <p className="text-sm text-text-muted mb-4">
                   Une fois le workshop complètement terminé, vous pouvez le marquer comme tel.
                 </p>

@@ -99,7 +99,7 @@ export default function AdminWorkshopsDashboard() {
     const matchesSearch =
       !searchTerm ||
       workshop.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      workshop.submittedBy.name.toLowerCase().includes(searchTerm.toLowerCase());
+      workshop.submittedBy?.name?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesYear = isInSchoolYear(workshop.createdAt, schoolYear);
     return matchesSearch && matchesYear;
   });
