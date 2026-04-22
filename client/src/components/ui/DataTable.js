@@ -76,7 +76,7 @@ export default function DataTable({
 
   return (
     <div className={cn('w-full overflow-x-auto rounded-xl border border-border', className)}>
-      <table className="w-full border-collapse text-sm" role="grid">
+      <table className="w-full border-collapse text-sm">
         <thead className={cn(
           'bg-surface-2',
           stickyHeader && 'sticky top-0 z-10'
@@ -88,7 +88,7 @@ export default function DataTable({
                 <th
                   key={col.key}
                   scope="col"
-                  aria-sort={col.sortable && isActive ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
+                  aria-sort={col.sortable ? (isActive ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none') : undefined}
                   className={cn(
                     'px-4 py-3 text-xs font-semibold uppercase tracking-snug text-text-dim',
                     ALIGN[col.align ?? 'left'],
@@ -127,7 +127,7 @@ export default function DataTable({
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 tabIndex={onRowClick ? 0 : undefined}
                 onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(row); } } : undefined}
-                role={onRowClick ? 'button' : undefined}
+                role="row"
                 className={cn(
                   'transition-colors duration-100',
                   onRowClick && 'cursor-pointer hover:bg-surface-2 focus-visible:outline-none focus-visible:bg-surface-2'
