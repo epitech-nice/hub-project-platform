@@ -138,6 +138,16 @@
   }
 }
 
+/* Animations */
+@keyframes slide-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.animate-slide-up {
+  animation: slide-up 300ms cubic-bezier(.4, 0, .2, 1) both;
+}
+
 /* Layout structurel */
 html, body {
   height: 100%;

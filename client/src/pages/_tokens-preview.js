@@ -1,5 +1,7 @@
 import { useTheme } from 'next-themes';
 import { useState, useEffect } from 'react';
+import Modal from '../components/ui/Modal';
+import Dialog from '../components/ui/Dialog';
 import Button from '../components/ui/Button';
 import IconButton from '../components/ui/IconButton';
 import Input from '../components/ui/Input';
@@ -15,6 +17,8 @@ import Card from '../components/ui/Card';
 export default function TokensPreview() {
   const { theme, setTheme } = useTheme();
   const [season, setSeason] = useState('none');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -154,6 +158,40 @@ export default function TokensPreview() {
             </div>
           </div>
         </section>
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Modal / Dialog</h2>
+          <div className="flex gap-3">
+            <Button onClick={() => setModalOpen(true)}>Ouvrir Modal</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(true)}>Ouvrir Dialog</Button>
+          </div>
+          <Modal
+            open={modalOpen}
+            onClose={() => setModalOpen(false)}
+            title="Exemple de Modal"
+            footer={
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setModalOpen(false)}>Annuler</Button>
+                <Button onClick={() => setModalOpen(false)}>Confirmer</Button>
+              </div>
+            }
+          >
+            <p className="text-text-muted">Contenu de la modal. Fermer via ESC, backdrop ou bouton ×.</p>
+          </Modal>
+          <Dialog
+            open={dialogOpen}
+            onClose={() => setDialogOpen(false)}
+            title="Confirmation"
+            footer={
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setDialogOpen(false)}>Non</Button>
+                <Button variant="danger" size="sm" onClick={() => setDialogOpen(false)}>Supprimer</Button>
+              </div>
+            }
+          >
+            <p className="text-text-muted text-sm">Cette action est irréversible. Continuer ?</p>
+          </Dialog>
+        </section>
+
         <section>
           <h2 className="text-xl font-semibold mb-4">Card</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
