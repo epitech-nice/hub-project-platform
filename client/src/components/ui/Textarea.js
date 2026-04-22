@@ -2,7 +2,7 @@ import { forwardRef, useCallback } from 'react';
 import { cn } from '../../lib/cn';
 
 const Textarea = forwardRef(function Textarea(
-  { error = false, autoGrow = false, className = '', onInput, rows = 3, ...props },
+  { error = false, autoGrow = false, className = '', onInput, rows = 3, style, ...props },
   ref
 ) {
   const handleInput = useCallback(
@@ -33,7 +33,7 @@ const Textarea = forwardRef(function Textarea(
         autoGrow && 'resize-none overflow-hidden',
         className
       )}
-      style={{ fontSize: '16px' }}
+      style={{ fontSize: '16px', ...style }}
       {...props}
     />
   );

@@ -30,7 +30,7 @@ const Select = forwardRef(function Select(
       >
         {children}
       </select>
-      <span className="absolute right-3 text-text-dim">
+      <span className="absolute right-3 text-text-dim pointer-events-none">
         <ChevronDown />
       </span>
     </div>
