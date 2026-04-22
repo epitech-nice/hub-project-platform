@@ -5,13 +5,14 @@ const STATUS_MAP = {
   pending_changes: { variant: 'changes',  label: 'Modifications requises' },
   approved:        { variant: 'approved', label: 'Approuvé' },
   rejected:        { variant: 'rejected', label: 'Rejeté' },
+  completed:       { variant: 'neutral',  label: 'Terminé' },
 };
 
 /**
  * StatusBadge — maps a workflow status string to a Badge with a French label.
  *
  * Props:
- *   status: 'pending' | 'pending_changes' | 'approved' | 'rejected'
+ *   status: 'pending' | 'pending_changes' | 'approved' | 'rejected' | 'completed'
  *   dot:    boolean (default: false)
  *   size:   'sm' | 'md'
  */
