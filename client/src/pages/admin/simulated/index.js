@@ -501,7 +501,7 @@ export default function AdminSimulated() {
         <div className="flex items-center gap-2 flex-wrap">
           <StatusBadge status={v} />
           {row.totalCredits > 0 && ["approved", "completed"].includes(v) && (
-            <span className="text-xs text-success font-medium">{row.totalCredits} cr. total</span>
+            <span className="text-xs text-text-muted font-medium">{row.totalCredits} cr. total</span>
           )}
         </div>
       ),
@@ -728,7 +728,14 @@ export default function AdminSimulated() {
           </div>
         )}
         {forceSuccess && (
-          <div className="mb-3 text-sm text-success bg-success/10 px-3 py-2 rounded">
+          <div
+            className="mb-3 text-sm px-3 py-2 rounded border"
+            style={{
+              color: 'rgb(var(--status-approved-text))',
+              backgroundColor: 'rgb(var(--status-approved-bg))',
+              borderColor: 'rgba(var(--status-approved-text) / 0.3)',
+            }}
+          >
             {forceSuccess}
           </div>
         )}
@@ -884,7 +891,7 @@ export default function AdminSimulated() {
                 </thead>
                 <tbody className="bg-surface divide-y divide-border">
                   {genPreview.map((c, i) => (
-                    <tr key={i}>
+                    <tr key={c.name}>
                       <td className="px-4 py-2 text-text font-medium">{c.name}</td>
                       <td className="px-4 py-2 text-text-muted">{new Date(c.startDate).toLocaleDateString("fr-FR")}</td>
                       <td className="px-4 py-2 text-text-muted">{new Date(c.firstSubmissionDeadline).toLocaleDateString("fr-FR")}</td>
@@ -979,7 +986,7 @@ export default function AdminSimulated() {
                 </thead>
                 <tbody className="bg-surface divide-y divide-border">
                   {jsonPreview.map((c, i) => (
-                    <tr key={i}>
+                    <tr key={c.name}>
                       <td className="px-4 py-2 text-text font-medium">{c.name}</td>
                       <td className="px-4 py-2 text-text-muted">{new Date(c.startDate).toLocaleDateString("fr-FR")}</td>
                       <td className="px-4 py-2 text-text-muted">{new Date(c.firstSubmissionDeadline).toLocaleDateString("fr-FR")}</td>
