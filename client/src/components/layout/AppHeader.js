@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useTheme } from 'next-themes';
@@ -91,6 +91,7 @@ function NavLink({ href, children }) {
 export default function AppHeader() {
   const { isAuthenticated, user, loading, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const closeMobile = useCallback(() => setMobileOpen(false), []);
   const isAdmin = user?.role === 'admin';
 
   // Build nav sections shared between desktop dropdowns and mobile panel
@@ -242,7 +243,7 @@ export default function AppHeader() {
       {isAuthenticated && (
         <MobileNavPanel
           open={mobileOpen}
-          onClose={() => setMobileOpen(false)}
+          onClose={closeMobile}
           sections={mobileSections}
         />
       )}

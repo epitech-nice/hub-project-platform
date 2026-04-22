@@ -8,19 +8,55 @@ function useScrollLock(active) {
   useEffect(() => {
     if (!active) return;
     const scrollY = window.scrollY;
-    const prev = { overflow: document.body.style.overflow, position: document.body.style.position, top: document.body.style.top, width: document.body.style.width };
+    const prev = {
+      overflow: document.body.style.overflow,
+      position: document.body.style.position,
+      top:      document.body.style.top,
+      width:    document.body.style.width,
+    };
     document.body.style.overflow = 'hidden';
     document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
+    document.body.style.top      = `-${scrollY}px`;
+    document.body.style.width    = '100%';
     return () => {
+      // Read saved scroll position from the style set above, not from the
+      // captured variable — the user may have scrolled before the panel opened.
+      const saved = Math.abs(parseInt(document.body.style.top || '0', 10));
       document.body.style.overflow = prev.overflow;
       document.body.style.position = prev.position;
-      document.body.style.top = prev.top;
-      document.body.style.width = prev.width;
-      window.scrollTo(0, scrollY);
+      document.body.style.top      = prev.top;
+      document.body.style.width    = prev.width;
+      window.scrollTo(0, saved);
     };
   }, [active]);
+}
+
+const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function useFocusTrap(ref, active) {
+  useEffect(() => {
+    if (!active || !ref.current) return;
+    const el = ref.current;
+    const getFocusable = () => Array.from(el.querySelectorAll(FOCUSABLE));
+
+    // Focus first element on open
+    getFocusable()[0]?.focus();
+
+    const handleTab = (e) => {
+      if (e.key !== 'Tab') return;
+      const items = getFocusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last  = items[items.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleTab);
+    return () => document.removeEventListener('keydown', handleTab);
+  }, [ref, active]);
 }
 
 function NavSection({ label, items, onClose }) {
@@ -60,9 +96,14 @@ export default function MobileNavPanel({ open, onClose, sections = [] }) {
   const router = useRouter();
 
   useScrollLock(open);
+  useFocusTrap(panelRef, open);
 
   useEffect(() => { setMounted(true); }, []);
-  useEffect(() => { if (open) onClose(); }, [router.asPath]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close when route changes; onClose is stable via useCallback in parent
+  useEffect(() => {
+    if (open) onClose();
+  }, [router.asPath, onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -70,13 +111,6 @@ export default function MobileNavPanel({ open, onClose, sections = [] }) {
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
   }, [open, onClose]);
-
-  // Focus first focusable element when panel opens
-  useEffect(() => {
-    if (!open || !panelRef.current) return;
-    const first = panelRef.current.querySelector('a, button, [tabindex]:not([tabindex="-1"])');
-    first?.focus();
-  }, [open]);
 
   if (!mounted || typeof document === 'undefined') return null;
 
