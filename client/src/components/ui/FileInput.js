@@ -137,7 +137,7 @@ export default function FileInput({
   const isPdf = file?.type === 'application/pdf';
 
   return (
-    <div className={cn('w-full', className)}>
+    <div className={cn('w-full', className)} {...props}>
       <div
         role="button"
         tabIndex={0}
