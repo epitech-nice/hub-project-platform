@@ -150,6 +150,7 @@ export default function AdminProjectDetail() {
         router.push("/admin/dashboard");
       } catch (err) {
         setError(err.message || "Une erreur est survenue lors de la suppression");
+      } finally {
         setIsSubmitting(false);
       }
     }
@@ -224,9 +225,7 @@ export default function AdminProjectDetail() {
         />
 
         <div className="lg:grid lg:grid-cols-[1fr_360px] lg:gap-8 mt-2">
-          {/* Left column */}
           <div className="space-y-6">
-            {/* Metadata card */}
             <Card>
               <div className="flex items-start justify-between gap-4 mb-5">
                 <div>
@@ -256,7 +255,6 @@ export default function AdminProjectDetail() {
               </div>
             </Card>
 
-            {/* Description + Objectifs + Technologies */}
             <Card>
               <div className="space-y-6">
                 <div>
@@ -292,7 +290,6 @@ export default function AdminProjectDetail() {
               </div>
             </Card>
 
-            {/* Étudiants impliqués */}
             {project.studentCount > 1 && (
               <Card>
                 <h2 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-3">
@@ -318,7 +315,6 @@ export default function AdminProjectDetail() {
               </Card>
             )}
 
-            {/* Liens */}
             {hasLinks && (
               <Card>
                 <h2 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-3">
@@ -366,7 +362,6 @@ export default function AdminProjectDetail() {
               </Card>
             )}
 
-            {/* Informations supplémentaires */}
             {hasAdditionalInfo && (
               <Card>
                 <h2 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-3">
@@ -423,7 +418,6 @@ export default function AdminProjectDetail() {
               </Card>
             )}
 
-            {/* Requête externe */}
             {project.externalRequestStatus?.sent && (
               <Card>
                 <h2 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-3">
@@ -446,15 +440,12 @@ export default function AdminProjectDetail() {
               </Card>
             )}
 
-            {/* Historique des modifications */}
             {historyEntries.length > 0 && (
               <ChangeHistory entries={historyEntries} />
             )}
           </div>
 
-          {/* Right column */}
           <div className="mt-6 lg:mt-0 space-y-4">
-            {/* Évaluation actuelle */}
             {project.status !== "pending" && (
               <Card>
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-3">
@@ -494,7 +485,7 @@ export default function AdminProjectDetail() {
             {project.status !== "completed" && (
               <Card>
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-4">
-                  Évaluation
+                  Formulaire d'évaluation
                 </h3>
 
                 {error && (
@@ -544,7 +535,6 @@ export default function AdminProjectDetail() {
                     >
                       <Input
                         type="number"
-                        id="credits"
                         name="credits"
                         value={reviewForm.credits === null ? "" : reviewForm.credits}
                         onChange={handleChange}
@@ -556,7 +546,6 @@ export default function AdminProjectDetail() {
 
                   <FormField label="Commentaires">
                     <Textarea
-                      id="comments"
                       name="comments"
                       value={reviewForm.comments}
                       onChange={handleChange}
@@ -580,7 +569,6 @@ export default function AdminProjectDetail() {
               </Card>
             )}
 
-            {/* Marquer comme terminé */}
             {project.status === "approved" && (
               <Card>
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-2">
