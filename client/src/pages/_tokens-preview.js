@@ -1,9 +1,15 @@
 import { useTheme } from 'next-themes';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function TokensPreview() {
   const { theme, setTheme } = useTheme();
   const [season, setSeason] = useState('none');
+
+  useEffect(() => {
+    return () => {
+      document.documentElement.classList.remove('christmas', 'spring');
+    };
+  }, []);
 
   const setSeasonClass = (s) => {
     document.documentElement.classList.remove('christmas', 'spring');

@@ -6,6 +6,12 @@ module.exports = {
     "./src/components/**/*.{js,ts,jsx,tsx}",
     './app/**/*.{js,ts,jsx,tsx}',
   ],
+  safelist: [
+    'bg-primary', 'bg-secondary', 'bg-accent', 'bg-danger',
+    'bg-bg', 'bg-surface', 'bg-surface-2',
+    'bg-border', 'bg-border-strong',
+    'bg-text', 'bg-text-muted', 'bg-text-dim',
+  ],
   theme: {
     extend: {
       fontFamily: {
