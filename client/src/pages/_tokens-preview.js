@@ -179,7 +179,7 @@ export default function TokensPreview() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
             <div className="space-y-2">
               <div className="text-xs font-mono text-text-dim mb-2">PDF — preview</div>
-              <FileInput accept="application/pdf" maxSize={5000000} preview onChange={(f) => console.log('pdf:', f)} />
+              <FileInput accept="application/pdf" maxSize={5000000} preview onPreviewPdf={(f) => console.log('preview pdf:', f)} onChange={(f) => console.log('pdf:', f)} />
             </div>
             <div className="space-y-2">
               <div className="text-xs font-mono text-text-dim mb-2">Image — preview</div>

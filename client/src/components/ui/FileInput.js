@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useId } from 'react';
+import { useRef, useState, useCallback, useId, useEffect } from 'react';
 import { cn } from '../../lib/cn';
 
 const UploadIcon = () => (
@@ -14,8 +14,27 @@ const FileIcon = () => (
   </svg>
 );
 
+const ACCEPT_LABELS = {
+  'application/pdf': 'PDF',
+  'image/*': 'Images',
+  'image/png': 'PNG',
+  'image/jpeg': 'JPEG',
+  'image/gif': 'GIF',
+  'image/webp': 'WebP',
+};
+
+function formatAcceptHint(accept) {
+  return accept
+    .split(',')
+    .map((t) => {
+      const trimmed = t.trim();
+      return ACCEPT_LABELS[trimmed] ?? trimmed.replace(/^\./, '').toUpperCase();
+    })
+    .join(', ');
+}
+
 function validate(file, accept, maxSize) {
-  if (maxSize && file.size > maxSize) {
+  if (maxSize != null && file.size > maxSize) {
     const mb = (maxSize / 1_000_000).toFixed(0);
     return `Fichier trop volumineux (max ${mb} Mo)`;
   }
@@ -37,14 +56,23 @@ export default function FileInput({
   maxSize,
   preview = false,
   className = '',
+  onPreviewPdf,
   ...props
 }) {
   const id = useId();
   const inputRef = useRef(null);
+  const dragCounter = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [error, setError] = useState(null);
+
+  // Revoke blob URL when it changes or on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const handleFile = useCallback(
     (f) => {
@@ -62,8 +90,10 @@ export default function FileInput({
       onChange?.(f);
 
       if (preview && f.type.startsWith('image/')) {
-        const url = URL.createObjectURL(f);
-        setPreviewUrl(url);
+        setPreviewUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(f);
+        });
       } else {
         setPreviewUrl(null);
       }
@@ -71,24 +101,37 @@ export default function FileInput({
     [accept, maxSize, preview, onChange]
   );
 
-  const handleChange = (e) => handleFile(e.target.files?.[0] ?? null);
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    handleFile(e.dataTransfer.files?.[0] ?? null);
-  };
-
-  const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
-  const handleDragLeave = () => setIsDragging(false);
-
-  const clear = () => {
+  const clear = useCallback(() => {
     setFile(null);
     setPreviewUrl(null);
     setError(null);
     onChange?.(null);
     if (inputRef.current) inputRef.current.value = '';
+  }, [onChange]);
+
+  const handleChange = (e) => handleFile(e.target.files?.[0] ?? null);
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    dragCounter.current++;
+    setIsDragging(true);
   };
+
+  const handleDragOver = (e) => { e.preventDefault(); };
+
+  const handleDragLeave = () => {
+    dragCounter.current--;
+    if (dragCounter.current === 0) setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setIsDragging(false);
+    handleFile(e.dataTransfer.files?.[0] ?? null);
+  };
+
+  const openDialog = () => inputRef.current?.click();
 
   const isImage = file?.type.startsWith('image/');
   const isPdf = file?.type === 'application/pdf';
@@ -98,15 +141,21 @@ export default function FileInput({
       <div
         role="button"
         tabIndex={0}
-        onClick={() => inputRef.current?.click()}
-        onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
+        onClick={openDialog}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openDialog();
+          }
+        }}
         onDrop={handleDrop}
+        onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         className={cn(
           'flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed',
           'px-6 py-8 text-center cursor-pointer',
-          'transition-colors duration-200',
+          'transition-colors duration-200 ease-smooth',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
           isDragging
             ? 'border-primary bg-primary-ghost'
@@ -120,8 +169,8 @@ export default function FileInput({
         <div className="text-sm text-text-muted">
           <span className="font-medium text-primary">Choisir un fichier</span> ou glisser-déposer
         </div>
-        {accept && <div className="text-xs text-text-dim">{accept.replace(/application\//g, '').replace(/,/g, ', ')}</div>}
-        {maxSize && <div className="text-xs text-text-dim">Max {(maxSize / 1_000_000).toFixed(0)} Mo</div>}
+        {accept && <div className="text-xs text-text-dim">{formatAcceptHint(accept)}</div>}
+        {maxSize != null && <div className="text-xs text-text-dim">Max {(maxSize / 1_000_000).toFixed(0)} Mo</div>}
       </div>
 
       <input
@@ -131,7 +180,6 @@ export default function FileInput({
         accept={accept}
         onChange={handleChange}
         className="sr-only"
-        {...props}
       />
 
       {error && (
@@ -143,17 +191,17 @@ export default function FileInput({
           {preview && isImage && previewUrl && (
             <div className="mb-2 overflow-hidden rounded-md border border-border">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewUrl} alt="Aperçu" className="max-h-48 w-full object-cover" />
+              <img src={previewUrl} alt={`Aperçu de ${file.name}`} className="max-h-48 w-full object-cover" />
             </div>
           )}
           <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2">
             <FileIcon />
             <span className="flex-1 truncate text-sm text-text">{file.name}</span>
-            {preview && isPdf && (
+            {preview && isPdf && onPreviewPdf && (
               <button
                 type="button"
                 className="text-xs text-primary hover:underline"
-                onClick={(e) => { e.stopPropagation(); /* modal opens in Phase 3 */ }}
+                onClick={(e) => { e.stopPropagation(); onPreviewPdf(file); }}
               >
                 Aperçu
               </button>
@@ -161,7 +209,7 @@ export default function FileInput({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); clear(); }}
-              className="text-text-dim hover:text-danger transition-colors"
+              className="text-text-dim hover:text-danger transition-colors ease-smooth"
               aria-label="Supprimer le fichier"
             >
               <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
