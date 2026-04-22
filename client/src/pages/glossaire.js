@@ -2,6 +2,7 @@
 import React from "react";
 import Head from "next/head";
 import AppHeader from "../components/layout/AppHeader";
+import Footer from "../components/layout/Footer";
 import PageHead from "../components/ui/PageHead";
 
 export default function Glossaire() {
@@ -338,6 +339,8 @@ export default function Glossaire() {
           </aside>
         </div>
       </main>
+
+      <Footer />
     </div>
   );
 }
