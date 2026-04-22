@@ -1,15 +1,17 @@
-// pages/index.js
 import React from "react";
 import Head from "next/head";
-import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
-import Header from "../components/layout/Header";
+import AppHeader from "../components/layout/AppHeader";
+import Footer from "../components/layout/Footer";
+import Badge from "../components/ui/Badge";
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
 
 export default function Home() {
   const { isAuthenticated } = useAuth();
 
   return (
-    <div className="min-h-screen dark:bg-gray-900">
+    <div className="min-h-screen bg-bg text-text">
       <Head>
         <title>Hub Projets - Accueil</title>
         <meta
@@ -18,70 +20,72 @@ export default function Home() {
         />
       </Head>
 
-      <Header />
+      <AppHeader />
 
-      <main className="container mx-auto px-4 py-10">
+      <main className="container mx-auto px-4 py-12 max-w-container">
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-4xl font-bold mb-6 dark:text-white">
-            Bienvenue sur la plateforme Hub Projets
+          <div className="mb-4">
+            <Badge variant="neutral">Epitech Nice</Badge>
+          </div>
+
+          <h1 className="text-4xl font-bold tracking-tight mb-4">
+            Bienvenue sur le Hub Projets
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8">
+          <p className="text-xl text-text-muted mb-8">
             Soumettez et gérez vos demandes de projets facilement
           </p>
 
           {isAuthenticated ? (
             <div className="flex flex-wrap justify-center gap-4">
-              <Link href="/dashboard">
-                <a className="bg-blue-600 dark:bg-blue-700 text-white px-6 py-3 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800">
-                  Accéder à mon tableau de bord
-                </a>
-              </Link>
-              <Link href="/submit-project">
-                <a className="bg-green-600 dark:bg-green-700 text-white px-6 py-3 rounded-lg hover:bg-green-700 dark:hover:bg-green-800">
-                  Soumettre un nouveau projet
-                </a>
-              </Link>
-              <Link href="/glossaire">
-                <a className="bg-purple-600 dark:bg-purple-700 text-white px-6 py-3 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-800">
-                  Comprendre la planification projet
-                </a>
-              </Link>
+              <Button variant="primary" size="lg" as="a" href="/dashboard">
+                Accéder à mon tableau de bord
+              </Button>
+              <Button variant="outline" size="lg" as="a" href="/submit-project">
+                Soumettre un nouveau projet
+              </Button>
+              <Button variant="ghost" size="lg" as="a" href="/glossaire">
+                Comprendre la planification projet
+              </Button>
             </div>
           ) : (
-            <a
+            <Button
+              variant="primary"
+              size="lg"
+              as="a"
               href={`${process.env.NEXT_PUBLIC_API_URL}/api/auth/microsoft`}
-              className="bg-blue-600 dark:bg-blue-700 text-white px-6 py-3 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800"
             >
-              Connexion
-            </a>
+              Connexion Microsoft
+            </Button>
           )}
         </div>
 
-        <div className="mt-16 grid md:grid-cols-3 gap-8">
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
-            <h3 className="text-xl font-bold mb-3 dark:text-white">Soumettre un projet</h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
+        <div className="mt-16 grid md:grid-cols-3 gap-6">
+          <Card>
+            <h3 className="text-xl font-bold mb-3">Soumettre un projet</h3>
+            <p className="text-text-muted">
               Remplissez un formulaire simple pour soumettre votre demande de
               projet Hub.
             </p>
-          </div>
+          </Card>
 
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
-            <h3 className="text-xl font-bold mb-3 dark:text-white">Suivi en temps réel</h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
+          <Card>
+            <h3 className="text-xl font-bold mb-3">Suivi en temps réel</h3>
+            <p className="text-text-muted">
               Suivez l'état de vos demandes et consultez les retours des
               administrateurs.
             </p>
-          </div>
+          </Card>
 
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
-            <h3 className="text-xl font-bold mb-3 dark:text-white">Gestion simplifiée</h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
+          <Card>
+            <h3 className="text-xl font-bold mb-3">Gestion simplifiée</h3>
+            <p className="text-text-muted">
               Une interface intuitive pour gérer toutes vos demandes de projets.
             </p>
-          </div>
+          </Card>
         </div>
       </main>
+
+      <Footer />
     </div>
   );
 }
