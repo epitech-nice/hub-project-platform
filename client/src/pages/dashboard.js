@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import AppHeader from "../components/layout/AppHeader";
 import Footer from "../components/layout/Footer";
-import ProjectCard from "../components/projects/ProjectCard";
+import ProjectCard from "../components/patterns/ProjectCard";
 import Button from "../components/ui/Button";
 import Skeleton from "../components/ui/Skeleton";
 import BentoGrid from "../components/ui/BentoGrid";
@@ -65,7 +65,7 @@ export default function Dashboard() {
   const firstName = user?.name?.split(" ")[0] ?? "étudiant";
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-bg">
       <Head>
         <title>Hub Projets - Tableau de bord</title>
       </Head>
