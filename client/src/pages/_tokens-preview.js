@@ -1,5 +1,6 @@
 import { useTheme } from 'next-themes';
 import { useState, useEffect } from 'react';
+import Button from '../components/ui/Button';
 
 export default function TokensPreview() {
   const { theme, setTheme } = useTheme();
@@ -70,10 +71,20 @@ export default function TokensPreview() {
           </div>
         </section>
 
-        {/* Les sections suivantes seront ajoutées au fil des phases */}
         <section>
-          <h2 className="text-xl font-semibold mb-4">Components</h2>
-          <p className="text-text-muted">Ajoutés au fil des phases 2 et 3.</p>
+          <h2 className="text-xl font-semibold mb-4">Button</h2>
+          <div className="space-y-4">
+            {['primary', 'ghost', 'outline', 'danger', 'subtle'].map((variant) => (
+              <div key={variant} className="flex flex-wrap items-center gap-3">
+                <span className="w-20 text-xs font-mono text-text-dim">{variant}</span>
+                <Button variant={variant} size="sm">Small</Button>
+                <Button variant={variant} size="md">Medium</Button>
+                <Button variant={variant} size="lg">Large</Button>
+                <Button variant={variant} size="md" loading>Loading</Button>
+                <Button variant={variant} size="md" disabled>Disabled</Button>
+              </div>
+            ))}
+          </div>
         </section>
       </div>
     </div>
