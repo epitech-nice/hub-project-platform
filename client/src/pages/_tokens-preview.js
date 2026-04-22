@@ -10,6 +10,7 @@ import Radio from '../components/ui/Radio';
 import Switch from '../components/ui/Switch';
 import FileInput from '../components/ui/FileInput';
 import Badge from '../components/ui/Badge';
+import Card from '../components/ui/Card';
 
 export default function TokensPreview() {
   const { theme, setTheme } = useTheme();
@@ -153,6 +154,23 @@ export default function TokensPreview() {
             </div>
           </div>
         </section>
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Card</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <Card.Header><div className="font-semibold">Header</div></Card.Header>
+              <Card.Body><p className="text-text-muted text-sm">Contenu par défaut (padding 22px).</p></Card.Body>
+              <Card.Footer><div className="text-xs text-text-dim">Footer</div></Card.Footer>
+            </Card>
+            <Card padding="compact">
+              <Card.Body><p className="text-text-muted text-sm">Compact (padding 18px).</p></Card.Body>
+            </Card>
+            <Card interactive as="button" onClick={() => {}}>
+              <Card.Body><p className="text-sm">Interactive — hover pour shadow-md.</p></Card.Body>
+            </Card>
+          </div>
+        </section>
+
         <section>
           <h2 className="text-xl font-semibold mb-4">Badge</h2>
           <div className="space-y-4">
