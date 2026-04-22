@@ -198,6 +198,15 @@
   animation: slide-up 300ms cubic-bezier(.4, 0, .2, 1) both;
 }
 
+@keyframes fade-scale {
+  from { transform: scale(.97) translateY(-4px); opacity: 0; }
+  to   { transform: scale(1)   translateY(0);    opacity: 1; }
+}
+
+.animate-fade-scale {
+  animation: fade-scale 160ms cubic-bezier(.4, 0, .2, 1) both;
+}
+
 /* Layout structurel */
 html, body {
   height: 100%;

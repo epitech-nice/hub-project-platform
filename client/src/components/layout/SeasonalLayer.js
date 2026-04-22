@@ -32,7 +32,7 @@ function ChristmasParticles({ count }) {
     () =>
       Array.from({ length: count }, (_, i) => ({
         id: i,
-        left: (i / count) * 100 + (Math.random() - 0.5) * (100 / count),
+        left: (i / count) * 100 + ((i * 7) % 13) - 6,
         duration: 5 + (i % 10),
         delay: (i % 5),
         size: 10 + (i % 20),
@@ -71,7 +71,7 @@ function SpringParticles({ count }) {
     () =>
       Array.from({ length: count }, (_, i) => ({
         id: i,
-        left: (i / count) * 100 + (Math.random() - 0.5) * (100 / count),
+        left: (i / count) * 100 + ((i * 7) % 13) - 6,
         duration: 6 + (i % 10),
         delay: (i % 6),
         size: 12 + (i % 18),
@@ -183,6 +183,7 @@ export default function SeasonalLayer() {
     // Apply class on <html>
     document.documentElement.classList.remove('christmas', 'spring');
     if (active) document.documentElement.classList.add(active);
+    return () => document.documentElement.classList.remove('christmas', 'spring');
   }, []);
 
   if (!mounted || !season || reducedMotion) return null;
