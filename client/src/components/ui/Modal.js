@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../../lib/cn';
 
@@ -15,9 +15,9 @@ function useFocusTrap(containerRef, open) {
   useEffect(() => {
     if (!open || !containerRef.current) return;
 
+    const previouslyFocused = document.activeElement;
     const el = containerRef.current;
-    const firstFocusable = el.querySelector(FOCUSABLE);
-    firstFocusable?.focus();
+    el.querySelector(FOCUSABLE)?.focus();
 
     const handleKeyDown = (e) => {
       if (e.key !== 'Tab') return;
@@ -35,7 +35,10 @@ function useFocusTrap(containerRef, open) {
     };
 
     el.addEventListener('keydown', handleKeyDown);
-    return () => el.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      el.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus();
+    };
   }, [open, containerRef]);
 }
 
@@ -67,6 +70,7 @@ export default function Modal({
   className = '',
 }) {
   const containerRef = useRef(null);
+  const titleId = useId();
 
   useFocusTrap(containerRef, open);
   useScrollLock(open);
@@ -82,8 +86,8 @@ export default function Modal({
     return () => document.removeEventListener('keydown', handleEsc);
   }, [open, handleEsc]);
 
-  if (!open) return null;
   if (typeof document === 'undefined') return null;
+  if (!open) return null;
 
   const MAX_W = size === 'sm' ? 'sm:max-w-sm' : 'sm:max-w-lg';
 
@@ -92,7 +96,7 @@ export default function Modal({
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
       aria-modal="true"
       role="dialog"
-      aria-labelledby={title ? 'modal-title' : undefined}
+      aria-labelledby={title ? titleId : undefined}
     >
       {/* Backdrop */}
       <div
@@ -115,7 +119,7 @@ export default function Modal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           {title && (
-            <h2 id="modal-title" className="text-lg font-semibold tracking-tight">{title}</h2>
+            <h2 id={titleId} className="text-lg font-semibold tracking-tight">{title}</h2>
           )}
           <button
             type="button"
