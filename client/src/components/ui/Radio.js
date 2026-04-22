@@ -27,7 +27,7 @@ export default function Radio({ label, description, checked, onChange, disabled 
         <span
           className={cn(
             'absolute inset-0 rounded-full border-2 border-border bg-surface',
-            'transition-colors duration-150',
+            'transition-colors duration-150 ease-smooth',
             'peer-checked:border-primary',
             'peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 peer-focus-visible:ring-offset-1'
           )}
@@ -37,7 +37,7 @@ export default function Radio({ label, description, checked, onChange, disabled 
         <span
           className={cn(
             'absolute inset-[4px] rounded-full bg-primary',
-            'opacity-0 peer-checked:opacity-100 transition-opacity duration-150',
+            'opacity-0 peer-checked:opacity-100 transition-opacity duration-150 ease-smooth',
             'pointer-events-none'
           )}
           aria-hidden="true"

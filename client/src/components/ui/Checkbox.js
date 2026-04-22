@@ -27,7 +27,7 @@ export default function Checkbox({ label, description, checked, onChange, disabl
         <span
           className={cn(
             'absolute inset-0 rounded border-2 border-border bg-surface',
-            'transition-colors duration-150',
+            'transition-colors duration-150 ease-smooth',
             'peer-checked:bg-primary peer-checked:border-primary',
             'peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 peer-focus-visible:ring-offset-1'
           )}
@@ -37,7 +37,7 @@ export default function Checkbox({ label, description, checked, onChange, disabl
         <svg
           className={cn(
             'absolute inset-0 h-full w-full p-0.5 text-white',
-            'opacity-0 peer-checked:opacity-100 transition-opacity duration-150',
+            'opacity-0 peer-checked:opacity-100 transition-opacity duration-150 ease-smooth',
             'pointer-events-none'
           )}
           viewBox="0 0 12 12"

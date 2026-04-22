@@ -29,7 +29,7 @@ export default function Switch({ label, description, checked, onChange, disabled
         <span
           className={cn(
             'block h-6 w-11 rounded-full border-2 border-transparent bg-border',
-            'transition-colors duration-200',
+            'transition-colors duration-200 ease-smooth',
             'peer-checked:bg-primary',
             'peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 peer-focus-visible:ring-offset-1'
           )}
@@ -39,7 +39,7 @@ export default function Switch({ label, description, checked, onChange, disabled
         <span
           className={cn(
             'absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm',
-            'transition-transform duration-200',
+            'transition-transform duration-200 ease-smooth',
             'peer-checked:translate-x-5',
             'pointer-events-none'
           )}
