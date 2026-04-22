@@ -1,5 +1,5 @@
 // pages/admin/dashboard.js
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useAuth } from "../../context/AuthContext";
@@ -75,53 +75,41 @@ export default function AdminDashboard() {
     }
   }, [isAuthenticated, isAdmin, authLoading, router]);
 
+  const fetchProjects = useCallback(async (page) => {
+    try {
+      const params = { page, limit: ITEMS_PER_PAGE };
+      if (filter !== "all") params.status = filter;
+      if (searchTerm) params.search = searchTerm;
+      if (schoolYear) params.schoolYear = schoolYear;
+      const response = await get("/api/projects", params);
+      setProjects(response.data);
+      setCurrentPage(response.page || page);
+      setTotalPages(response.totalPages || 1);
+      setTotal(response.total || 0);
+    } catch (error) {
+      console.error("Erreur lors de la récupération des projets:", error);
+    }
+  }, [filter, searchTerm, schoolYear, get]);
+
   useEffect(() => {
     if (!isAuthenticated || !isAdmin) return;
+
+    setCurrentPage(1);
 
     const searchChanged = prevSearchTermRef.current !== searchTerm;
     prevSearchTermRef.current = searchTerm;
 
-    const fetchData = async (page) => {
-      try {
-        const params = { page, limit: ITEMS_PER_PAGE };
-        if (filter !== "all") params.status = filter;
-        if (searchTerm) params.search = searchTerm;
-        if (schoolYear) params.schoolYear = schoolYear;
-
-        const response = await get("/api/projects", params);
-        setProjects(response.data);
-        setCurrentPage(response.page || page);
-        setTotalPages(response.totalPages || 1);
-        setTotal(response.total || 0);
-      } catch (error) {
-        console.error("Erreur lors de la récupération des projets:", error);
-      }
-    };
-
     if (searchChanged) {
-      const timer = setTimeout(() => fetchData(1), 300);
+      const timer = setTimeout(() => fetchProjects(1), 300);
       return () => clearTimeout(timer);
     } else {
-      fetchData(1);
+      fetchProjects(1);
     }
-  }, [filter, schoolYear, searchTerm, isAuthenticated, isAdmin]);
+  }, [filter, schoolYear, searchTerm, isAuthenticated, isAdmin, fetchProjects]);
 
   const handlePageChange = async (newPage) => {
     if (newPage < 1 || newPage > totalPages) return;
-    try {
-      const params = { page: newPage, limit: ITEMS_PER_PAGE };
-      if (filter !== "all") params.status = filter;
-      if (searchTerm) params.search = searchTerm;
-      if (schoolYear) params.schoolYear = schoolYear;
-
-      const response = await get("/api/projects", params);
-      setProjects(response.data);
-      setCurrentPage(response.page || newPage);
-      setTotalPages(response.totalPages || 1);
-      setTotal(response.total || 0);
-    } catch (error) {
-      console.error("Erreur lors du changement de page:", error);
-    }
+    fetchProjects(newPage);
   };
 
   const currentYear = new Date().getFullYear();
@@ -191,6 +179,8 @@ export default function AdminDashboard() {
           ? ""
           : filter === "pending"
           ? " en attente"
+          : filter === "pending_changes"
+          ? " avec modifications requises"
           : filter === "approved"
           ? " approuvé"
           : filter === "rejected"
@@ -317,20 +307,22 @@ export default function AdminDashboard() {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-text mb-1.5">
+            <label htmlFor="export-start-date" className="block text-sm font-medium text-text mb-1.5">
               Date de début
             </label>
             <Input
+              id="export-start-date"
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-text mb-1.5">
+            <label htmlFor="export-end-date" className="block text-sm font-medium text-text mb-1.5">
               Date de fin
             </label>
             <Input
+              id="export-end-date"
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
