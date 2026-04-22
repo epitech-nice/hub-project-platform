@@ -7,7 +7,6 @@ import { ThemeProvider, useTheme } from "next-themes";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "../styles/globals.css";
-import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import SeasonalLayer from "../components/layout/SeasonalLayer";
 
