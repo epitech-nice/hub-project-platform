@@ -1,6 +1,7 @@
 import { useTheme } from 'next-themes';
 import { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
+import IconButton from '../components/ui/IconButton';
 
 export default function TokensPreview() {
   const { theme, setTheme } = useTheme();
@@ -68,6 +69,27 @@ export default function TokensPreview() {
             <div className="h-20 bg-surface rounded-lg shadow-sm flex items-center justify-center text-sm">sm</div>
             <div className="h-20 bg-surface rounded-lg shadow-md flex items-center justify-center text-sm">md</div>
             <div className="h-20 bg-surface rounded-lg shadow-lg flex items-center justify-center text-sm">lg</div>
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">IconButton</h2>
+          <div className="flex flex-wrap gap-4">
+            {['default', 'ghost', 'danger'].map((variant) => (
+              <div key={variant} className="flex flex-col items-center gap-2">
+                <span className="text-xs font-mono text-text-dim">{variant}</span>
+                <div className="flex items-center gap-2">
+                  {['sm', 'md', 'lg'].map((size) => (
+                    <IconButton key={size} variant={variant} size={size} aria-label={`${variant} ${size}`}>
+                      <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <circle cx="8" cy="8" r="6" />
+                        <path d="M8 5v3l2 2" />
+                      </svg>
+                    </IconButton>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
