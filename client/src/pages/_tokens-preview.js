@@ -2,6 +2,9 @@ import { useTheme } from 'next-themes';
 import { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import IconButton from '../components/ui/IconButton';
+import Input from '../components/ui/Input';
+import Textarea from '../components/ui/Textarea';
+import Select from '../components/ui/Select';
 
 export default function TokensPreview() {
   const { theme, setTheme } = useTheme();
@@ -106,6 +109,43 @@ export default function TokensPreview() {
                 <Button variant={variant} size="md" disabled>Disabled</Button>
               </div>
             ))}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Form inputs</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Input normal</label>
+              <Input placeholder="Placeholder..." />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Input error</label>
+              <Input error placeholder="Invalid value" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Input disabled</label>
+              <Input disabled placeholder="Disabled" value="Valeur existante" readOnly />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Textarea (auto-grow)</label>
+              <Textarea autoGrow placeholder="Écris ici..." />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select</label>
+              <Select>
+                <option value="">Choisir...</option>
+                <option value="a">Option A</option>
+                <option value="b">Option B</option>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select error</label>
+              <Select error>
+                <option value="">Choisir...</option>
+                <option value="a">Option A</option>
+              </Select>
+            </div>
           </div>
         </section>
       </div>
