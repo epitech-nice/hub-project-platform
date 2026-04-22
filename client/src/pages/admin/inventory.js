@@ -1,25 +1,38 @@
 // pages/admin/inventory.js
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import Header from '../../components/layout/Header';
+import AppHeader from '../../components/layout/AppHeader';
+import Footer from '../../components/layout/Footer';
 import { useAuth } from '../../context/AuthContext';
 import { useApi } from '../../hooks/useApi';
+import PageHead from '../../components/ui/PageHead';
+import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import FormField from '../../components/ui/FormField';
+import Textarea from '../../components/ui/Textarea';
+import Select from '../../components/ui/Select';
+import FilterChips from '../../components/ui/FilterChips';
+import TableToolbar from '../../components/ui/TableToolbar';
+import DataTable from '../../components/ui/DataTable';
+import Badge from '../../components/ui/Badge';
+import Modal from '../../components/ui/Modal';
 
 // ── Constantes ───────────────────────────────────────────────────────────────
 const getAvailability = (tool) => {
   if (tool.status === 'maintenance') {
-    return { label: 'Maintenance', cls: 'bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-300' };
+    return { label: 'Maintenance', variant: 'rejected' };
   }
   const available = tool.quantity - (tool.borrowedCount || 0);
   if (available <= 0) {
-    return { label: 'Épuisé', cls: 'bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-300' };
+    return { label: 'Épuisé', variant: 'changes' };
   }
   if ((tool.borrowedCount || 0) > 0) {
-    return { label: `${available}/${tool.quantity} dispo`, cls: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/20 dark:text-yellow-300' };
+    return { label: `${available}/${tool.quantity} dispo`, variant: 'pending' };
   }
-  return { label: `Disponible (${tool.quantity})`, cls: 'bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-300' };
+  return { label: `Disponible (${tool.quantity})`, variant: 'approved' };
 };
+
 const EMPTY_FORM = {
   name:         '',
   description:  '',
@@ -302,7 +315,8 @@ export default function AdminInventoryPage() {
   };
 
   // Depuis l'import : ouvrir le formulaire d'ajout avec le RFID pré-rempli
-  // Le modal d'import reste ouvert en arrière-plan (z-50), le formulaire s'empile dessus (z-60)
+  // Le modal d'import reste ouvert en arrière-plan, le formulaire s'empile dessus
+  // (portals appended to body in DOM order — tool modal appended after import modal)
   const openAddFromImport = (rfid) => {
     setFromImport(true);
     openAddModal({ rfid });
@@ -316,577 +330,421 @@ export default function AdminInventoryPage() {
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
   if (authLoading || pageLoading) {
-    return <div className="text-center py-10 dark:text-white">Chargement...</div>;
+    return <div className="text-center py-10 text-text-muted">Chargement...</div>;
   }
   if (!isAuthenticated || !isAdmin) return null;
 
   const rfidCount = parseRfidText(importRaw).length;
 
+  // ── Colonnes DataTable ────────────────────────────────────────────────────
+  const COLUMNS = [
+    {
+      key: 'name',
+      label: 'Outil',
+      render: (v, row) => (
+        <div>
+          <p className="font-medium text-text">{v}</p>
+          {row.description && (
+            <p className="text-xs text-text-muted truncate max-w-xs">{row.description}</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'tags',
+      label: 'Tags',
+      render: (v) => (
+        <div className="flex flex-wrap gap-1">
+          {(v || []).map((tag) => (
+            <Badge key={tag} variant="neutral" size="sm">{tag}</Badge>
+          ))}
+        </div>
+      ),
+    },
+    {
+      key: 'rfid',
+      label: 'RFID',
+      render: (v) =>
+        v ? (
+          <span className="font-mono text-xs bg-surface-2 px-2 py-0.5 rounded text-text-muted">{v}</span>
+        ) : (
+          <span className="text-text-dim text-xs">—</span>
+        ),
+    },
+    {
+      key: 'quantity',
+      label: 'Qté',
+      align: 'center',
+      render: (v) => <span className="font-medium text-text">{v}</span>,
+    },
+    {
+      key: 'status',
+      label: 'Statut',
+      render: (_, row) => {
+        const { label, variant } = getAvailability(row);
+        return <Badge variant={variant}>{label}</Badge>;
+      },
+    },
+    {
+      key: '_id',
+      label: 'Actions',
+      align: 'center',
+      render: (v, row) => (
+        <div className="flex justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const url = `${window.location.origin}/inventory/scan/${row._id}`;
+              const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
+              window.open(qrUrl, '_blank');
+            }}
+          >
+            QR Code
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => openEditModal(row)}>Modifier</Button>
+          <Button variant="danger" size="sm" onClick={() => setDeleteId(row._id)}>Supprimer</Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="min-h-screen dark:bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-bg">
       <Head>
         <title>Hub Inventaire - Administration</title>
       </Head>
-      <Header />
+      <AppHeader />
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">
 
-        {/* ── En-tête ──────────────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <h1 className="text-3xl font-bold dark:text-white">Inventaire du Hub</h1>
-          <div className="flex gap-2">
-            <button
-              onClick={handleExportCSV}
-              disabled={isExporting}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800 text-white rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-              {isExporting ? 'Export...' : 'Exporter CSV'}
-            </button>
-            <button
-              onClick={() => { setImportRaw(''); setImportResults(null); setShowImport(true); }}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-800 dark:bg-gray-600 dark:hover:bg-gray-500 text-white rounded-md text-sm font-medium"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-              </svg>
-              Import RFID
-            </button>
-            <button
-              onClick={() => openAddModal()}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white rounded-md text-sm font-medium"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Ajouter un outil
-            </button>
-          </div>
-        </div>
+        <PageHead
+          title="Inventaire du Hub"
+          actions={
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleExportCSV} loading={isExporting}>
+                Exporter CSV
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => { setImportRaw(''); setImportResults(null); setShowImport(true); }}
+              >
+                Import RFID
+              </Button>
+              <Button variant="primary" onClick={() => openAddModal()}>
+                Ajouter un outil
+              </Button>
+            </div>
+          }
+        />
 
         {/* ── Filtres ──────────────────────────────────────────────────────── */}
-        <div className="mb-6 flex flex-col md:flex-row md:items-center gap-4">
-          <div className="flex flex-wrap gap-2">
-            {[
-              { key: 'all',         label: 'Tous',        cls: 'bg-gray-700 text-white dark:bg-gray-600' },
-              { key: 'available',   label: 'Disponible',  cls: 'bg-green-600 text-white' },
-              { key: 'borrowed',    label: 'Emprunté',    cls: 'bg-yellow-500 text-white' },
-              { key: 'maintenance', label: 'Maintenance', cls: 'bg-red-600 text-white' },
-            ].map(({ key, label, cls }) => (
-              <button
-                key={key}
-                onClick={() => setStatusFilter(key)}
-                className={`px-4 py-2 rounded-md text-sm font-medium ${
-                  statusFilter === key ? cls : 'bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher..."
-            className="w-full md:w-64 px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+        <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
+          <FilterChips
+            options={[
+              { value: 'all',         label: 'Tous' },
+              { value: 'available',   label: 'Disponible' },
+              { value: 'borrowed',    label: 'Emprunté' },
+              { value: 'maintenance', label: 'Maintenance' },
+            ]}
+            value={statusFilter}
+            onChange={setStatusFilter}
+          />
+          <TableToolbar
+            search={search}
+            onSearch={setSearch}
+            searchPlaceholder="Rechercher..."
+            className="flex-1 md:max-w-xs"
           />
         </div>
 
         {/* ── Table ────────────────────────────────────────────────────────── */}
-        {tools.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 text-center">
-            <h3 className="text-xl font-bold mb-3 dark:text-white">Aucun outil à afficher</h3>
-            <p className="text-gray-600 dark:text-gray-300">
-              {search || statusFilter !== 'all'
-                ? 'Aucun outil ne correspond à votre recherche.'
-                : 'Commencez par ajouter un outil avec le bouton ci-dessus.'}
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full bg-white dark:bg-gray-800 shadow-md rounded-lg">
-              <thead className="bg-gray-100 dark:bg-gray-700">
-                <tr>
-                  <th className="px-4 py-3 text-left dark:text-gray-200">Outil</th>
-                  <th className="px-4 py-3 text-left dark:text-gray-200">Tags</th>
-                  <th className="px-4 py-3 text-left dark:text-gray-200">RFID</th>
-                  <th className="px-4 py-3 text-center dark:text-gray-200">Qté</th>
-                  <th className="px-4 py-3 text-left dark:text-gray-200">Statut</th>
-                  <th className="px-4 py-3 text-center dark:text-gray-200">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tools.map((tool) => {
-                  const { label: availLabel, cls: availCls } = getAvailability(tool);
-                  return (
-                  <tr key={tool._id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                    <td className="px-4 py-3">
-                      <p className="font-medium dark:text-white">{tool.name}</p>
-                      {tool.description && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">
-                          {tool.description}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {tool.tags &&
-                          tool.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {tool.rfid ? (
-                        <span className="font-mono text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
-                          {tool.rfid}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 dark:text-gray-600 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center font-medium dark:text-white">
-                      {tool.quantity}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${availCls}`}>
-                        {availLabel}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex justify-center gap-2">
-                        <button
-                          onClick={() => {
-                            const url = `${window.location.origin}/inventory/scan/${tool._id}`;
-                            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
-                            window.open(qrUrl, '_blank');
-                          }}
-                          className="bg-purple-600 dark:bg-purple-700 text-white px-3 py-1 rounded hover:bg-purple-700 dark:hover:bg-purple-800 text-sm"
-                        >
-                          QR Code
-                        </button>
-                        <button
-                          onClick={() => openEditModal(tool)}
-                          className="bg-blue-600 dark:bg-blue-700 text-white px-3 py-1 rounded hover:bg-blue-700 dark:hover:bg-blue-800 text-sm"
-                        >
-                          Modifier
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(tool._id)}
-                          className="bg-red-600 dark:bg-red-700 text-white px-3 py-1 rounded hover:bg-red-700 dark:hover:bg-red-800 text-sm"
-                        >
-                          Supprimer
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <DataTable
+          columns={COLUMNS}
+          rows={tools}
+          rowKey="_id"
+          emptyLabel={
+            search || statusFilter !== 'all'
+              ? 'Aucun outil ne correspond à votre recherche.'
+              : 'Commencez par ajouter un outil avec le bouton ci-dessus.'
+          }
+        />
+
       </main>
 
-      {/* ── Modal : Ajout / Modification ─────────────────────────────────────── */}
-      {/* z-60 : s'empile au-dessus du modal import (z-50) quand openAddFromImport est appelé */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4" style={{ zIndex: 60 }}>
-          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-lg shadow-xl">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b dark:border-gray-700">
-              <h2 className="text-xl font-bold dark:text-white">
-                {modalMode === 'add' ? "Ajouter un outil" : "Modifier l'outil"}
-              </h2>
-              <button
-                onClick={closeModal}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none"
-              >
-                &times;
-              </button>
-            </div>
-
-            <form onSubmit={handleFormSubmit} className="px-6 py-5 space-y-4">
-              {formError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-300 text-sm">
-                  {formError}
-                </div>
-              )}
-
-              {/* Nom */}
-              <div>
-                <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                  Nom <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="Ex : Arduino Mega"
-                  className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                  Description
-                </label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  placeholder="Description courte de l'outil..."
-                  rows={2}
-                  className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
-              </div>
-
-              {/* Tags */}
-              <div>
-                <label className="block text-sm font-medium mb-1 dark:text-gray-200">Tags</label>
-                {/* Zone chips + input */}
-                <div
-                  className="w-full border rounded-md dark:border-gray-600 px-2 py-1.5 flex flex-wrap gap-1 cursor-text min-h-[42px] focus-within:ring-2 focus-within:ring-blue-500 dark:bg-gray-700"
-                  onClick={() => tagInputRef.current?.focus()}
-                >
-                  {form.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
-                    >
-                      {tag}
-                      <button
-                        type="button"
-                        onClick={() => setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }))}
-                        className="hover:text-red-500 font-bold leading-none"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                  <input
-                    ref={tagInputRef}
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={handleTagKeyDown}
-                    onBlur={() => addTag(tagInput)}
-                    placeholder={form.tags.length === 0 ? 'Ajouter des tags (Entrée pour valider)...' : ''}
-                    className="flex-1 min-w-[120px] bg-transparent outline-none text-sm dark:text-white placeholder-gray-400"
-                  />
-                </div>
-                {/* Tags existants en suggestion rapide */}
-                {allTags.filter((t) => !form.tags.includes(t)).length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5">
-                    {allTags
-                      .filter((t) => !form.tags.includes(t))
-                      .map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => setForm((f) => ({ ...f, tags: [...f.tags, tag] }))}
-                          className="px-2 py-0.5 rounded-full text-xs border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                        >
-                          + {tag}
-                        </button>
-                      ))}
-                  </div>
-                )}
-              </div>
-
-              {/* RFID + Quantité + Empruntés */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                    Code RFID
-                  </label>
-                  <input
-                    type="text"
-                    value={form.rfid}
-                    onChange={(e) => setForm((f) => ({ ...f, rfid: e.target.value }))}
-                    placeholder="Optionnel"
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                    Stock total
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.quantity}
-                    onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                    Max / Étudiant
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={form.maxBorrowPerUser}
-                    onChange={(e) => setForm((f) => ({ ...f, maxBorrowPerUser: e.target.value }))}
-                    placeholder="Illimité"
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                    Qté empruntée
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.borrowedCount}
-                    onChange={(e) => setForm((f) => ({ ...f, borrowedCount: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Statut */}
-              <div>
-                <label className="block text-sm font-medium mb-1 dark:text-gray-200">Statut</label>
-                <select
-                  value={form.status}
-                  onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                  className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="available">Disponible</option>
-                  <option value="borrowed">Emprunté</option>
-                  <option value="maintenance">Maintenance</option>
-                </select>
-              </div>
-
-              {/* Actions */}
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  disabled={formLoading}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white disabled:opacity-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={formLoading}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {formLoading
-                    ? 'Enregistrement...'
-                    : modalMode === 'add'
-                    ? 'Ajouter'
-                    : 'Enregistrer'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Modal : Confirmation suppression ─────────────────────────────────── */}
-      {deleteId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full shadow-xl">
-            <h2 className="text-xl font-bold mb-2 dark:text-white">Confirmer la suppression</h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">
-              Cette action est irréversible.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setDeleteId(null)}
-                disabled={deleteLoading}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white disabled:opacity-50"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleteLoading}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {deleteLoading ? 'Suppression...' : 'Supprimer'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Footer />
 
       {/* ── Modal : Import RFID ───────────────────────────────────────────────── */}
-      {showImport && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-2xl shadow-xl max-h-[90vh] flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b dark:border-gray-700 shrink-0">
-              <h2 className="text-xl font-bold dark:text-white">Import RFID</h2>
-              <button
-                onClick={() => setShowImport(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none"
-              >
-                &times;
-              </button>
-            </div>
+      <Modal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        title="Import RFID"
+        size="lg"
+        footer={
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setShowImport(false)}>Fermer</Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-text-muted">
+            Collez les codes RFID exportés depuis votre lecteur portable (un par ligne), ou déposez un fichier{' '}
+            <code className="bg-surface-2 px-1 rounded text-text">.txt</code> /{' '}
+            <code className="bg-surface-2 px-1 rounded text-text">.csv</code>.
+          </p>
 
-            {/* Corps scrollable */}
-            <div className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Collez les codes RFID exportés depuis votre lecteur portable (un par ligne),
-                ou déposez un fichier{' '}
-                <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">.txt</code> /{' '}
-                <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">.csv</code>.
-              </p>
+          {/* Drag & drop zone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleFileDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
+              dragOver
+                ? 'border-primary bg-primary-ghost'
+                : 'border-border hover:border-primary hover:bg-primary-ghost'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mx-auto mb-1 text-text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v8" />
+            </svg>
+            <p className="text-sm text-text-muted">
+              Glissez un fichier ici, ou <span className="text-primary underline">parcourir</span>
+            </p>
+            <input ref={fileInputRef} type="file" accept=".txt,.csv" className="hidden" onChange={handleFileInput} />
+          </div>
 
-              {/* Zone drag & drop */}
-              <div
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleFileDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
-                  dragOver
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500'
-                }`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mx-auto mb-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v8" />
-                </svg>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Glissez un fichier ici, ou{' '}
-                  <span className="text-blue-600 dark:text-blue-400 underline">parcourir</span>
-                </p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".txt,.csv"
-                  className="hidden"
-                  onChange={handleFileInput}
-                />
+          <Textarea
+            value={importRaw}
+            onChange={(e) => setImportRaw(e.target.value)}
+            placeholder={"A3B4C5D6\n9F8E7D6C\n1A2B3C4D\n..."}
+            rows={6}
+            className="font-mono"
+          />
+
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-text-dim">
+              {rfidCount} code{rfidCount > 1 ? 's' : ''} détecté{rfidCount > 1 ? 's' : ''}
+            </span>
+            <Button
+              variant="outline"
+              onClick={handleImportAnalyze}
+              disabled={importLoading || rfidCount === 0}
+              loading={importLoading}
+            >
+              Analyser
+            </Button>
+          </div>
+
+          {importResults && (
+            <div className="space-y-4 pt-4 border-t border-border">
+              {/* Summary badges */}
+              <div className="flex gap-3 flex-wrap">
+                <Badge variant="neutral">{importResults.scannedCount} analysé{importResults.scannedCount > 1 ? 's' : ''}</Badge>
+                <Badge variant="approved">{importResults.known.length} identifié{importResults.known.length > 1 ? 's' : ''}</Badge>
+                <Badge variant={importResults.unknownRfids.length > 0 ? 'changes' : 'neutral'}>
+                  {importResults.unknownRfids.length} inconnu{importResults.unknownRfids.length > 1 ? 's' : ''}
+                </Badge>
               </div>
 
-              {/* Textarea codes RFID */}
-              <textarea
-                value={importRaw}
-                onChange={(e) => setImportRaw(e.target.value)}
-                placeholder={"A3B4C5D6\n9F8E7D6C\n1A2B3C4D\n..."}
-                rows={6}
-                className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              />
-
-              {/* Compteur + bouton analyser */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-400 dark:text-gray-500">
-                  {rfidCount} code{rfidCount > 1 ? 's' : ''} détecté{rfidCount > 1 ? 's' : ''}
-                </span>
-                <button
-                  onClick={handleImportAnalyze}
-                  disabled={importLoading || rfidCount === 0}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-800 dark:bg-gray-600 dark:hover:bg-gray-500 text-white rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {importLoading ? 'Analyse en cours...' : 'Analyser'}
-                </button>
-              </div>
-
-              {/* ── Résultats ──────────────────────────────────────────────── */}
-              {importResults && (
-                <div className="space-y-4 pt-4 border-t dark:border-gray-700">
-                  {/* Badges résumé */}
-                  <div className="flex gap-3 flex-wrap">
-                    <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-700 dark:text-gray-300">
-                      {importResults.scannedCount} code{importResults.scannedCount > 1 ? 's' : ''} analysé{importResults.scannedCount > 1 ? 's' : ''}
-                    </span>
-                    <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-300">
-                      {importResults.known.length} identifié{importResults.known.length > 1 ? 's' : ''}
-                    </span>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      importResults.unknownRfids.length > 0
-                        ? 'bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-300'
-                        : 'bg-gray-100 dark:bg-gray-700 dark:text-gray-400'
-                    }`}>
-                      {importResults.unknownRfids.length} inconnu{importResults.unknownRfids.length > 1 ? 's' : ''}
-                    </span>
+              {importResults.known.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-text mb-2">Outils identifiés</p>
+                  <div className="space-y-1.5">
+                    {importResults.known.map((tool) => {
+                      const { label, variant } = getAvailability(tool);
+                      return (
+                        <div
+                          key={tool._id}
+                          className="flex items-center justify-between px-3 py-2 bg-surface-2 border border-border rounded-md"
+                        >
+                          <div>
+                            <span className="text-sm font-medium text-text">{tool.name}</span>
+                            <span className="ml-2 font-mono text-xs text-text-dim">{tool.rfid}</span>
+                          </div>
+                          <Badge variant={variant} size="sm">{label}</Badge>
+                        </div>
+                      );
+                    })}
                   </div>
+                </div>
+              )}
 
-                  {/* Outils identifiés */}
-                  {importResults.known.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                        Outils identifiés
-                      </h4>
-                      <div className="space-y-1.5">
-                        {importResults.known.map((tool) => (
-                          <div
-                            key={tool._id}
-                            className="flex items-center justify-between px-3 py-2 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 rounded-md"
-                          >
-                            <div>
-                              <span className="text-sm font-medium dark:text-white">{tool.name}</span>
-                              <span className="ml-2 font-mono text-xs text-gray-400 dark:text-gray-500">
-                                {tool.rfid}
-                              </span>
-                            </div>
-                            {(() => { const { label, cls } = getAvailability(tool); return (
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{label}</span>
-                            ); })()}
-                          </div>
-                        ))}
+              {importResults.unknownRfids.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-text mb-2">Codes inconnus — non enregistrés en base</p>
+                  <div className="space-y-1.5">
+                    {importResults.unknownRfids.map((rfid) => (
+                      <div
+                        key={rfid}
+                        className="flex items-center justify-between px-3 py-2 border border-border rounded-md"
+                      >
+                        <span className="font-mono text-sm text-text">{rfid}</span>
+                        <Button variant="primary" size="sm" onClick={() => openAddFromImport(rfid)}>
+                          Créer l&apos;outil →
+                        </Button>
                       </div>
-                    </div>
-                  )}
-
-                  {/* Codes inconnus */}
-                  {importResults.unknownRfids.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                        Codes inconnus — non enregistrés en base
-                      </h4>
-                      <div className="space-y-1.5">
-                        {importResults.unknownRfids.map((rfid) => (
-                          <div
-                            key={rfid}
-                            className="flex items-center justify-between px-3 py-2 bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800/30 rounded-md"
-                          >
-                            <span className="font-mono text-sm text-gray-700 dark:text-gray-300">
-                              {rfid}
-                            </span>
-                            <button
-                              onClick={() => openAddFromImport(rfid)}
-                              className="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded"
-                            >
-                              Créer l'outil →
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 border-t dark:border-gray-700 flex justify-end shrink-0">
-              <button
-                onClick={() => setShowImport(false)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white"
-              >
-                Fermer
-              </button>
-            </div>
-          </div>
+          )}
         </div>
-      )}
+      </Modal>
+
+      {/* ── Modal : Ajout / Modification ─────────────────────────────────────── */}
+      {/* DOM order: appended after import modal portal → naturally on top at same z-index */}
+      <Modal
+        open={showModal}
+        onClose={closeModal}
+        title={modalMode === 'add' ? "Ajouter un outil" : "Modifier l'outil"}
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={closeModal} disabled={formLoading}>Annuler</Button>
+            <Button type="submit" form="tool-form" variant="primary" loading={formLoading}>
+              {modalMode === 'add' ? 'Ajouter' : 'Enregistrer'}
+            </Button>
+          </div>
+        }
+      >
+        <form id="tool-form" onSubmit={handleFormSubmit} className="space-y-4">
+          {formError && (
+            <div className="rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+              {formError}
+            </div>
+          )}
+
+          <FormField label="Nom" required>
+            <Input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Ex : Arduino Mega"
+            />
+          </FormField>
+
+          <FormField label="Description">
+            <Textarea
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Description courte de l'outil..."
+              rows={2}
+            />
+          </FormField>
+
+          {/* Tags: custom chip input */}
+          <div>
+            <p className="text-sm font-medium text-text mb-1">Tags</p>
+            <div
+              className="w-full border border-border rounded-md px-2 py-1.5 flex flex-wrap gap-1 cursor-text min-h-[42px] focus-within:ring-2 focus-within:ring-primary/30 bg-surface"
+              onClick={() => tagInputRef.current?.focus()}
+            >
+              {form.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary"
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }))}
+                    className="hover:text-danger font-bold leading-none"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                ref={tagInputRef}
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleTagKeyDown}
+                onBlur={() => addTag(tagInput)}
+                placeholder={form.tags.length === 0 ? 'Ajouter des tags (Entrée pour valider)...' : ''}
+                className="flex-1 min-w-[120px] bg-transparent outline-none text-sm text-text placeholder:text-text-dim"
+              />
+            </div>
+            {allTags.filter((t) => !form.tags.includes(t)).length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {allTags
+                  .filter((t) => !form.tags.includes(t))
+                  .map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, tags: [...f.tags, tag] }))}
+                      className="px-2 py-0.5 rounded-full text-xs border border-dashed border-border text-text-muted hover:border-primary hover:text-primary transition-colors"
+                    >
+                      + {tag}
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Code RFID">
+              <Input
+                type="text"
+                value={form.rfid}
+                onChange={(e) => setForm((f) => ({ ...f, rfid: e.target.value }))}
+                placeholder="Optionnel"
+                className="font-mono"
+              />
+            </FormField>
+            <FormField label="Stock total">
+              <Input
+                type="number"
+                min="0"
+                value={form.quantity}
+                onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
+              />
+            </FormField>
+            <FormField label="Max / Étudiant">
+              <Input
+                type="number"
+                min="1"
+                value={form.maxBorrowPerUser}
+                onChange={(e) => setForm((f) => ({ ...f, maxBorrowPerUser: e.target.value }))}
+                placeholder="Illimité"
+              />
+            </FormField>
+            <FormField label="Qté empruntée">
+              <Input
+                type="number"
+                min="0"
+                value={form.borrowedCount}
+                onChange={(e) => setForm((f) => ({ ...f, borrowedCount: e.target.value }))}
+              />
+            </FormField>
+          </div>
+
+          <FormField label="Statut">
+            <Select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
+              <option value="available">Disponible</option>
+              <option value="borrowed">Emprunté</option>
+              <option value="maintenance">Maintenance</option>
+            </Select>
+          </FormField>
+        </form>
+      </Modal>
+
+      {/* ── Modal : Confirmation suppression ─────────────────────────────────── */}
+      <Modal
+        open={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        title="Confirmer la suppression"
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setDeleteId(null)} disabled={deleteLoading}>Annuler</Button>
+            <Button variant="danger" onClick={handleDelete} loading={deleteLoading}>Supprimer</Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-text-muted">Cette action est irréversible.</p>
+      </Modal>
     </div>
   );
 }
