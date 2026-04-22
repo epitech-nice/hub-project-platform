@@ -8,6 +8,7 @@ import Select from '../components/ui/Select';
 import Checkbox from '../components/ui/Checkbox';
 import Radio from '../components/ui/Radio';
 import Switch from '../components/ui/Switch';
+import FileInput from '../components/ui/FileInput';
 
 export default function TokensPreview() {
   const { theme, setTheme } = useTheme();
@@ -151,6 +152,20 @@ export default function TokensPreview() {
             </div>
           </div>
         </section>
+        <section>
+          <h2 className="text-xl font-semibold mb-4">FileInput</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
+            <div className="space-y-2">
+              <div className="text-xs font-mono text-text-dim mb-2">PDF — preview</div>
+              <FileInput accept="application/pdf" maxSize={5000000} preview onChange={(f) => console.log('pdf:', f)} />
+            </div>
+            <div className="space-y-2">
+              <div className="text-xs font-mono text-text-dim mb-2">Image — preview</div>
+              <FileInput accept="image/*" maxSize={2000000} preview onChange={(f) => console.log('img:', f)} />
+            </div>
+          </div>
+        </section>
+
         <section>
           <h2 className="text-xl font-semibold mb-4">Checkbox / Radio / Switch</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
