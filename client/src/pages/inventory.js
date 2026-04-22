@@ -88,7 +88,6 @@ export default function InventoryPage() {
     if (!authLoading && !isAuthenticated) router.push('/');
   }, [isAuthenticated, authLoading, router]);
 
-  // Chargement initial des tags
   useEffect(() => {
     if (isAuthenticated) {
       get('/api/tools/tags')
@@ -112,7 +111,6 @@ export default function InventoryPage() {
     return () => clearTimeout(timer);
   }, [isAuthenticated, search, activeTag, statusFilter, activeTab]);
 
-  // Chargement de l'historique quand on change d'onglet
   useEffect(() => {
     if (isAuthenticated && activeTab === 'history') {
       setLoansLoading(true);
@@ -127,6 +125,11 @@ export default function InventoryPage() {
     return <div className="text-center py-10 text-text-muted">Chargement...</div>;
   }
   if (!isAuthenticated) return null;
+
+  const modalAvailability = selectedTool ? getAvailability(selectedTool) : null;
+  const modalAvailable = selectedTool
+    ? selectedTool.quantity - (selectedTool.borrowedCount || 0)
+    : 0;
 
   return (
     <div className="min-h-screen flex flex-col bg-bg">
@@ -229,7 +232,8 @@ export default function InventoryPage() {
                     return (
                       <Card
                         key={tool._id}
-                        className="flex flex-col cursor-pointer hover:shadow-md transition-shadow"
+                        interactive
+                        className="flex flex-col"
                         onClick={() => setSelectedTool(tool)}
                       >
                         <div className="flex items-start justify-between mb-2">
@@ -284,12 +288,9 @@ export default function InventoryPage() {
         onClose={() => setSelectedTool(null)}
         title={selectedTool?.name ?? ''}
       >
-        {selectedTool && (() => {
-          const { label, variant } = getAvailability(selectedTool);
-          const available = selectedTool.quantity - (selectedTool.borrowedCount || 0);
-          return (
+        {selectedTool && (
             <div className="space-y-4">
-              <Badge variant={variant}>{label}</Badge>
+              <Badge variant={modalAvailability.variant}>{modalAvailability.label}</Badge>
 
               {selectedTool.description && (
                 <p className="text-sm text-text-muted leading-relaxed">{selectedTool.description}</p>
@@ -312,9 +313,9 @@ export default function InventoryPage() {
                   <p className="text-xs text-text-muted mb-1">Disponibles</p>
                   <p
                     className="text-xl font-bold"
-                    style={{ color: available > 0 ? 'rgb(var(--status-approved-text))' : 'rgb(var(--danger))' }}
+                    style={{ color: modalAvailable > 0 ? 'rgb(var(--status-approved-text))' : 'rgb(var(--danger))' }}
                   >
-                    {available}
+                    {modalAvailable}
                   </p>
                 </div>
                 {(selectedTool.borrowedCount || 0) > 0 && (
@@ -357,8 +358,7 @@ export default function InventoryPage() {
                 </Button>
               </div>
             </div>
-          );
-        })()}
+        )}
       </Modal>
     </div>
   );
