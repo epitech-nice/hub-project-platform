@@ -1,9 +1,10 @@
-import { forwardRef } from 'react';
+import { forwardRef, useEffect } from 'react';
 import { cn } from '../../lib/cn';
 
 const VARIANTS = {
   default: 'bg-surface-2 text-text hover:bg-border',
   ghost: 'bg-transparent text-text-muted hover:bg-surface-2',
+  // ghost-style danger is intentional for icon contexts (e.g. trash icon in table row)
   danger: 'bg-transparent text-danger hover:bg-danger/10',
 };
 
@@ -17,9 +18,12 @@ const IconButton = forwardRef(function IconButton(
   { variant = 'default', size = 'md', className = '', children, ...props },
   ref
 ) {
-  if (process.env.NODE_ENV !== 'production' && !props['aria-label']) {
-    console.warn('[IconButton] aria-label is required for accessibility.');
-  }
+  const ariaLabel = props['aria-label'];
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production' && !ariaLabel) {
+      console.warn('[IconButton] aria-label is required for accessibility.');
+    }
+  }, [ariaLabel]);
 
   const classes = cn(
     'inline-flex items-center justify-center rounded-md',
