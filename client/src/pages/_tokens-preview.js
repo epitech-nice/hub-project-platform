@@ -5,6 +5,9 @@ import IconButton from '../components/ui/IconButton';
 import Input from '../components/ui/Input';
 import Textarea from '../components/ui/Textarea';
 import Select from '../components/ui/Select';
+import Checkbox from '../components/ui/Checkbox';
+import Radio from '../components/ui/Radio';
+import Switch from '../components/ui/Switch';
 
 export default function TokensPreview() {
   const { theme, setTheme } = useTheme();
@@ -145,6 +148,32 @@ export default function TokensPreview() {
                 <option value="">Choisir...</option>
                 <option value="a">Option A</option>
               </Select>
+            </div>
+          </div>
+        </section>
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Checkbox / Radio / Switch</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <div className="text-xs font-mono text-text-dim mb-3">Checkbox</div>
+              <Checkbox label="Unchecked" checked={false} onChange={() => {}} />
+              <Checkbox label="Checked" checked={true} onChange={() => {}} />
+              <Checkbox label="Disabled" disabled checked={false} onChange={() => {}} />
+              <Checkbox label="With description" description="Détail supplémentaire ici" checked={true} onChange={() => {}} />
+            </div>
+            <div className="space-y-2">
+              <div className="text-xs font-mono text-text-dim mb-3">Radio</div>
+              <Radio label="Unchecked" checked={false} onChange={() => {}} />
+              <Radio label="Checked" checked={true} onChange={() => {}} />
+              <Radio label="Disabled" disabled checked={false} onChange={() => {}} />
+              <Radio label="With description" description="Détail supplémentaire ici" checked={true} onChange={() => {}} />
+            </div>
+            <div className="space-y-2">
+              <div className="text-xs font-mono text-text-dim mb-3">Switch</div>
+              <Switch label="Off" checked={false} onChange={() => {}} />
+              <Switch label="On" checked={true} onChange={() => {}} />
+              <Switch label="Disabled" disabled checked={false} onChange={() => {}} />
+              <Switch label="With description" description="Active cette option" checked={true} onChange={() => {}} />
             </div>
           </div>
         </section>
