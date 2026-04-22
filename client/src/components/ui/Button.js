@@ -1,4 +1,5 @@
 import { forwardRef } from 'react';
+import { cn } from '../../lib/cn';
 
 const VARIANTS = {
   primary: 'bg-primary text-white hover:bg-primary-hover',
@@ -50,11 +51,12 @@ const Button = forwardRef(function Button(
     'disabled:opacity-50 disabled:cursor-not-allowed ' +
     'min-h-[40px] md:min-h-0';
 
-  const classes = [base, VARIANTS[variant] ?? VARIANTS.primary, SIZES[size] ?? SIZES.md, className]
-    .join(' ')
-    .trim();
+  const disabledLinkClass =
+    Tag === 'a' && isDisabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : '';
 
-  const linkProps = Tag === 'a' ? { href } : {};
+  const classes = cn(base, VARIANTS[variant] ?? VARIANTS.primary, SIZES[size] ?? SIZES.md, disabledLinkClass, className);
+
+  const linkProps = Tag === 'a' ? { href: isDisabled ? undefined : href, tabIndex: isDisabled ? -1 : undefined } : {};
   const buttonProps = Tag === 'button' ? { type: 'button', disabled: isDisabled } : {};
 
   return (
