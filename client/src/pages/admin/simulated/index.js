@@ -1,34 +1,35 @@
 // pages/admin/simulated/index.js
-import React, { useEffect, useState, useRef } from "react";
 import Head from "next/head";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import Header from "../../../components/layout/Header";
+import AppHeader from "../../../components/layout/AppHeader";
+import Footer from "../../../components/layout/Footer";
 import { useAuth } from "../../../context/AuthContext";
 import { useApi } from "../../../hooks/useApi";
 
-const statusColors = {
-  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-800/20 dark:text-yellow-300",
-  pending_changes: "bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-300",
-  approved: "bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-300",
-  rejected: "bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-400",
-  completed: "bg-purple-100 text-purple-800 dark:bg-purple-800/20 dark:text-purple-300",
-};
-
-const statusLabels = {
-  pending: "En attente",
-  pending_changes: "Modifications requises",
-  approved: "Approuvé",
-  rejected: "Refusé",
-  completed: "Terminé",
-};
+import PageHead from "../../../components/ui/PageHead";
+import Tabs from "../../../components/ui/Tabs";
+import Card from "../../../components/ui/Card";
+import Button from "../../../components/ui/Button";
+import Input from "../../../components/ui/Input";
+import FormField from "../../../components/ui/FormField";
+import Textarea from "../../../components/ui/Textarea";
+import Select from "../../../components/ui/Select";
+import Switch from "../../../components/ui/Switch";
+import FileInput from "../../../components/ui/FileInput";
+import FilterChips from "../../../components/ui/FilterChips";
+import TableToolbar from "../../../components/ui/TableToolbar";
+import DataTable from "../../../components/ui/DataTable";
+import StatusBadge from "../../../components/domain/StatusBadge";
+import Badge from "../../../components/ui/Badge";
+import EmptyState from "../../../components/ui/EmptyState";
+import Skeleton from "../../../components/ui/Skeleton";
+import Modal from "../../../components/ui/Modal";
 
 export default function AdminSimulated() {
   const { isAuthenticated, isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
   const { get, post, put, delete: del, loading: apiLoading } = useApi();
-
-  const [activeTab, setActiveTab] = useState("catalogue");
 
   // ── Catalogue ──
   const [catalogProjects, setCatalogProjects] = useState([]);
@@ -36,8 +37,11 @@ export default function AdminSimulated() {
   const [editingProject, setEditingProject] = useState(null);
   const [catalogError, setCatalogError] = useState("");
   const [isSubmittingCatalog, setIsSubmittingCatalog] = useState(false);
-  const fileInputRef = useRef(null);
-  const editFileInputRef = useRef(null);
+
+  // ── Modal / FileInput reset keys ──
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createFileKey, setCreateFileKey] = useState(0);
+  const [editFileKey, setEditFileKey] = useState(0);
 
   // ── Enrollments ──
   const [enrollments, setEnrollments] = useState([]);
@@ -72,13 +76,13 @@ export default function AdminSimulated() {
 
   // ── Import JSON ──
   const [jsonInput, setJsonInput] = useState("");
-  const [jsonPreview, setJsonPreview] = useState(null); // tableau parsé ou null
+  const [jsonPreview, setJsonPreview] = useState(null);
   const [jsonError, setJsonError] = useState("");
   const [isImporting, setIsImporting] = useState(false);
 
   // ── Génération automatique ──
   const [genForm, setGenForm] = useState({ firstStartDate: "", numberOfCycles: 8, namePrefix: "Cycle" });
-  const [genPreview, setGenPreview] = useState(null); // tableau de cycles prévisualisés
+  const [genPreview, setGenPreview] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [genError, setGenError] = useState("");
 
@@ -359,7 +363,8 @@ export default function AdminSimulated() {
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
       setCatalogForm({ title: "", file: null });
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setCreateFileKey((k) => k + 1);
+      setShowCreateModal(false);
       await fetchCatalog();
     } catch (err) {
       setCatalogError(err.message || "Erreur lors de la création");
@@ -410,7 +415,7 @@ export default function AdminSimulated() {
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
       setEditingProject(null);
-      if (editFileInputRef.current) editFileInputRef.current.value = "";
+      setEditFileKey((k) => k + 1);
       await fetchCatalog();
     } catch (err) {
       setCatalogError(err.message || "Erreur lors de la mise à jour");
@@ -448,556 +453,481 @@ export default function AdminSimulated() {
   });
 
   if (authLoading) {
-    return <div className="text-center py-10 dark:text-white">Chargement...</div>;
+    return <div className="text-center py-10 text-text-muted">Chargement...</div>;
   }
 
   if (!isAuthenticated || !isAdmin) return null;
 
-  return (
-    <div className="min-h-screen dark:bg-gray-900">
-      <Head>
-        <title>Hub Projets - Admin Simulated</title>
-      </Head>
+  const pendingCount = enrollments.filter((e) => e.status === "pending").length;
 
-      <Header />
-
-      <main className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-6 dark:text-white">
-          Administration — Simulated Professional Work
-        </h1>
-
-        {/* Onglets */}
-        <div className="flex space-x-2 mb-8 border-b dark:border-gray-700">
-          <button
-            onClick={() => setActiveTab("catalogue")}
-            className={`px-6 py-3 font-medium rounded-t-lg transition-colors ${
-              activeTab === "catalogue"
-                ? "bg-white dark:bg-gray-800 border border-b-white dark:border-gray-700 dark:border-b-gray-800 text-blue-600 dark:text-blue-400 -mb-px"
-                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-            }`}
-          >
-            Catalogue de projets
-          </button>
-          <button
-            onClick={() => setActiveTab("enrollments")}
-            className={`px-6 py-3 font-medium rounded-t-lg transition-colors ${
-              activeTab === "enrollments"
-                ? "bg-white dark:bg-gray-800 border border-b-white dark:border-gray-700 dark:border-b-gray-800 text-blue-600 dark:text-blue-400 -mb-px"
-                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-            }`}
-          >
-            Suivis étudiants
-            {enrollments.filter((e) => e.status === "pending").length > 0 && (
-              <span className="ml-2 bg-yellow-500 text-white text-xs rounded-full px-2 py-0.5">
-                {enrollments.filter((e) => e.status === "pending").length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("cycles")}
-            className={`px-6 py-3 font-medium rounded-t-lg transition-colors ${
-              activeTab === "cycles"
-                ? "bg-white dark:bg-gray-800 border border-b-white dark:border-gray-700 dark:border-b-gray-800 text-blue-600 dark:text-blue-400 -mb-px"
-                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-            }`}
-          >
-            Calendrier des cycles
-          </button>
+  // ── DataTable columns ──
+  const enrollmentColumns = [
+    {
+      key: "student",
+      label: "Étudiant",
+      render: (v) => (
+        <div>
+          <p className="font-medium text-text">{v.name}</p>
+          <p className="text-xs text-text-muted">{v.email}</p>
         </div>
+      ),
+    },
+    {
+      key: "simulatedProject",
+      label: "Projet",
+      render: (v, row) => (
+        <div className="flex items-center gap-2">
+          <span>{v.title}</span>
+          {row.isDoubleCycle && (
+            <Badge variant="neutral" size="sm">Double</Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "cycleNumber",
+      label: "Cycle",
+      render: (v) => `#${v}`,
+    },
+    {
+      key: "submittedAt",
+      label: "Soumis le",
+      render: (v) => new Date(v).toLocaleDateString("fr-FR"),
+    },
+    {
+      key: "status",
+      label: "Statut",
+      render: (v, row) => (
+        <div className="flex items-center gap-2 flex-wrap">
+          <StatusBadge status={v} />
+          {row.totalCredits > 0 && ["approved", "completed"].includes(v) && (
+            <span className="text-xs text-success font-medium">{row.totalCredits} cr. total</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "_id",
+      label: "",
+      align: "right",
+      render: (v) => (
+        <Button variant="outline" size="sm" as="a" href={`/admin/simulated/enrollments/${v}`}>
+          Détails
+        </Button>
+      ),
+    },
+  ];
 
-        {/* ── TAB : CATALOGUE ── */}
-        {activeTab === "catalogue" && (
-          <div>
-            {/* Formulaire de création */}
-            <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-8">
-              <h2 className="text-xl font-bold mb-4 dark:text-white">Ajouter un projet</h2>
-              {catalogError && (
-                <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-4">
-                  {catalogError}
-                </div>
-              )}
-              <form onSubmit={handleCreateProject} className="flex flex-col sm:flex-row gap-4 items-end">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                    Titre du projet *
-                  </label>
-                  <input
-                    type="text"
-                    value={catalogForm.title}
-                    onChange={(e) => setCatalogForm({ ...catalogForm, title: e.target.value })}
-                    placeholder="Ex: Epikodi"
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    required
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                    Sujet PDF
-                  </label>
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    ref={fileInputRef}
-                    onChange={(e) =>
-                      setCatalogForm({ ...catalogForm, file: e.target.files[0] || null })
-                    }
-                    className="w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-900/30 dark:file:text-blue-300"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={isSubmittingCatalog}
-                  className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white px-6 py-2 rounded-md disabled:opacity-50 whitespace-nowrap"
-                >
-                  {isSubmittingCatalog ? "Ajout..." : "Ajouter"}
-                </button>
-              </form>
-            </div>
+  // ── Tab content ──
 
-            {/* Liste des projets */}
-            {apiLoading ? (
-              <div className="text-center py-10 dark:text-white">Chargement...</div>
-            ) : catalogProjects.length === 0 ? (
-              <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 text-center">
-                <p className="text-gray-600 dark:text-gray-300">
-                  Aucun projet dans le catalogue. Ajoutez-en un ci-dessus.
-                </p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {catalogProjects.map((project) => (
-                  <div
-                    key={project._id}
-                    className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-4"
-                  >
-                    {editingProject && editingProject._id === project._id ? (
-                      // ── Mode édition ──
-                      <form onSubmit={handleUpdateProject} className="flex flex-col sm:flex-row gap-4 items-end">
-                        <div className="flex-1">
-                          <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                            Titre
-                          </label>
-                          <input
-                            type="text"
-                            value={editingProject.title}
-                            onChange={(e) =>
-                              setEditingProject({ ...editingProject, title: e.target.value })
-                            }
-                            className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            required
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                            Remplacer le PDF
-                          </label>
-                          <input
-                            type="file"
-                            accept="application/pdf"
-                            ref={editFileInputRef}
-                            onChange={(e) =>
-                              setEditingProject({
-                                ...editingProject,
-                                newFile: e.target.files[0] || null,
-                              })
-                            }
-                            className="w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-900/30 dark:file:text-blue-300"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            type="submit"
-                            disabled={isSubmittingCatalog}
-                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md disabled:opacity-50"
-                          >
-                            Sauvegarder
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingProject(null)}
-                            className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white px-4 py-2 rounded-md"
-                          >
-                            Annuler
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      // ── Mode affichage ──
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4 min-w-0">
-                          {project.subjectFile ? (
-                            <a
-                              href={`${process.env.NEXT_PUBLIC_API_URL}/uploads/${project.subjectFile}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="shrink-0 w-16 h-16 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded flex items-center justify-center hover:opacity-80 transition-opacity"
-                              title="Voir le PDF"
-                            >
-                              <svg className="w-8 h-8 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                              </svg>
-                            </a>
-                          ) : (
-                            <div className="shrink-0 w-16 h-16 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded flex items-center justify-center">
-                              <span className="text-xs text-gray-400">Pas de PDF</span>
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <p className="font-semibold dark:text-white truncate">{project.title}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                              Ajouté le {new Date(project.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {/* Toggle actif/inactif */}
-                          <button
-                            onClick={() => handleToggleActive(project)}
-                            className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-                              project.isActive
-                                ? "bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-300 hover:bg-green-200"
-                                : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 hover:bg-gray-200"
-                            }`}
-                            title={project.isActive ? "Cliquer pour désactiver" : "Cliquer pour activer"}
-                          >
-                            {project.isActive ? "Actif" : "Inactif"}
-                          </button>
-                          {/* Éditer */}
-                          <button
-                            onClick={() => setEditingProject({ ...project, newFile: null })}
-                            className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-3 py-1 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 text-sm"
-                          >
-                            Modifier
-                          </button>
-                          {/* Supprimer */}
-                          <button
-                            onClick={() => handleDeleteProject(project._id)}
-                            className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-3 py-1 rounded hover:bg-red-200 dark:hover:bg-red-900/50 text-sm"
-                          >
-                            Supprimer
-                          </button>
-                        </div>
-                      </div>
-                    )}
+  const catalogueContent = (
+    <div>
+      {/* Error */}
+      {catalogError && (
+        <div className="mb-4 rounded border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+          {catalogError}
+        </div>
+      )}
+
+      {/* Header row: add button */}
+      <div className="flex justify-end mb-4">
+        <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+          Ajouter un projet
+        </Button>
+      </div>
+
+      {/* Create Modal */}
+      <Modal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Ajouter un projet"
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setShowCreateModal(false)}>
+              Annuler
+            </Button>
+            <Button
+              type="submit"
+              form="create-project-form"
+              variant="primary"
+              loading={isSubmittingCatalog}
+            >
+              Ajouter
+            </Button>
+          </div>
+        }
+      >
+        <form id="create-project-form" onSubmit={handleCreateProject} className="space-y-4">
+          <FormField label="Titre du projet" required>
+            <Input
+              type="text"
+              value={catalogForm.title}
+              onChange={(e) => setCatalogForm({ ...catalogForm, title: e.target.value })}
+              placeholder="Ex: Epikodi"
+              required
+            />
+          </FormField>
+          <FormField label="Sujet PDF">
+            <FileInput
+              key={createFileKey}
+              accept="application/pdf"
+              onChange={(file) => setCatalogForm({ ...catalogForm, file })}
+            />
+          </FormField>
+        </form>
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal
+        open={editingProject !== null}
+        onClose={() => setEditingProject(null)}
+        title="Modifier le projet"
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setEditingProject(null)}>
+              Annuler
+            </Button>
+            <Button
+              type="submit"
+              form="edit-project-form"
+              variant="primary"
+              loading={isSubmittingCatalog}
+            >
+              Sauvegarder
+            </Button>
+          </div>
+        }
+      >
+        <form id="edit-project-form" onSubmit={handleUpdateProject} className="space-y-4">
+          <FormField label="Titre" required>
+            <Input
+              type="text"
+              value={editingProject?.title ?? ""}
+              onChange={(e) =>
+                setEditingProject({ ...editingProject, title: e.target.value })
+              }
+              required
+            />
+          </FormField>
+          <FormField label="Remplacer le PDF">
+            <FileInput
+              key={editFileKey}
+              accept="application/pdf"
+              onChange={(file) =>
+                setEditingProject({ ...editingProject, newFile: file })
+              }
+            />
+          </FormField>
+        </form>
+      </Modal>
+
+      {/* Project list */}
+      {apiLoading ? (
+        <div className="grid gap-4">
+          <Skeleton variant="rect" height={80} />
+          <Skeleton variant="rect" height={80} />
+          <Skeleton variant="rect" height={80} />
+        </div>
+      ) : catalogProjects.length === 0 ? (
+        <EmptyState
+          title="Aucun projet dans le catalogue"
+          sub="Ajoutez-en un via le bouton ci-dessus."
+        />
+      ) : (
+        <div className="grid gap-4">
+          {catalogProjects.map((project) => (
+            <Card key={project._id} padding="compact">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4 min-w-0">
+                  {project.subjectFile ? (
+                    <a
+                      href={`${process.env.NEXT_PUBLIC_API_URL}/uploads/${project.subjectFile}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 w-16 h-16 bg-danger/5 border border-danger/20 rounded flex items-center justify-center hover:opacity-80 transition-opacity"
+                      title="Voir le PDF"
+                    >
+                      <svg className="w-8 h-8 text-danger" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                      </svg>
+                    </a>
+                  ) : (
+                    <div className="shrink-0 w-16 h-16 bg-surface-2 border border-border rounded flex items-center justify-center">
+                      <span className="text-xs text-text-dim">Pas de PDF</span>
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-semibold text-text truncate">{project.title}</p>
+                    <p className="text-xs text-text-muted mt-0.5">
+                      Ajouté le {new Date(project.createdAt).toLocaleDateString()}
+                    </p>
                   </div>
-                ))}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    variant="subtle"
+                    size="sm"
+                    onClick={() => handleToggleActive(project)}
+                    title={project.isActive ? "Cliquer pour désactiver" : "Cliquer pour activer"}
+                  >
+                    {project.isActive ? "Actif" : "Inactif"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingProject({ ...project, newFile: null })}
+                  >
+                    Modifier
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleDeleteProject(project._id)}
+                  >
+                    Supprimer
+                  </Button>
+                </div>
               </div>
-            )}
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const enrollmentsContent = (
+    <div>
+      {/* Filters + search */}
+      <div className="mb-4">
+        <FilterChips
+          options={[
+            { value: "all", label: "Tous" },
+            { value: "pending", label: "En attente" },
+            { value: "pending_changes", label: "Modifs requises" },
+            { value: "approved", label: "Approuvés" },
+            { value: "completed", label: "Terminés" },
+            { value: "rejected", label: "Refusés" },
+          ]}
+          value={enrollmentFilter}
+          onChange={setEnrollmentFilter}
+        />
+      </div>
+      <TableToolbar
+        search={enrollmentSearch}
+        onSearch={setEnrollmentSearch}
+        searchPlaceholder="Rechercher étudiant ou projet..."
+        className="mb-6"
+      />
+
+      {/* Force inscription */}
+      <Card className="mb-6">
+        <h3 className="font-semibold text-text mb-3">Inscrire un étudiant manuellement</h3>
+        {forceError && (
+          <div className="mb-3 text-sm text-danger bg-danger/10 px-3 py-2 rounded">
+            {forceError}
           </div>
         )}
-
-        {/* ── TAB : SUIVIS ÉTUDIANTS ── */}
-        {activeTab === "enrollments" && (
-          <div>
-            {/* Filtres */}
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
-              <div className="flex space-x-2 overflow-x-auto pb-1">
-                {[
-                  { key: "all", label: "Tous", activeClass: "bg-gray-700 text-white dark:bg-gray-600" },
-                  { key: "pending", label: "En attente", activeClass: "bg-yellow-500 text-white" },
-                  { key: "pending_changes", label: "Modifs requises", activeClass: "bg-orange-500 text-white" },
-                  { key: "approved", label: "Approuvés", activeClass: "bg-green-600 text-white" },
-                  { key: "completed", label: "Terminés", activeClass: "bg-purple-600 text-white" },
-                  { key: "rejected", label: "Refusés", activeClass: "bg-red-600 text-white" },
-                ].map(({ key, label, activeClass }) => (
-                  <button
-                    key={key}
-                    onClick={() => setEnrollmentFilter(key)}
-                    className={`px-4 py-2 rounded-md whitespace-nowrap text-sm ${
-                      enrollmentFilter === key
-                        ? activeClass
-                        : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <input
-                type="text"
-                value={enrollmentSearch}
-                onChange={(e) => setEnrollmentSearch(e.target.value)}
-                placeholder="Rechercher étudiant ou projet..."
-                className="px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white md:w-72"
-              />
-            </div>
-
-            {/* Force inscription */}
-            <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-4 mb-6">
-              <h3 className="font-semibold dark:text-white mb-3">Inscrire un étudiant manuellement</h3>
-              {forceError && (
-                <div className="mb-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded">
-                  {forceError}
-                </div>
-              )}
-              {forceSuccess && (
-                <div className="mb-3 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded">
-                  {forceSuccess}
-                </div>
-              )}
-              <form onSubmit={handleForceEnroll} className="flex flex-col sm:flex-row gap-3 items-end">
-                <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Projet</label>
-                  <select
-                    value={forceForm.projectId}
-                    onChange={(e) => setForceForm((prev) => ({ ...prev, projectId: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
-                    required
-                  >
-                    <option value="">-- Sélectionner un projet --</option>
-                    {catalogProjects.map((p) => (
-                      <option key={p._id} value={p._id}>
-                        {p.title}{!p.isActive ? " (inactif)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Email étudiant</label>
-                  <input
-                    type="email"
-                    value={forceForm.studentEmail}
-                    onChange={(e) => setForceForm((prev) => ({ ...prev, studentEmail: e.target.value }))}
-                    placeholder="prenom.nom@ecole.fr"
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={isForceSubmitting}
-                  className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-800 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 whitespace-nowrap"
-                >
-                  {isForceSubmitting ? "Inscription..." : "Inscrire"}
-                </button>
-              </form>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                Inscrit l&apos;étudiant même si la fenêtre de dépôt est fermée. L&apos;étudiant devra soumettre son lien GitHub depuis son espace.
-              </p>
-            </div>
-
-            {/* Export CSV des cycles terminés */}
-            <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-4 mb-6">
-              <h3 className="font-semibold dark:text-white mb-3">Exporter les cycles terminés (CSV)</h3>
-              <div className="flex flex-col sm:flex-row gap-3 items-end">
-                <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Date de début</label>
-                  <input
-                    type="date"
-                    value={exportStartDate}
-                    onChange={(e) => setExportStartDate(e.target.value)}
-                    className="px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Date de fin</label>
-                  <input
-                    type="date"
-                    value={exportEndDate}
-                    onChange={(e) => setExportEndDate(e.target.value)}
-                    className="px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
-                  />
-                </div>
-                <button
-                  onClick={handleExport}
-                  disabled={isExporting}
-                  className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 flex items-center gap-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  {isExporting ? "Export..." : "Télécharger CSV"}
-                </button>
-              </div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                Sans dates : exporte tous les cycles terminés.
-              </p>
-            </div>
-
-            {apiLoading ? (
-              <div className="text-center py-10 dark:text-white">Chargement...</div>
-            ) : filteredEnrollments.length === 0 ? (
-              <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 text-center">
-                <p className="text-gray-600 dark:text-gray-300">Aucun suivi à afficher.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full bg-white dark:bg-gray-800 shadow-md rounded-lg">
-                  <thead className="bg-gray-100 dark:bg-gray-700">
-                    <tr>
-                      <th className="px-4 py-3 text-left dark:text-gray-200">Étudiant</th>
-                      <th className="px-4 py-3 text-left dark:text-gray-200">Projet</th>
-                      <th className="px-4 py-3 text-left dark:text-gray-200">Cycle</th>
-                      <th className="px-4 py-3 text-left dark:text-gray-200">Soumis le</th>
-                      <th className="px-4 py-3 text-left dark:text-gray-200">Statut</th>
-                      <th className="px-4 py-3 text-center dark:text-gray-200">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredEnrollments.map((enrollment) => (
-                      <tr key={enrollment._id} className="border-t dark:border-gray-700">
-                        <td className="px-4 py-3 dark:text-white">
-                          <p className="font-medium">{enrollment.student.name}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {enrollment.student.email}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 dark:text-gray-300">
-                          {enrollment.simulatedProject.title}
-                          {enrollment.isDoubleCycle && (
-                            <span className="ml-2 text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-1.5 py-0.5 rounded">
-                              Double
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 dark:text-gray-300 text-center">
-                          #{enrollment.cycleNumber}
-                        </td>
-                        <td className="px-4 py-3 dark:text-gray-300 text-sm">
-                          {new Date(enrollment.submittedAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusColors[enrollment.status]}`}>
-                            {statusLabels[enrollment.status]}
-                          </span>
-                          {enrollment.totalCredits > 0 && ["approved", "completed"].includes(enrollment.status) && (
-                            <span className="ml-2 text-xs text-green-700 dark:text-green-400 font-medium">
-                              {enrollment.totalCredits} cr. total
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <Link href={`/admin/simulated/enrollments/${enrollment._id}`}>
-                            <a className="bg-blue-600 dark:bg-blue-700 text-white px-3 py-1 rounded hover:bg-blue-700 dark:hover:bg-blue-800 text-sm">
-                              Détails
-                            </a>
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+        {forceSuccess && (
+          <div className="mb-3 text-sm text-success bg-success/10 px-3 py-2 rounded">
+            {forceSuccess}
           </div>
         )}
-        {/* ── TAB : CYCLES ── */}
-        {activeTab === "cycles" && (
-          <div>
-            {/* ── Génération automatique ── */}
-            <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
-              <h2 className="text-xl font-bold mb-1 dark:text-white">Génération automatique</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Génère N cycles consécutifs de 2 semaines (vendredi → vendredi). Chaque cycle : ouverture = vendredi de début, deadline dépôt = mercredi suivant (+5j), défense = vendredi 2 semaines après (+14j).
-              </p>
-              {genError && (
-                <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-4">
-                  {genError}
-                </div>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">Date de départ *</label>
-                  <input
-                    type="date"
-                    value={genForm.firstStartDate}
-                    onChange={(e) => setGenForm({ ...genForm, firstStartDate: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  />
-                  <p className="text-xs text-gray-400 mt-0.5">1er vendredi du semestre</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">Nombre de cycles *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="52"
-                    value={genForm.numberOfCycles}
-                    onChange={(e) => setGenForm({ ...genForm, numberOfCycles: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">Préfixe de nom</label>
-                  <input
-                    type="text"
-                    value={genForm.namePrefix}
-                    onChange={(e) => setGenForm({ ...genForm, namePrefix: e.target.value })}
-                    placeholder="Cycle"
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  />
-                  <p className="text-xs text-gray-400 mt-0.5">Ex: "Cycle" → "Cycle 1", "Cycle 2"...</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handlePreviewGeneration}
-                className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white px-5 py-2 rounded-md text-sm"
+        <form onSubmit={handleForceEnroll} className="flex flex-col sm:flex-row gap-3 items-end">
+          <div className="flex-1">
+            <FormField label="Projet">
+              <Select
+                value={forceForm.projectId}
+                onChange={(e) => setForceForm((prev) => ({ ...prev, projectId: e.target.value }))}
+                required
               >
-                Prévisualiser
-              </button>
+                <option value="">-- Sélectionner un projet --</option>
+                {catalogProjects.map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.title}{!p.isActive ? " (inactif)" : ""}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          </div>
+          <div className="flex-1">
+            <FormField label="Email étudiant">
+              <Input
+                type="email"
+                value={forceForm.studentEmail}
+                onChange={(e) => setForceForm((prev) => ({ ...prev, studentEmail: e.target.value }))}
+                placeholder="prenom.nom@ecole.fr"
+                required
+              />
+            </FormField>
+          </div>
+          <Button
+            type="submit"
+            variant="primary"
+            loading={isForceSubmitting}
+          >
+            Inscrire
+          </Button>
+        </form>
+        <p className="text-xs text-text-dim mt-2">
+          Inscrit l&apos;étudiant même si la fenêtre de dépôt est fermée. L&apos;étudiant devra soumettre son lien GitHub depuis son espace.
+        </p>
+      </Card>
 
-              {genPreview && (
-                <div className="mt-5">
-                  <p className="text-sm font-medium dark:text-gray-200 mb-2">
-                    Aperçu — {genPreview.length} cycle{genPreview.length > 1 ? "s" : ""} à créer :
-                  </p>
-                  <div className="overflow-x-auto rounded-lg border dark:border-gray-700 mb-4">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-gray-100 dark:bg-gray-700">
-                        <tr>
-                          <th className="px-4 py-2 text-left dark:text-gray-200">Nom</th>
-                          <th className="px-4 py-2 text-left dark:text-gray-200">Ouverture</th>
-                          <th className="px-4 py-2 text-left dark:text-gray-200">Deadline P1</th>
-                          <th className="px-4 py-2 text-left dark:text-gray-200">Défense P1</th>
-                          <th className="px-4 py-2 text-left dark:text-gray-200">Deadline P2</th>
-                          <th className="px-4 py-2 text-left dark:text-gray-200">Défense P2</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
-                        {genPreview.map((c, i) => (
-                          <tr key={i}>
-                            <td className="px-4 py-2 dark:text-white font-medium">{c.name}</td>
-                            <td className="px-4 py-2 dark:text-gray-300">{new Date(c.startDate).toLocaleDateString("fr-FR")}</td>
-                            <td className="px-4 py-2 dark:text-gray-300">{new Date(c.firstSubmissionDeadline).toLocaleDateString("fr-FR")}</td>
-                            <td className="px-4 py-2 dark:text-gray-300">{new Date(c.firstDefenseDate).toLocaleDateString("fr-FR")}</td>
-                            <td className="px-4 py-2 dark:text-gray-300">{new Date(c.secondSubmissionDeadline).toLocaleDateString("fr-FR")}</td>
-                            <td className="px-4 py-2 dark:text-gray-300">{new Date(c.secondDefenseDate).toLocaleDateString("fr-FR")}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={handleConfirmGeneration}
-                      disabled={isGenerating}
-                      className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-md text-sm font-medium disabled:opacity-50"
-                    >
-                      {isGenerating ? "Création en cours..." : `Créer ces ${genPreview.length} cycles`}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setGenPreview(null)}
-                      className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white px-4 py-2 rounded-md text-sm"
-                    >
-                      Annuler
-                    </button>
-                  </div>
-                </div>
-              )}
+      {/* Export CSV des cycles terminés */}
+      <Card className="mb-6">
+        <h3 className="font-semibold text-text mb-3">Exporter les cycles terminés (CSV)</h3>
+        <div className="flex flex-col sm:flex-row gap-3 items-end">
+          <div>
+            <FormField label="Date de début">
+              <Input
+                type="date"
+                value={exportStartDate}
+                onChange={(e) => setExportStartDate(e.target.value)}
+              />
+            </FormField>
+          </div>
+          <div>
+            <FormField label="Date de fin">
+              <Input
+                type="date"
+                value={exportEndDate}
+                onChange={(e) => setExportEndDate(e.target.value)}
+              />
+            </FormField>
+          </div>
+          <Button
+            variant="primary"
+            onClick={handleExport}
+            loading={isExporting}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Télécharger CSV
+          </Button>
+        </div>
+        <p className="text-xs text-text-dim mt-2">
+          Sans dates : exporte tous les cycles terminés.
+        </p>
+      </Card>
+
+      {/* Enrollments table */}
+      <DataTable
+        columns={enrollmentColumns}
+        rows={filteredEnrollments}
+        rowKey="_id"
+        loading={apiLoading}
+        emptyLabel="Aucun suivi à afficher."
+      />
+    </div>
+  );
+
+  const cyclesContent = (
+    <div>
+      {/* ── Génération automatique ── */}
+      <Card className="mb-6">
+        <h2 className="text-xl font-bold mb-1 text-text">Génération automatique</h2>
+        <p className="text-sm text-text-muted mb-4">
+          Génère N cycles consécutifs de 2 semaines (vendredi → vendredi). Chaque cycle : ouverture = vendredi de début, deadline dépôt = mercredi suivant (+5j), défense = vendredi 2 semaines après (+14j).
+        </p>
+        {genError && (
+          <div className="mb-4 rounded border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+            {genError}
+          </div>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <FormField label="Date de départ *" hint="1er vendredi du semestre">
+            <Input
+              type="date"
+              value={genForm.firstStartDate}
+              onChange={(e) => setGenForm({ ...genForm, firstStartDate: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Nombre de cycles *">
+            <Input
+              type="number"
+              min="1"
+              max="52"
+              value={genForm.numberOfCycles}
+              onChange={(e) => setGenForm({ ...genForm, numberOfCycles: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Préfixe de nom" hint='Ex: "Cycle" → "Cycle 1", "Cycle 2"...'>
+            <Input
+              type="text"
+              value={genForm.namePrefix}
+              onChange={(e) => setGenForm({ ...genForm, namePrefix: e.target.value })}
+              placeholder="Cycle"
+            />
+          </FormField>
+        </div>
+        <Button variant="primary" onClick={handlePreviewGeneration}>
+          Prévisualiser
+        </Button>
+
+        {genPreview && (
+          <div className="mt-5">
+            <p className="text-sm font-medium text-text mb-2">
+              Aperçu — {genPreview.length} cycle{genPreview.length > 1 ? "s" : ""} à créer :
+            </p>
+            <div className="overflow-x-auto rounded-lg border border-border mb-4">
+              <table className="min-w-full text-sm">
+                <thead className="bg-surface-2">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-text">Nom</th>
+                    <th className="px-4 py-2 text-left text-text">Ouverture</th>
+                    <th className="px-4 py-2 text-left text-text">Deadline P1</th>
+                    <th className="px-4 py-2 text-left text-text">Défense P1</th>
+                    <th className="px-4 py-2 text-left text-text">Deadline P2</th>
+                    <th className="px-4 py-2 text-left text-text">Défense P2</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-surface divide-y divide-border">
+                  {genPreview.map((c, i) => (
+                    <tr key={i}>
+                      <td className="px-4 py-2 text-text font-medium">{c.name}</td>
+                      <td className="px-4 py-2 text-text-muted">{new Date(c.startDate).toLocaleDateString("fr-FR")}</td>
+                      <td className="px-4 py-2 text-text-muted">{new Date(c.firstSubmissionDeadline).toLocaleDateString("fr-FR")}</td>
+                      <td className="px-4 py-2 text-text-muted">{new Date(c.firstDefenseDate).toLocaleDateString("fr-FR")}</td>
+                      <td className="px-4 py-2 text-text-muted">{new Date(c.secondSubmissionDeadline).toLocaleDateString("fr-FR")}</td>
+                      <td className="px-4 py-2 text-text-muted">{new Date(c.secondDefenseDate).toLocaleDateString("fr-FR")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+            <div className="flex gap-3">
+              <Button
+                variant="primary"
+                onClick={handleConfirmGeneration}
+                loading={isGenerating}
+              >
+                {isGenerating ? "Création en cours..." : `Créer ces ${genPreview.length} cycles`}
+              </Button>
+              <Button variant="outline" onClick={() => setGenPreview(null)}>
+                Annuler
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
 
-            {/* ── Import JSON ── */}
-            <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
-              <h2 className="text-xl font-bold mb-1 dark:text-white">Import JSON</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                Collez un tableau JSON de cycles. Chaque objet doit avoir : <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">name</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">startDate</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">firstSubmissionDeadline</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">firstDefenseDate</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">secondSubmissionDeadline</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">secondDefenseDate</code> (format <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">YYYY-MM-DD</code>).
-              </p>
-              <details className="mb-3">
-                <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">Voir un exemple JSON</summary>
-                <pre className="mt-2 bg-gray-100 dark:bg-gray-700 rounded p-3 text-xs text-gray-700 dark:text-gray-300 overflow-x-auto">{`[
+      {/* ── Import JSON ── */}
+      <Card className="mb-6">
+        <h2 className="text-xl font-bold mb-1 text-text">Import JSON</h2>
+        <p className="text-sm text-text-muted mb-3">
+          Collez un tableau JSON de cycles. Chaque objet doit avoir :{" "}
+          <code className="bg-surface-2 px-1 rounded text-xs">name</code>,{" "}
+          <code className="bg-surface-2 px-1 rounded text-xs">startDate</code>,{" "}
+          <code className="bg-surface-2 px-1 rounded text-xs">firstSubmissionDeadline</code>,{" "}
+          <code className="bg-surface-2 px-1 rounded text-xs">firstDefenseDate</code>,{" "}
+          <code className="bg-surface-2 px-1 rounded text-xs">secondSubmissionDeadline</code>,{" "}
+          <code className="bg-surface-2 px-1 rounded text-xs">secondDefenseDate</code>{" "}
+          (format <code className="bg-surface-2 px-1 rounded text-xs">YYYY-MM-DD</code>).
+        </p>
+        <details className="mb-3">
+          <summary className="text-xs text-primary cursor-pointer hover:underline">Voir un exemple JSON</summary>
+          <pre className="mt-2 bg-surface-2 rounded p-3 text-xs text-text-muted overflow-x-auto">{`[
   {
     "name": "Cycle 1 — Printemps 2026",
     "startDate": "2026-02-28",
@@ -1008,310 +938,340 @@ export default function AdminSimulated() {
     "isDoubleCycle": false
   }
 ]`}</pre>
-              </details>
-              {jsonError && (
-                <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-4">
-                  {jsonError}
-                </div>
-              )}
-              <textarea
-                value={jsonInput}
-                onChange={(e) => { setJsonInput(e.target.value); setJsonPreview(null); setJsonError(""); }}
-                placeholder='[{ "name": "Cycle 1", "startDate": "2026-02-27", ... }]'
-                rows={6}
-                className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm mb-3"
-              />
-              <button
-                type="button"
-                onClick={handleParseJson}
-                disabled={!jsonInput.trim()}
-                className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white px-5 py-2 rounded-md text-sm disabled:opacity-50"
-              >
-                Analyser
-              </button>
-
-              {jsonPreview && (
-                <div className="mt-5">
-                  <p className="text-sm font-medium dark:text-gray-200 mb-2">
-                    {jsonPreview.length} cycle{jsonPreview.length > 1 ? "s" : ""} détecté{jsonPreview.length > 1 ? "s" : ""} — aperçu :
-                  </p>
-                  <div className="overflow-x-auto rounded-lg border dark:border-gray-700 mb-4">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-gray-100 dark:bg-gray-700">
-                        <tr>
-                          <th className="px-4 py-2 text-left dark:text-gray-200">Nom</th>
-                          <th className="px-4 py-2 text-left dark:text-gray-200">Ouverture</th>
-                          <th className="px-4 py-2 text-left dark:text-gray-200">Deadline P1</th>
-                          <th className="px-4 py-2 text-left dark:text-gray-200">Défense P1</th>
-                          <th className="px-4 py-2 text-left dark:text-gray-200">Deadline P2</th>
-                          <th className="px-4 py-2 text-left dark:text-gray-200">Défense P2</th>
-                          <th className="px-4 py-2 text-left dark:text-gray-200">Double</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
-                        {jsonPreview.map((c, i) => (
-                          <tr key={i}>
-                            <td className="px-4 py-2 dark:text-white font-medium">{c.name}</td>
-                            <td className="px-4 py-2 dark:text-gray-300">{new Date(c.startDate).toLocaleDateString("fr-FR")}</td>
-                            <td className="px-4 py-2 dark:text-gray-300">{new Date(c.firstSubmissionDeadline).toLocaleDateString("fr-FR")}</td>
-                            <td className="px-4 py-2 dark:text-gray-300">{new Date(c.firstDefenseDate).toLocaleDateString("fr-FR")}</td>
-                            <td className="px-4 py-2 dark:text-gray-300">{new Date(c.secondSubmissionDeadline).toLocaleDateString("fr-FR")}</td>
-                            <td className="px-4 py-2 dark:text-gray-300">{new Date(c.secondDefenseDate).toLocaleDateString("fr-FR")}</td>
-                            <td className="px-4 py-2 dark:text-gray-300">{c.isDoubleCycle ? "Oui" : "Non"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={handleImportJson}
-                      disabled={isImporting}
-                      className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-md text-sm font-medium disabled:opacity-50"
-                    >
-                      {isImporting ? "Import en cours..." : `Importer ces ${jsonPreview.length} cycles`}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setJsonPreview(null); setJsonError(""); }}
-                      className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white px-4 py-2 rounded-md text-sm"
-                    >
-                      Annuler
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Formulaire de création manuelle */}
-            <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-8">
-              <h2 className="text-xl font-bold mb-4 dark:text-white">Ajouter un cycle manuellement</h2>
-              {cycleError && (
-                <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-4">
-                  {cycleError}
-                </div>
-              )}
-              <form onSubmit={handleCreateCycle} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                    Nom du cycle *
-                  </label>
-                  <input
-                    type="text"
-                    value={cycleForm.name}
-                    onChange={(e) => setCycleForm({ ...cycleForm, name: e.target.value })}
-                    placeholder="Ex: Cycle 1 — Printemps 2026"
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">Ouverture * (vendredi W0)</label>
-                  <input type="date" value={cycleForm.startDate}
-                    onChange={(e) => setCycleForm({ ...cycleForm, startDate: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
-                  <p className="text-xs text-gray-400 mt-0.5">Début de la fenêtre — vendredi W0</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">Deadline dépôt P1 * (mercredi W1)</label>
-                  <input type="date" value={cycleForm.firstSubmissionDeadline}
-                    onChange={(e) => setCycleForm({ ...cycleForm, firstSubmissionDeadline: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
-                  <p className="text-xs text-gray-400 mt-0.5">Mercredi W1 (+5j)</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">1ère défense * (vendredi W2)</label>
-                  <input type="date" value={cycleForm.firstDefenseDate}
-                    onChange={(e) => setCycleForm({ ...cycleForm, firstDefenseDate: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
-                  <p className="text-xs text-gray-400 mt-0.5">Vendredi W2 (+14j)</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">Deadline dépôt P2 * (mercredi W3)</label>
-                  <input type="date" value={cycleForm.secondSubmissionDeadline}
-                    onChange={(e) => setCycleForm({ ...cycleForm, secondSubmissionDeadline: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
-                  <p className="text-xs text-gray-400 mt-0.5">Mercredi W3 (+19j)</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1 dark:text-gray-200">2ème défense * (vendredi W4)</label>
-                  <input type="date" value={cycleForm.secondDefenseDate}
-                    onChange={(e) => setCycleForm({ ...cycleForm, secondDefenseDate: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
-                  <p className="text-xs text-gray-400 mt-0.5">Vendredi W4 (+28j) — fin du cycle</p>
-                </div>
-                <div className="flex items-center gap-3 pt-5">
-                  <input
-                    type="checkbox"
-                    id="isDoubleCycle"
-                    checked={cycleForm.isDoubleCycle}
-                    onChange={(e) => setCycleForm({ ...cycleForm, isDoubleCycle: e.target.checked })}
-                    className="w-4 h-4"
-                  />
-                  <label htmlFor="isDoubleCycle" className="text-sm font-medium dark:text-gray-200">
-                    Double cycle (ex: vacances)
-                  </label>
-                </div>
-                <div className="sm:col-span-2">
-                  <button
-                    type="submit"
-                    disabled={isSubmittingCycle}
-                    className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white px-6 py-2 rounded-md disabled:opacity-50"
-                  >
-                    {isSubmittingCycle ? "Ajout..." : "Ajouter le cycle"}
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* Liste des cycles */}
-            {cycles.length === 0 ? (
-              <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 text-center">
-                <p className="text-gray-600 dark:text-gray-300">
-                  Aucun cycle planifié. Ajoutez-en un ci-dessus.
-                </p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {cycles.map((cycle) => {
-                  const now = new Date();
-                  const start = new Date(cycle.startDate);
-                  const phase1Open = now >= start && now <= new Date(cycle.firstSubmissionDeadline);
-                  const phase2Open = now >= new Date(cycle.firstDefenseDate) && now <= new Date(cycle.secondSubmissionDeadline);
-                  const isOpen = phase1Open || phase2Open;
-                  const isUpcoming = now < start;
-
-                  return (
-                    <div key={cycle._id} className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-4">
-                      {editingCycle && editingCycle._id === cycle._id ? (
-                        // ── Mode édition ──
-                        <form onSubmit={handleUpdateCycle} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="sm:col-span-2">
-                            <label className="block text-sm font-medium mb-1 dark:text-gray-200">Nom</label>
-                            <input
-                              type="text"
-                              value={editingCycle.name}
-                              onChange={(e) => setEditingCycle({ ...editingCycle, name: e.target.value })}
-                              className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1 dark:text-gray-200">Ouverture (W0 ven)</label>
-                            <input type="date" value={editingCycle.startDate?.slice(0, 10)}
-                              onChange={(e) => setEditingCycle({ ...editingCycle, startDate: e.target.value })}
-                              className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1 dark:text-gray-200">Deadline P1 (W1 mer)</label>
-                            <input type="date" value={editingCycle.firstSubmissionDeadline?.slice(0, 10)}
-                              onChange={(e) => setEditingCycle({ ...editingCycle, firstSubmissionDeadline: e.target.value })}
-                              className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1 dark:text-gray-200">Défense P1 (W2 ven)</label>
-                            <input type="date" value={editingCycle.firstDefenseDate?.slice(0, 10)}
-                              onChange={(e) => setEditingCycle({ ...editingCycle, firstDefenseDate: e.target.value })}
-                              className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1 dark:text-gray-200">Deadline P2 (W3 mer)</label>
-                            <input type="date" value={editingCycle.secondSubmissionDeadline?.slice(0, 10)}
-                              onChange={(e) => setEditingCycle({ ...editingCycle, secondSubmissionDeadline: e.target.value })}
-                              className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1 dark:text-gray-200">Défense P2 (W4 ven)</label>
-                            <input type="date" value={editingCycle.secondDefenseDate?.slice(0, 10)}
-                              onChange={(e) => setEditingCycle({ ...editingCycle, secondDefenseDate: e.target.value })}
-                              className="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              checked={editingCycle.isDoubleCycle}
-                              onChange={(e) => setEditingCycle({ ...editingCycle, isDoubleCycle: e.target.checked })}
-                              className="w-4 h-4"
-                            />
-                            <label className="text-sm dark:text-gray-200">Double cycle</label>
-                          </div>
-                          <div className="sm:col-span-2 flex gap-2">
-                            <button
-                              type="submit"
-                              disabled={isSubmittingCycle}
-                              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md disabled:opacity-50"
-                            >
-                              Sauvegarder
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingCycle(null)}
-                              className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white px-4 py-2 rounded-md"
-                            >
-                              Annuler
-                            </button>
-                          </div>
-                        </form>
-                      ) : (
-                        // ── Mode affichage ──
-                        <div className="flex items-start justify-between gap-4 flex-wrap">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <p className="font-semibold dark:text-white">{cycle.name}</p>
-                              {cycle.isDoubleCycle && (
-                                <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-0.5 rounded-full">
-                                  Double cycle
-                                </span>
-                              )}
-                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                                isOpen
-                                  ? "bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-300"
-                                  : isUpcoming
-                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-800/20 dark:text-blue-300"
-                                  : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
-                              }`}>
-                                {isOpen ? "Ouvert" : isUpcoming ? "À venir" : "Clôturé"}
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400 space-y-0.5">
-                              <p>
-                                <span className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">P1</span>{" "}
-                                Ouverture : <span className="font-medium text-gray-700 dark:text-gray-300">{new Date(cycle.startDate).toLocaleDateString("fr-FR")}</span>
-                                {" "}→ Deadline : <span className="font-medium text-gray-700 dark:text-gray-300">{new Date(cycle.firstSubmissionDeadline).toLocaleDateString("fr-FR")}</span>
-                                {" "}· Défense : <span className="font-medium text-gray-700 dark:text-gray-300">{new Date(cycle.firstDefenseDate).toLocaleDateString("fr-FR")}</span>
-                              </p>
-                              <p>
-                                <span className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">P2</span>{" "}
-                                Deadline : <span className="font-medium text-gray-700 dark:text-gray-300">{new Date(cycle.secondSubmissionDeadline).toLocaleDateString("fr-FR")}</span>
-                                {" "}· Défense finale : <span className="font-medium text-gray-700 dark:text-gray-300">{new Date(cycle.secondDefenseDate).toLocaleDateString("fr-FR")}</span>
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex gap-2 shrink-0">
-                            <button
-                              onClick={() => setEditingCycle({ ...cycle })}
-                              className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-3 py-1 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 text-sm"
-                            >
-                              Modifier
-                            </button>
-                            <button
-                              onClick={() => handleDeleteCycle(cycle._id)}
-                              className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-3 py-1 rounded hover:bg-red-200 dark:hover:bg-red-900/50 text-sm"
-                            >
-                              Supprimer
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+        </details>
+        {jsonError && (
+          <div className="mb-4 rounded border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+            {jsonError}
           </div>
         )}
+        <Textarea
+          value={jsonInput}
+          onChange={(e) => { setJsonInput(e.target.value); setJsonPreview(null); setJsonError(""); }}
+          placeholder='[{ "name": "Cycle 1", "startDate": "2026-02-27", ... }]'
+          rows={6}
+          className="font-mono mb-3"
+        />
+        <Button
+          variant="primary"
+          onClick={handleParseJson}
+          disabled={!jsonInput.trim()}
+        >
+          Analyser
+        </Button>
+
+        {jsonPreview && (
+          <div className="mt-5">
+            <p className="text-sm font-medium text-text mb-2">
+              {jsonPreview.length} cycle{jsonPreview.length > 1 ? "s" : ""} détecté{jsonPreview.length > 1 ? "s" : ""} — aperçu :
+            </p>
+            <div className="overflow-x-auto rounded-lg border border-border mb-4">
+              <table className="min-w-full text-sm">
+                <thead className="bg-surface-2">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-text">Nom</th>
+                    <th className="px-4 py-2 text-left text-text">Ouverture</th>
+                    <th className="px-4 py-2 text-left text-text">Deadline P1</th>
+                    <th className="px-4 py-2 text-left text-text">Défense P1</th>
+                    <th className="px-4 py-2 text-left text-text">Deadline P2</th>
+                    <th className="px-4 py-2 text-left text-text">Défense P2</th>
+                    <th className="px-4 py-2 text-left text-text">Double</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-surface divide-y divide-border">
+                  {jsonPreview.map((c, i) => (
+                    <tr key={i}>
+                      <td className="px-4 py-2 text-text font-medium">{c.name}</td>
+                      <td className="px-4 py-2 text-text-muted">{new Date(c.startDate).toLocaleDateString("fr-FR")}</td>
+                      <td className="px-4 py-2 text-text-muted">{new Date(c.firstSubmissionDeadline).toLocaleDateString("fr-FR")}</td>
+                      <td className="px-4 py-2 text-text-muted">{new Date(c.firstDefenseDate).toLocaleDateString("fr-FR")}</td>
+                      <td className="px-4 py-2 text-text-muted">{new Date(c.secondSubmissionDeadline).toLocaleDateString("fr-FR")}</td>
+                      <td className="px-4 py-2 text-text-muted">{new Date(c.secondDefenseDate).toLocaleDateString("fr-FR")}</td>
+                      <td className="px-4 py-2 text-text-muted">{c.isDoubleCycle ? "Oui" : "Non"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="primary"
+                onClick={handleImportJson}
+                loading={isImporting}
+              >
+                {isImporting ? "Import en cours..." : `Importer ces ${jsonPreview.length} cycles`}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => { setJsonPreview(null); setJsonError(""); }}
+              >
+                Annuler
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* ── Formulaire de création manuelle ── */}
+      <Card className="mb-8">
+        <h2 className="text-xl font-bold mb-4 text-text">Ajouter un cycle manuellement</h2>
+        {cycleError && (
+          <div className="mb-4 rounded border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+            {cycleError}
+          </div>
+        )}
+        <form onSubmit={handleCreateCycle} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-2">
+            <FormField label="Nom du cycle" required>
+              <Input
+                type="text"
+                value={cycleForm.name}
+                onChange={(e) => setCycleForm({ ...cycleForm, name: e.target.value })}
+                placeholder="Ex: Cycle 1 — Printemps 2026"
+                required
+              />
+            </FormField>
+          </div>
+          <FormField label="Ouverture * (vendredi W0)" hint="Début de la fenêtre — vendredi W0">
+            <Input
+              type="date"
+              value={cycleForm.startDate}
+              onChange={(e) => setCycleForm({ ...cycleForm, startDate: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="Deadline dépôt P1 * (mercredi W1)" hint="Mercredi W1 (+5j)">
+            <Input
+              type="date"
+              value={cycleForm.firstSubmissionDeadline}
+              onChange={(e) => setCycleForm({ ...cycleForm, firstSubmissionDeadline: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="1ère défense * (vendredi W2)" hint="Vendredi W2 (+14j)">
+            <Input
+              type="date"
+              value={cycleForm.firstDefenseDate}
+              onChange={(e) => setCycleForm({ ...cycleForm, firstDefenseDate: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="Deadline dépôt P2 * (mercredi W3)" hint="Mercredi W3 (+19j)">
+            <Input
+              type="date"
+              value={cycleForm.secondSubmissionDeadline}
+              onChange={(e) => setCycleForm({ ...cycleForm, secondSubmissionDeadline: e.target.value })}
+              required
+            />
+          </FormField>
+          <FormField label="2ème défense * (vendredi W4)" hint="Vendredi W4 (+28j) — fin du cycle">
+            <Input
+              type="date"
+              value={cycleForm.secondDefenseDate}
+              onChange={(e) => setCycleForm({ ...cycleForm, secondDefenseDate: e.target.value })}
+              required
+            />
+          </FormField>
+          <div className="flex items-center pt-2">
+            <Switch
+              label="Double cycle (ex: vacances)"
+              checked={cycleForm.isDoubleCycle}
+              onChange={(e) => setCycleForm({ ...cycleForm, isDoubleCycle: e.target.checked })}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Button type="submit" variant="primary" loading={isSubmittingCycle}>
+              {isSubmittingCycle ? "Ajout..." : "Ajouter le cycle"}
+            </Button>
+          </div>
+        </form>
+      </Card>
+
+      {/* ── Liste des cycles ── */}
+      {cycles.length === 0 ? (
+        <EmptyState
+          title="Aucun cycle planifié"
+          sub="Ajoutez-en un ci-dessus."
+        />
+      ) : (
+        <div className="grid gap-4">
+          {cycles.map((cycle) => {
+            const now = new Date();
+            const start = new Date(cycle.startDate);
+            const phase1Open = now >= start && now <= new Date(cycle.firstSubmissionDeadline);
+            const phase2Open = now >= new Date(cycle.firstDefenseDate) && now <= new Date(cycle.secondSubmissionDeadline);
+            const isOpen = phase1Open || phase2Open;
+            const isUpcoming = now < start;
+
+            return (
+              <Card key={cycle._id} padding="compact">
+                {editingCycle && editingCycle._id === cycle._id ? (
+                  // ── Mode édition ──
+                  <form onSubmit={handleUpdateCycle} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2">
+                      <FormField label="Nom">
+                        <Input
+                          type="text"
+                          value={editingCycle.name}
+                          onChange={(e) => setEditingCycle({ ...editingCycle, name: e.target.value })}
+                          required
+                        />
+                      </FormField>
+                    </div>
+                    <FormField label="Ouverture (W0 ven)">
+                      <Input
+                        type="date"
+                        value={editingCycle.startDate?.slice(0, 10)}
+                        onChange={(e) => setEditingCycle({ ...editingCycle, startDate: e.target.value })}
+                        required
+                      />
+                    </FormField>
+                    <FormField label="Deadline P1 (W1 mer)">
+                      <Input
+                        type="date"
+                        value={editingCycle.firstSubmissionDeadline?.slice(0, 10)}
+                        onChange={(e) => setEditingCycle({ ...editingCycle, firstSubmissionDeadline: e.target.value })}
+                        required
+                      />
+                    </FormField>
+                    <FormField label="Défense P1 (W2 ven)">
+                      <Input
+                        type="date"
+                        value={editingCycle.firstDefenseDate?.slice(0, 10)}
+                        onChange={(e) => setEditingCycle({ ...editingCycle, firstDefenseDate: e.target.value })}
+                        required
+                      />
+                    </FormField>
+                    <FormField label="Deadline P2 (W3 mer)">
+                      <Input
+                        type="date"
+                        value={editingCycle.secondSubmissionDeadline?.slice(0, 10)}
+                        onChange={(e) => setEditingCycle({ ...editingCycle, secondSubmissionDeadline: e.target.value })}
+                        required
+                      />
+                    </FormField>
+                    <FormField label="Défense P2 (W4 ven)">
+                      <Input
+                        type="date"
+                        value={editingCycle.secondDefenseDate?.slice(0, 10)}
+                        onChange={(e) => setEditingCycle({ ...editingCycle, secondDefenseDate: e.target.value })}
+                        required
+                      />
+                    </FormField>
+                    <div className="flex items-center">
+                      <Switch
+                        label="Double cycle"
+                        checked={editingCycle.isDoubleCycle}
+                        onChange={(e) => setEditingCycle({ ...editingCycle, isDoubleCycle: e.target.checked })}
+                      />
+                    </div>
+                    <div className="sm:col-span-2 flex gap-2">
+                      <Button type="submit" variant="primary" loading={isSubmittingCycle}>
+                        Sauvegarder
+                      </Button>
+                      <Button variant="outline" onClick={() => setEditingCycle(null)}>
+                        Annuler
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  // ── Mode affichage ──
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <p className="font-semibold text-text">{cycle.name}</p>
+                        {cycle.isDoubleCycle && (
+                          <Badge variant="neutral" size="sm">Double cycle</Badge>
+                        )}
+                        {isOpen ? (
+                          <Badge variant="approved" size="sm">Ouvert</Badge>
+                        ) : isUpcoming ? (
+                          <Badge variant="neutral" size="sm">À venir</Badge>
+                        ) : (
+                          <Badge variant="neutral" size="sm">Clôturé</Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-text-muted space-y-0.5">
+                        <p>
+                          <span className="text-xs font-semibold uppercase tracking-wide text-primary">P1</span>{" "}
+                          Ouverture : <span className="font-medium text-text">{new Date(cycle.startDate).toLocaleDateString("fr-FR")}</span>
+                          {" "}→ Deadline : <span className="font-medium text-text">{new Date(cycle.firstSubmissionDeadline).toLocaleDateString("fr-FR")}</span>
+                          {" "}· Défense : <span className="font-medium text-text">{new Date(cycle.firstDefenseDate).toLocaleDateString("fr-FR")}</span>
+                        </p>
+                        <p>
+                          <span className="text-xs font-semibold uppercase tracking-wide text-primary">P2</span>{" "}
+                          Deadline : <span className="font-medium text-text">{new Date(cycle.secondSubmissionDeadline).toLocaleDateString("fr-FR")}</span>
+                          {" "}· Défense finale : <span className="font-medium text-text">{new Date(cycle.secondDefenseDate).toLocaleDateString("fr-FR")}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingCycle({ ...cycle })}
+                      >
+                        Modifier
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleDeleteCycle(cycle._id)}
+                      >
+                        Supprimer
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  const tabItems = [
+    {
+      id: "catalogue",
+      label: "Catalogue de projets",
+      content: catalogueContent,
+    },
+    {
+      id: "enrollments",
+      label: (
+        <span className="flex items-center gap-2">
+          Suivis étudiants
+          {pendingCount > 0 && (
+            <Badge variant="pending" size="sm">{pendingCount}</Badge>
+          )}
+        </span>
+      ),
+      content: enrollmentsContent,
+    },
+    {
+      id: "cycles",
+      label: "Calendrier des cycles",
+      content: cyclesContent,
+    },
+  ];
+
+  return (
+    <div className="min-h-screen flex flex-col bg-bg">
+      <Head>
+        <title>Hub Projets - Admin Simulated</title>
+      </Head>
+
+      <AppHeader />
+
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">
+        <PageHead
+          title="Administration — Simulated Professional Work"
+          sub="Gérez le catalogue de projets et les suivis étudiants"
+        />
+        <Tabs defaultValue="catalogue" className="mt-6" items={tabItems} />
       </main>
+
+      <Footer />
     </div>
   );
 }
