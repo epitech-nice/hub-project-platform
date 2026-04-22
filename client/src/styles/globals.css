@@ -31,6 +31,10 @@
     --status-changes-text: 180 83 9;
     --status-rejected-bg: 254 226 226;
     --status-rejected-text: 185 28 28;
+    --status-neutral-bg: 241 245 249;
+    --status-neutral-text: 71 85 105;
+    --status-new-bg: 237 233 254;
+    --status-new-text: 109 40 217;
 
     /* Ombres */
     --shadow-sm: 0 1px 2px rgba(16, 24, 40, .04);
@@ -64,6 +68,10 @@
     --status-changes-text: 253 224 71;
     --status-rejected-bg: 127 29 29;
     --status-rejected-text: 252 165 165;
+    --status-neutral-bg: 31 38 55;
+    --status-neutral-text: 148 163 184;
+    --status-new-bg: 46 16 101;
+    --status-new-text: 196 181 253;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
     --shadow-md: 0 6px 18px rgba(0, 0, 0, .4);

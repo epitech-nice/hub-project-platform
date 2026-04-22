@@ -9,6 +9,7 @@ import Checkbox from '../components/ui/Checkbox';
 import Radio from '../components/ui/Radio';
 import Switch from '../components/ui/Switch';
 import FileInput from '../components/ui/FileInput';
+import Badge from '../components/ui/Badge';
 
 export default function TokensPreview() {
   const { theme, setTheme } = useTheme();
@@ -152,6 +153,27 @@ export default function TokensPreview() {
             </div>
           </div>
         </section>
+        <section>
+          <h2 className="text-xl font-semibold mb-4">Badge</h2>
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {['pending', 'approved', 'changes', 'rejected', 'neutral', 'new'].map((v) => (
+                <Badge key={v} variant={v}>{v}</Badge>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {['pending', 'approved', 'changes', 'rejected', 'neutral', 'new'].map((v) => (
+                <Badge key={v} variant={v} dot>{v} + dot</Badge>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {['pending', 'approved'].map((v) => (
+                <Badge key={v} variant={v} size="sm" dot>{v} sm</Badge>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section>
           <h2 className="text-xl font-semibold mb-4">FileInput</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
