@@ -1,22 +1,27 @@
-// pages/dashboard.js
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import Header from "../components/layout/Header";
+import AppHeader from "../components/layout/AppHeader";
+import Footer from "../components/layout/Footer";
 import ProjectCard from "../components/projects/ProjectCard";
+import Button from "../components/ui/Button";
+import Skeleton from "../components/ui/Skeleton";
+import BentoGrid from "../components/ui/BentoGrid";
+import BentoCard from "../components/ui/BentoCard";
+import FilterChips from "../components/ui/FilterChips";
+import EmptyState from "../components/ui/EmptyState";
 import { useAuth } from "../context/AuthContext";
 import { useApi } from "../hooks/useApi";
 
 export default function Dashboard() {
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
   const { get, loading: apiLoading } = useApi();
   const [projects, setProjects] = useState([]);
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    // Rediriger si non authentifié
     if (!authLoading && !isAuthenticated) {
       router.push("/");
     }
@@ -33,7 +38,6 @@ export default function Dashboard() {
         }
       }
     };
-
     fetchProjects();
   }, [isAuthenticated]);
 
@@ -43,138 +47,152 @@ export default function Dashboard() {
       : projects.filter((project) => project.status === filter);
 
   if (authLoading) {
-    return <div className="text-center py-10 dark:text-white">Chargement...</div>;
+    return (
+      <div className="flex justify-center py-16">
+        <Skeleton variant="rect" width={320} height={48} />
+      </div>
+    );
   }
 
   if (!isAuthenticated) {
     return null;
   }
 
-  // Ajouter cette fonction dans le composant Dashboard
   const handleProjectDelete = (projectId) => {
     setProjects(projects.filter((project) => project._id !== projectId));
   };
 
+  const firstName = user?.name?.split(" ")[0] ?? "étudiant";
+
   return (
-    <div className="min-h-screen dark:bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-background">
       <Head>
         <title>Hub Projets - Tableau de bord</title>
       </Head>
 
-      <Header />
+      <AppHeader />
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold dark:text-white">Mes projets</h1>
-          <Link href="/submit-project">
-            <a className="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800">
-              Soumettre un nouveau projet
-            </a>
-          </Link>
-        </div>
+      <main className="flex-1">
+        {/* Hero */}
+        <section className="border-b border-border bg-surface">
+          <div className="container mx-auto px-4 py-8 max-w-container">
+            <p className="text-text-muted text-sm mb-1">Tableau de bord</p>
+            <h1 className="text-2xl font-bold tracking-tight text-text">
+              Bonjour, {firstName}
+            </h1>
+          </div>
+        </section>
 
-        <div className="mb-6">
-          <div className="flex space-x-4 overflow-x-auto pb-2">
-            <button
-              className={`px-4 py-2 rounded-md ${
-                filter === "all" 
-                  ? "bg-blue-600 text-white dark:bg-blue-700" 
-                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-              }`}
-              onClick={() => setFilter("all")}
-            >
-              Tous
-            </button>
-            <button
-              className={`px-4 py-2 rounded-md ${
-                filter === "pending"
-                  ? "bg-yellow-500 text-white dark:bg-yellow-600"
-                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-              }`}
-              onClick={() => setFilter("pending")}
-            >
-              En attente
-            </button>
-            <button
-              className={`px-4 py-2 rounded-md ${
-                filter === "pending_changes"
-                  ? "bg-orange-500 text-white dark:bg-orange-600"
-                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-              }`}
-              onClick={() => setFilter("pending_changes")}
-            >
-              Modifs requises
-            </button>
-            <button
-              className={`px-4 py-2 rounded-md ${
-                filter === "approved"
-                  ? "bg-green-600 text-white dark:bg-green-700"
-                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-              }`}
-              onClick={() => setFilter("approved")}
-            >
-              Approuvés
-            </button>
-            <button
-              className={`px-4 py-2 rounded-md ${
-                filter === "rejected" 
-                  ? "bg-red-600 text-white dark:bg-red-700" 
-                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-              }`}
-              onClick={() => setFilter("rejected")}
-            >
-              Refusés
-            </button>
-            <button
-              className={`px-4 py-2 rounded-md ${
-                filter === "completed"
-                  ? "bg-purple-600 text-white dark:bg-purple-700"
-                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-              }`}
-              onClick={() => setFilter("completed")}
-            >
-              Terminés
-            </button>
-          </div>
-        </div>
+        {/* Bento navigation */}
+        <section className="container mx-auto px-4 py-8 max-w-container">
+          <BentoGrid cols={3} gap="md">
+            <BentoCard span="wide" variant="highlight" as="a" href="/dashboard">
+              <p className="text-xs font-medium text-primary/70 uppercase tracking-wide mb-1">
+                Mes projets
+              </p>
+              <p className="text-2xl font-bold text-text">
+                {projects.length}
+                <span className="text-base font-normal text-text-muted ml-1">
+                  projet{projects.length !== 1 ? "s" : ""} soumis
+                </span>
+              </p>
+            </BentoCard>
 
-        {apiLoading ? (
-          <div className="text-center py-10 dark:text-white">Chargement des projets...</div>
-        ) : filteredProjects.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 text-center">
-            <h3 className="text-xl font-bold mb-3 dark:text-white">Aucun projet à afficher</h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
-              {filter === "all"
-                ? "Vous n'avez pas encore soumis de projet."
-                : `Vous n'avez pas de projets ${
-                    filter === "pending"
-                      ? "en attente"
-                      : filter === "approved"
-                      ? "approuvés"
-                      : "refusés"
-                  }.`}
-            </p>
-            {filter === "all" && (
-              <Link href="/submit-project">
-                <a className="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-800 inline-block">
-                  Soumettre mon premier projet
-                </a>
-              </Link>
-            )}
+            <BentoCard as="a" href="/submit-project">
+              <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">
+                Soumettre
+              </p>
+              <p className="text-sm text-text-dim">Nouveau projet</p>
+            </BentoCard>
+
+            <BentoCard as="a" href="/workshops/dashboard">
+              <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">
+                Workshops
+              </p>
+              <p className="text-sm text-text-dim">Mes ateliers</p>
+            </BentoCard>
+
+            <BentoCard span="wide" variant="highlight" as="a" href="/simulated">
+              <p className="text-xs font-medium text-primary/70 uppercase tracking-wide mb-1">
+                Simulated
+              </p>
+              <p className="text-sm text-text-muted">Travail professionnel simulé</p>
+            </BentoCard>
+
+            <BentoCard as="a" href="/inventory">
+              <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">
+                Inventaire
+              </p>
+              <p className="text-sm text-text-dim">Matériel disponible</p>
+            </BentoCard>
+          </BentoGrid>
+        </section>
+
+        {/* Projects list */}
+        <section className="container mx-auto px-4 pb-12 max-w-container">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-text">Mes projets</h2>
+            <Link href="/submit-project">
+              <Button variant="primary" size="sm" as="a">
+                Soumettre un projet
+              </Button>
+            </Link>
           </div>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProjects.map((project) => (
-              <ProjectCard
-                key={project._id}
-                project={project}
-                onDelete={handleProjectDelete}
-                isCreator={project.isCreator}
-              />
-            ))}
-          </div>
-        )}
+
+          <FilterChips
+            className="mb-6"
+            options={[
+              { value: "all", label: "Tous" },
+              { value: "pending", label: "En attente" },
+              { value: "pending_changes", label: "Modifs requises" },
+              { value: "approved", label: "Approuvés" },
+              { value: "rejected", label: "Refusés" },
+              { value: "completed", label: "Terminés" },
+            ]}
+            value={filter}
+            onChange={setFilter}
+          />
+
+          {apiLoading ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} variant="rect" height={180} />
+              ))}
+            </div>
+          ) : filteredProjects.length === 0 ? (
+            <EmptyState
+              title="Aucun projet à afficher"
+              sub={
+                filter === "all"
+                  ? "Vous n'avez pas encore soumis de projet."
+                  : "Aucun projet avec ce statut."
+              }
+              action={
+                filter === "all" ? (
+                  <Link href="/submit-project">
+                    <Button variant="primary" as="a">
+                      Soumettre mon premier projet
+                    </Button>
+                  </Link>
+                ) : null
+              }
+            />
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredProjects.map((project) => (
+                <ProjectCard
+                  key={project._id}
+                  project={project}
+                  onDelete={handleProjectDelete}
+                  isCreator={project.isCreator}
+                />
+              ))}
+            </div>
+          )}
+        </section>
       </main>
+
+      <Footer />
     </div>
   );
 }
