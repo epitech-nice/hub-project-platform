@@ -44,7 +44,6 @@ const EMPTY_FORM = {
   status:       'available',
 };
 
-// Extrait les codes RFID depuis un texte brut (newlines, virgules, points-virgules, espaces)
 const parseRfidText = (text) =>
   [
     ...new Set(
@@ -188,7 +187,7 @@ export default function AdminInventoryPage() {
       setFormError("Le nom de l'outil est requis");
       return;
     }
-    // Valider le tag en cours de saisie s'il n'a pas été confirmé
+    // flush any tag typed without pressing Enter before the form submits
     if (tagInput.trim()) addTag(tagInput);
 
     setFormLoading(true);
