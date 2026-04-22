@@ -9,8 +9,7 @@ import "react-toastify/dist/ReactToastify.css";
 import "../styles/globals.css";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
-import { PetalFall } from "../components/theme/PetalFall";
-import { SpringBackground } from "../components/theme/SpringBackground";
+import SeasonalLayer from "../components/layout/SeasonalLayer";
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -75,10 +74,9 @@ function MyApp({ Component, pageProps }) {
             <meta name="viewport" content="width=device-width, initial-scale=1" />
             <link rel="icon" href="/favicon.ico" sizes="any" />
           </Head>
-          <SpringBackground />
+          <SeasonalLayer />
           <Component {...pageProps} />
           <Footer />
-          <PetalFall />
           <ToastWithTheme />
           {/* <ToastContainer
             position="bottom-right"

@@ -139,6 +139,47 @@
 }
 
 /* Animations */
+/* Seasonal particle animations */
+@keyframes seasonal-fall {
+  0%   { transform: translateY(-10px) translateX(0); }
+  100% { transform: translateY(100vh) translateX(15px); }
+}
+@keyframes seasonal-petal {
+  0%   { transform: translateY(-20px) translateX(0) rotate(0deg); }
+  50%  { transform: translateY(50vh) translateX(30px) rotate(180deg); }
+  100% { transform: translateY(100vh) translateX(-10px) rotate(360deg); }
+}
+@keyframes seasonal-sway {
+  0%, 100% { transform: rotate(-3deg); }
+  50%       { transform: rotate(3deg); }
+}
+@keyframes seasonal-flutter {
+  0%, 100% { transform: translateY(0) rotate(-5deg); }
+  25%       { transform: translateY(-8px) rotate(5deg); }
+  75%       { transform: translateY(-4px) rotate(-3deg); }
+}
+@keyframes seasonal-twinkle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(1.2); }
+}
+@keyframes seasonal-bounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-5px); }
+}
+
+.seasonal-particle-fall {
+  animation: seasonal-fall linear infinite;
+  will-change: transform;
+}
+.seasonal-particle-petal {
+  animation: seasonal-petal linear infinite;
+  will-change: transform;
+}
+.seasonal-sway    { animation: seasonal-sway 4s ease-in-out infinite; }
+.seasonal-flutter { animation: seasonal-flutter 3s ease-in-out infinite; }
+.seasonal-twinkle { animation: seasonal-twinkle 2.5s ease-in-out infinite; }
+.seasonal-bounce  { animation: seasonal-bounce 2s ease-in-out infinite; }
+
 @keyframes shimmer {
   from { background-position: 200% 0; }
   to   { background-position: -200% 0; }
