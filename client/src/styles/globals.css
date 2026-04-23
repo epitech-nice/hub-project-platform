@@ -55,14 +55,14 @@
     --accent: 250 204 21;
     --danger: 248 113 113;
 
-    --bg: 10 14 26;
-    --surface: 17 23 38;
-    --surface-2: 15 20 34;
-    --border: 31 38 55;
-    --border-strong: 42 52 73;
+    --bg: 18 24 42;
+    --surface: 26 34 58;
+    --surface-2: 22 29 50;
+    --border: 44 54 80;
+    --border-strong: 58 72 106;
     --text: 241 245 249;
-    --text-muted: 148 163 184;
-    --text-dim: 148 163 184;
+    --text-muted: 160 176 204;
+    --text-dim: 120 136 165;
 
     --status-pending-bg: 30 58 138;
     --status-pending-text: 147 197 253;

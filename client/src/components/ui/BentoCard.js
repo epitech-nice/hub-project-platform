@@ -52,8 +52,8 @@ const BentoCard = forwardRef(function BentoCard(
         VARIANTS[variant] ?? VARIANTS.default,
         PADDING[padding] ?? PADDING.default,
         hover && [
-          'transition-shadow duration-200 ease-smooth',
-          'hover:shadow-md',
+          'transition-all duration-200 ease-smooth',
+          'hover:-translate-y-1 hover:shadow-lg hover:border-primary/40',
         ],
         className
       )}

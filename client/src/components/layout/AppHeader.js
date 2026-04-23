@@ -173,32 +173,31 @@ export default function AppHeader() {
   return (
     <>
       <header className="sticky top-0 z-30 w-full border-b border-border bg-surface/80 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4 sm:px-6">
-          {/* Logo */}
-          <Link href="/">
-            <a className="flex shrink-0 items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded">
-              <img
-                src="/images/logo-dark-mode-hub.png"
-                alt="Hub Projets"
-                className="h-8 w-auto"
-              />
-            </a>
-          </Link>
+        <div className="mx-auto flex h-14 max-w-7xl items-center px-4 sm:px-6">
+          {/* Logo — left */}
+          <div className="flex flex-1 items-center">
+            <Link href="/">
+              <a className="flex shrink-0 items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded">
+                <img
+                  src="/images/logo-dark-mode-hub.png"
+                  alt="Hub Projets"
+                  className="h-8 w-auto"
+                />
+              </a>
+            </Link>
+          </div>
 
-          {/* Desktop nav */}
+          {/* Desktop nav — center */}
           {!loading && isAuthenticated && (
-            <nav className="hidden lg:flex items-center gap-1 ml-4">
+            <nav className="hidden lg:flex items-center gap-1">
               <NavDropdown label="Soumettre un projet" sections={soumettreDesktop} />
               <NavDropdown label="Hub" sections={hubDesktop} />
               <NavLink href="/glossaire">Glossaire</NavLink>
             </nav>
           )}
 
-          {/* Spacer */}
-          <div className="flex-1" />
-
-          {/* Controls */}
-          <div className="flex items-center gap-1">
+          {/* Controls — right */}
+          <div className="flex flex-1 items-center justify-end gap-1">
             <SeasonalControl />
             <ThemeToggle />
 
