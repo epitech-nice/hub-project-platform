@@ -89,7 +89,7 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error("Erreur lors de la récupération des projets:", error);
     }
-  }, [filter, searchTerm, schoolYear, get]);
+  }, [filter, searchTerm, schoolYear]);
 
   useEffect(() => {
     if (!isAuthenticated || !isAdmin) return;
