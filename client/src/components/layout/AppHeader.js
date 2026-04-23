@@ -23,9 +23,9 @@ function ThemeToggle() {
       aria-label={isDark ? 'Activer le mode clair' : 'Activer le mode sombre'}
       className={cn(
         'flex h-9 w-9 items-center justify-center rounded-md',
-        'text-text-muted hover:text-text hover:bg-surface-2',
+        'text-white/70 hover:text-white hover:bg-white/15',
         'transition-colors duration-150 ease-smooth',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50'
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50'
       )}
     >
       {isDark ? (
@@ -55,9 +55,9 @@ function HamburgerButton({ open, onClick }) {
       aria-expanded={open}
       className={cn(
         'flex lg:hidden h-9 w-9 flex-col items-center justify-center gap-1.5 rounded-md',
-        'text-text-muted hover:text-text hover:bg-surface-2',
+        'text-white/70 hover:text-white hover:bg-white/15',
         'transition-colors duration-150 ease-smooth',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50'
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50'
       )}
     >
       <span className={cn('block h-px w-5 bg-current transition-transform duration-200 ease-smooth', open && 'translate-y-[7px] rotate-45')} />
@@ -78,7 +78,7 @@ function NavLink({ href, children }) {
         'text-sm font-medium px-1 py-0.5 rounded',
         'transition-colors duration-150 ease-smooth',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-        active ? 'text-primary' : 'text-text-muted hover:text-text'
+        active ? 'text-white font-semibold' : 'text-white/75 hover:text-white'
       )}>
         {children}
       </a>
@@ -172,7 +172,7 @@ export default function AppHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 w-full border-b border-border bg-surface/80 backdrop-blur-md">
+      <header className="sticky top-0 z-30 w-full border-b border-blue-700/50 bg-blue-600 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-7xl items-center px-4 sm:px-6">
           {/* Logo — left */}
           <div className="flex flex-1 items-center">
@@ -209,9 +209,9 @@ export default function AppHeader() {
                   onClick={logout}
                   className={cn(
                     'hidden lg:flex items-center h-9 px-3 rounded-md text-sm font-medium',
-                    'text-text-muted hover:text-text hover:bg-surface-2',
+                    'text-white/75 hover:text-white hover:bg-white/15',
                     'transition-colors duration-150 ease-smooth',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50'
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50'
                   )}
                 >
                   Déconnexion
@@ -227,9 +227,9 @@ export default function AppHeader() {
                 href={`${process.env.NEXT_PUBLIC_API_URL}/api/auth/microsoft`}
                 className={cn(
                   'flex items-center h-9 px-3 rounded-md text-sm font-medium',
-                  'bg-primary text-white hover:bg-primary-hover',
+                  'bg-white text-blue-600 hover:bg-blue-50',
                   'transition-colors duration-150 ease-smooth',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50'
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50'
                 )}
               >
                 Connexion
