@@ -1,6 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useApi } from '../../hooks/useApi';
+import Card from '../ui/Card';
+import Button from '../ui/Button';
+import Input from '../ui/Input';
+import Textarea from '../ui/Textarea';
+import FormField from '../ui/FormField';
+import FormActions from '../ui/FormActions';
 
 const ProjectForm = () => {
   const router = useRouter();
@@ -12,68 +18,46 @@ const ProjectForm = () => {
     technologies: '',
     studentCount: 1,
     studentEmails: '',
-    links: {
-      github: '',
-      projectGithub: '',
-      other: ''
-    }
+    links: { github: '', projectGithub: '', other: '' },
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [githubError, setGithubError] = useState('');
 
-  // Fonction pour valider le lien GitHub via le backend
   const validateGithubUrl = async (url) => {
     if (!url) {
       setGithubError('Ce champ est obligatoire');
       return false;
     }
-
     try {
       const data = await get('/api/projects/validate-github', { url });
-
       if (data.valid) {
         setGithubError('');
         return true;
       } else {
-        setGithubError(data.message || 'Ce dépôt n\'existe pas ou est privé');
+        setGithubError(data.message || "Ce dépôt n'existe pas ou est privé");
         return false;
       }
-    } catch (error) {
-      setGithubError(error.message || 'Erreur lors de la vérification du dépôt');
+    } catch (err) {
+      setGithubError(err.message || 'Erreur lors de la vérification du dépôt');
       return false;
     }
   };
 
-  // Valider le lien GitHub personnel lorsqu'il change
   useEffect(() => {
-    const validatePersonalGithub = async () => {
-      if (formData.links.github) {
-        await validateGithubUrl(formData.links.github);
-      }
-    };
-
-    const timeoutId = setTimeout(validatePersonalGithub, 1500);
+    const timeoutId = setTimeout(() => {
+      if (formData.links.github) validateGithubUrl(formData.links.github);
+    }, 1500);
     return () => clearTimeout(timeoutId);
   }, [formData.links.github]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
     if (name.includes('.')) {
       const [parent, child] = name.split('.');
-      setFormData({
-        ...formData,
-        [parent]: {
-          ...formData[parent],
-          [child]: value
-        }
-      });
+      setFormData({ ...formData, [parent]: { ...formData[parent], [child]: value } });
     } else {
-      setFormData({
-        ...formData,
-        [name]: value
-      });
+      setFormData({ ...formData, [name]: value });
     }
   };
 
@@ -83,32 +67,29 @@ const ProjectForm = () => {
     setError('');
 
     try {
-      // Valider le lien GitHub personnel avant de soumettre
       const isGithubValid = await validateGithubUrl(formData.links.github);
-
       if (!isGithubValid) {
         throw new Error('Veuillez corriger les erreurs dans le lien GitHub personnel');
       }
-
-      // Vérification des champs obligatoires
       if (!formData.links.projectGithub) {
         throw new Error('Le lien GitHub project est obligatoire');
       }
-
-      // Validation des emails si studentCount > 1
       if (formData.studentCount > 1 && !formData.studentEmails.trim()) {
         throw new Error('Veuillez indiquer les adresses e-mail des étudiants lorsque le projet implique plusieurs personnes');
       }
 
-      // Transformer les technologies en array
       const formattedData = {
         ...formData,
-        technologies: formData.technologies.split(',').map(tech => tech.trim()),
-        studentEmails: formData.studentCount > 1 ? formData.studentEmails.split(',').map(email => email.trim()) : [],
+        technologies: formData.technologies.split(',').map((t) => t.trim()),
+        studentEmails: formData.studentCount > 1
+          ? formData.studentEmails.split(',').map((e) => e.trim())
+          : [],
         links: {
           ...formData.links,
-          other: formData.links.other ? formData.links.other.split(',').map(link => link.trim()) : []
-        }
+          other: formData.links.other
+            ? formData.links.other.split(',').map((l) => l.trim())
+            : [],
+        },
       };
 
       await post('/api/projects', formattedData);
@@ -121,182 +102,139 @@ const ProjectForm = () => {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
-      <h2 className="text-2xl font-bold mb-6 dark:text-white">Soumettre un nouveau projet</h2>
+    <Card>
+      <h2 className="text-2xl font-bold text-text mb-6">Soumettre un nouveau projet</h2>
 
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400 px-4 py-3 rounded mb-4">
+        <div className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="name">
-            Nom du projet *
-          </label>
-          <input
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <FormField label="Nom du projet" required>
+          <Input
             type="text"
-            id="name"
             name="name"
             value={formData.name}
             onChange={handleChange}
-            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             required
           />
-        </div>
+        </FormField>
 
-        <div className="mb-4">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="description">
-            Description détaillée *
-          </label>
-          <textarea
-            id="description"
+        <FormField label="Description détaillée" required>
+          <Textarea
             name="description"
             value={formData.description}
             onChange={handleChange}
-            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
-            rows="4"
+            rows={4}
             required
           />
-        </div>
+        </FormField>
 
-        <div className="mb-4">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="objectives">
-            Objectifs *
-          </label>
-          <textarea
-            id="objectives"
+        <FormField label="Objectifs" required>
+          <Textarea
             name="objectives"
             value={formData.objectives}
             onChange={handleChange}
-            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
-            rows="3"
+            rows={3}
             required
           />
-        </div>
+        </FormField>
 
-        <div className="mb-4">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="technologies">
-            Technologies utilisées * (séparées par des virgules)
-          </label>
-          <input
+        <FormField label="Technologies utilisées (séparées par des virgules)" required>
+          <Input
             type="text"
-            id="technologies"
             name="technologies"
             value={formData.technologies}
             onChange={handleChange}
-            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             placeholder="React, Node.js, MongoDB, etc."
             required
           />
-        </div>
+        </FormField>
 
-        <div className="mb-4">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="studentCount">
-            Nombre d'étudiants impliqués *
-          </label>
-          <input
+        <FormField label="Nombre d'étudiants impliqués" required>
+          <Input
             type="number"
-            id="studentCount"
             name="studentCount"
             value={formData.studentCount}
             onChange={handleChange}
-            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             min="1"
             required
           />
-        </div>
+        </FormField>
 
-        {/* Champ conditionnel pour les emails des étudiants */}
         {formData.studentCount > 1 && (
-          <div className="mb-4">
-            <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="studentEmails">
-              Adresses e-mail des étudiants * (séparées par des virgules)
-            </label>
-            <input
+          <FormField
+            label="Adresses e-mail des étudiants (séparées par des virgules)"
+            required
+            hint={`Indiquez les adresses e-mail des ${formData.studentCount - 1} autres étudiants impliqués dans ce projet.`}
+          >
+            <Input
               type="text"
-              id="studentEmails"
               name="studentEmails"
               value={formData.studentEmails}
               onChange={handleChange}
-              className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
               placeholder="etudiant1@email.com, etudiant2@email.com, ..."
               required
             />
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Indiquez les adresses e-mail des {formData.studentCount - 1} autres étudiants impliqués dans ce projet.
-            </p>
-          </div>
+          </FormField>
         )}
 
-        <div className="mb-4">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="links.github">
-            Lien GitHub personnel *
-          </label>
-          <input
+        <FormField
+          label="Lien GitHub personnel"
+          required
+          error={githubError || undefined}
+          hint="Le lien vers votre dépôt GitHub personnel (doit être public)"
+        >
+          <Input
             type="url"
-            id="links.github"
             name="links.github"
             value={formData.links.github}
             onChange={handleChange}
-            className={`w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg ${githubError ? 'border-red-500 dark:border-red-700' : ''}`}
             placeholder="https://github.com/username/repo"
+            error={!!githubError}
             required
           />
-          {githubError && (
-            <p className="text-red-500 dark:text-red-400 text-sm mt-1">{githubError}</p>
-          )}
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Le lien vers votre dépôt GitHub personnel (doit être public)
-          </p>
-        </div>
+        </FormField>
 
-        <div className="mb-4">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="links.projectGithub">
-            Lien GitHub project *
-          </label>
-          <input
+        <FormField
+          label="Lien GitHub project"
+          required
+          hint="Le lien vers le Github Project"
+        >
+          <Input
             type="url"
-            id="links.projectGithub"
             name="links.projectGithub"
             value={formData.links.projectGithub}
             onChange={handleChange}
-            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             placeholder="https://github.com/organization/project"
             required
           />
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Le lien vers le Github Project
-          </p>
-        </div>
+        </FormField>
 
-        <div className="mb-6">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="links.other">
-            Autres liens (séparés par des virgules)
-          </label>
-          <input
+        <FormField label="Autres liens (séparés par des virgules)">
+          <Input
             type="text"
-            id="links.other"
             name="links.other"
             value={formData.links.other}
             onChange={handleChange}
-            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             placeholder="https://example.com, https://another-site.com"
           />
-        </div>
+        </FormField>
 
-        <div className="flex justify-end">
-          <button
+        <FormActions>
+          <Button
             type="submit"
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-50"
-            disabled={isSubmitting || githubError}
+            variant="primary"
+            loading={isSubmitting}
+            disabled={isSubmitting || !!githubError}
           >
-            {isSubmitting ? 'Soumission en cours...' : 'Soumettre le projet'}
-          </button>
-        </div>
+            Soumettre le projet
+          </Button>
+        </FormActions>
       </form>
-    </div>
+    </Card>
   );
 };
 

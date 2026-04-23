@@ -1,7 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useApi } from '../../hooks/useApi';
 import { toast } from 'react-toastify';
+import Card from '../ui/Card';
+import Button from '../ui/Button';
+import Input from '../ui/Input';
+import Textarea from '../ui/Textarea';
+import FormField from '../ui/FormField';
+import FormActions from '../ui/FormActions';
 
 const WorkshopForm = () => {
   const router = useRouter();
@@ -11,82 +17,56 @@ const WorkshopForm = () => {
     details: '',
     instructorCount: 1,
     instructorEmails: '',
-    links: {
-      github: '',
-      presentation: '',
-      other: ''
-    }
+    links: { github: '', presentation: '', other: '' },
   });
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [githubError, setGithubError] = useState('');
-  
-  // Fonction pour valider uniquement le lien GitHub de référence
+
   const validateGithubUrl = async (url) => {
     if (!url) {
       setGithubError('Ce champ est obligatoire');
       return false;
     }
-    
-    // Vérifier si l'URL ressemble à un lien GitHub
     const githubRegex = /^https:\/\/github\.com\/[\w-]+\/[\w-]+\/?$/;
     if (!githubRegex.test(url)) {
       setGithubError('URL GitHub invalide (ex: https://github.com/username/repo)');
       return false;
     }
-    
     try {
-      // Vérifier si le dépôt est public en essayant d'y accéder via l'API GitHub
       const repoUrl = url.replace('https://github.com/', 'https://api.github.com/repos/');
       const response = await fetch(repoUrl);
-      
       if (response.status === 200) {
         setGithubError('');
         return true;
       } else if (response.status === 404) {
-        setGithubError('Ce dépôt n\'existe pas ou est privé');
+        setGithubError("Ce dépôt n'existe pas ou est privé");
         return false;
       } else {
         setGithubError('Erreur lors de la vérification du dépôt');
         return false;
       }
-    } catch (error) {
-      console.error('Erreur lors de la vérification du dépôt GitHub:', error);
+    } catch (err) {
+      console.error('Erreur lors de la vérification du dépôt GitHub:', err);
       setGithubError('Erreur de connexion lors de la vérification');
       return false;
     }
   };
 
-  // Valider le lien GitHub lorsqu'il change
   useEffect(() => {
-    const validateRepoGithub = async () => {
-      if (formData.links.github) {
-        await validateGithubUrl(formData.links.github);
-      }
-    };
-    
-    const timeoutId = setTimeout(validateRepoGithub, 800); // Délai pour éviter trop de requêtes
+    const timeoutId = setTimeout(() => {
+      if (formData.links.github) validateGithubUrl(formData.links.github);
+    }, 800);
     return () => clearTimeout(timeoutId);
   }, [formData.links.github]);
-  
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
     if (name.includes('.')) {
       const [parent, child] = name.split('.');
-      setFormData({
-        ...formData,
-        [parent]: {
-          ...formData[parent],
-          [child]: value
-        }
-      });
+      setFormData({ ...formData, [parent]: { ...formData[parent], [child]: value } });
     } else {
-      setFormData({
-        ...formData,
-        [name]: value
-      });
+      setFormData({ ...formData, [name]: value });
     }
   };
 
@@ -96,31 +76,28 @@ const WorkshopForm = () => {
     setError('');
 
     try {
-      // Valider le lien GitHub avant de soumettre
       const isGithubValid = await validateGithubUrl(formData.links.github);
-      
       if (!isGithubValid) {
         throw new Error('Veuillez corriger les erreurs dans le lien GitHub');
       }
-      
-      // Vérification des champs obligatoires
       if (!formData.links.presentation) {
         throw new Error('Le lien vers la présentation est obligatoire');
       }
-      
-      // Validation des emails si instructorCount > 1
       if (formData.instructorCount > 1 && !formData.instructorEmails.trim()) {
         throw new Error('Veuillez indiquer les adresses e-mail des intervenants lorsque le workshop implique plusieurs personnes');
       }
 
-      // Transformer les données pour l'envoi
       const formattedData = {
         ...formData,
-        instructorEmails: formData.instructorCount > 1 ? formData.instructorEmails.split(',').map(email => email.trim()) : [],
+        instructorEmails: formData.instructorCount > 1
+          ? formData.instructorEmails.split(',').map((e) => e.trim())
+          : [],
         links: {
           ...formData.links,
-          other: formData.links.other ? formData.links.other.split(',').map(link => link.trim()) : []
-        }
+          other: formData.links.other
+            ? formData.links.other.split(',').map((l) => l.trim())
+            : [],
+        },
       };
 
       await post('/api/workshops', formattedData);
@@ -134,151 +111,118 @@ const WorkshopForm = () => {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
-      <h2 className="text-2xl font-bold mb-6 dark:text-white">Soumettre un nouveau workshop</h2>
-      
+    <Card>
+      <h2 className="text-2xl font-bold text-text mb-6">Soumettre un nouveau workshop</h2>
+
       {error && (
-        <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-4">
+        <div className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
           {error}
         </div>
       )}
-      
-      <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="title">
-            Titre du workshop *
-          </label>
-          <input
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <FormField label="Titre du workshop" required>
+          <Input
             type="text"
-            id="title"
             name="title"
             value={formData.title}
             onChange={handleChange}
-            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             required
           />
-        </div>
-        
-        <div className="mb-4">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="details">
-            Détails du workshop *
-          </label>
-          <textarea
-            id="details"
+        </FormField>
+
+        <FormField label="Détails du workshop" required>
+          <Textarea
             name="details"
             value={formData.details}
             onChange={handleChange}
-            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
-            rows="4"
+            rows={4}
             required
           />
-        </div>
-        
-        <div className="mb-4">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="instructorCount">
-            Nombre d'intervenants *
-          </label>
-          <input
+        </FormField>
+
+        <FormField label="Nombre d'intervenants" required>
+          <Input
             type="number"
-            id="instructorCount"
             name="instructorCount"
             value={formData.instructorCount}
             onChange={handleChange}
-            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             min="1"
             required
           />
-        </div>
-        
-        {/* Champ conditionnel pour les emails des intervenants */}
+        </FormField>
+
         {formData.instructorCount > 1 && (
-          <div className="mb-4">
-            <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="instructorEmails">
-              Adresses e-mail des intervenants * (séparées par des virgules)
-            </label>
-            <input
+          <FormField
+            label="Adresses e-mail des intervenants (séparées par des virgules)"
+            required
+            hint={`Indiquez les adresses e-mail des ${formData.instructorCount - 1} autres intervenants impliqués dans ce workshop.`}
+          >
+            <Input
               type="text"
-              id="instructorEmails"
               name="instructorEmails"
               value={formData.instructorEmails}
               onChange={handleChange}
-              className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
               placeholder="intervenant1@email.com, intervenant2@email.com, ..."
               required
             />
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Indiquez les adresses e-mail des {formData.instructorCount - 1} autres intervenants impliqués dans ce workshop.
-            </p>
-          </div>
+          </FormField>
         )}
-        
-        <div className="mb-4">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="links.github">
-            Lien GitHub de référence *
-          </label>
-          <input
+
+        <FormField
+          label="Lien GitHub de référence"
+          required
+          error={githubError || undefined}
+          hint="Le lien vers le dépôt GitHub de référence (doit être public)"
+        >
+          <Input
             type="url"
-            id="links.github"
             name="links.github"
             value={formData.links.github}
             onChange={handleChange}
-            className={`w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg ${githubError ? 'border-red-500 dark:border-red-800' : ''}`}
             placeholder="https://github.com/username/repo"
+            error={!!githubError}
             required
           />
-          {githubError && (
-            <p className="text-red-500 dark:text-red-400 text-sm mt-1">{githubError}</p>
-          )}
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Le lien vers le dépôt GitHub de référence (doit être public)
-          </p>
-        </div>
-        
-        <div className="mb-4">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="links.presentation">
-            Lien présentation PowerPoint *
-          </label>
-          <input
+        </FormField>
+
+        <FormField
+          label="Lien présentation PowerPoint"
+          required
+          hint="Le lien vers votre présentation PowerPoint ou équivalent"
+        >
+          <Input
             type="url"
-            id="links.presentation"
             name="links.presentation"
             value={formData.links.presentation}
             onChange={handleChange}
-            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             placeholder="https://example.com/presentation"
             required
           />
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Le lien vers votre présentation PowerPoint ou équivalent
-          </p>
-        </div>
-        
-        <div className="mb-6">
-          <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2" htmlFor="links.other">
-            Autres liens (séparés par des virgules)
-          </label>
-          <input
+        </FormField>
+
+        <FormField label="Autres liens (séparés par des virgules)">
+          <Input
             type="text"
-            id="links.other"
             name="links.other"
             value={formData.links.other}
             onChange={handleChange}
-            className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
             placeholder="https://example.com, https://another-site.com"
           />
-        </div>
-        
-        <div className="flex justify-end">
-          <button
+        </FormField>
+
+        <FormActions>
+          <Button
             type="submit"
-            className="bg-blue-600 dark:bg-blue-700 text-white px-6 py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-50"
-            disabled={isSubmitting || githubError}
+            variant="primary"
+            loading={isSubmitting}
+            disabled={isSubmitting || !!githubError}
           >
-            {isSubmitting ? 'Soumission en cours...' : 'Soumettre le workshop'}
-          </button>
-        </div>
+            Soumettre le workshop
+          </Button>
+        </FormActions>
       </form>
-    </div>
+    </Card>
   );
 };
 
