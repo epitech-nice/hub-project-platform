@@ -1,4 +1,3 @@
-import React from "react";
 import Head from "next/head";
 import { useAuth } from "../context/AuthContext";
 import AppHeader from "../components/layout/AppHeader";

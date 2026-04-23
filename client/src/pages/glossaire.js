@@ -1,5 +1,4 @@
 // pages/glossaire.js
-import React from "react";
 import Head from "next/head";
 import AppHeader from "../components/layout/AppHeader";
 import Footer from "../components/layout/Footer";
