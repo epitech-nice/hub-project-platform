@@ -1,27 +1,28 @@
 // pages/simulated/mes-projets.js
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Head from "next/head";
-import Link from "next/link";
 import { useRouter } from "next/router";
-import Header from "../../components/layout/Header";
+import AppHeader from "../../components/layout/AppHeader";
+import Footer from "../../components/layout/Footer";
+import PageHead from "../../components/ui/PageHead";
+import FilterChips from "../../components/ui/FilterChips";
+import EmptyState from "../../components/ui/EmptyState";
+import Skeleton from "../../components/ui/Skeleton";
+import Button from "../../components/ui/Button";
+import Badge from "../../components/ui/Badge";
+import Card from "../../components/ui/Card";
+import StatusBadge from "../../components/domain/StatusBadge";
 import { useAuth } from "../../context/AuthContext";
 import { useApi } from "../../hooks/useApi";
 
-const statusColors = {
-  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-800/20 dark:text-yellow-300",
-  pending_changes: "bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-300",
-  approved: "bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-300",
-  rejected: "bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-300",
-  completed: "bg-purple-100 text-purple-800 dark:bg-purple-800/20 dark:text-purple-300",
-};
-
-const statusLabels = {
-  pending: "En attente",
-  pending_changes: "Modifications requises",
-  approved: "Approuvé",
-  rejected: "Refusé",
-  completed: "Terminé",
-};
+const FILTER_OPTIONS = [
+  { value: 'all',             label: 'Tous' },
+  { value: 'pending',         label: 'En attente' },
+  { value: 'pending_changes', label: 'Modifs requises' },
+  { value: 'approved',        label: 'Approuvés' },
+  { value: 'completed',       label: 'Terminés' },
+  { value: 'rejected',        label: 'Refusés' },
+];
 
 export default function MesProjetsSimulated() {
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -52,150 +53,136 @@ export default function MesProjetsSimulated() {
     filter === "all" ? enrollments : enrollments.filter((e) => e.status === filter);
 
   if (authLoading) {
-    return <div className="text-center py-10 dark:text-white">Chargement...</div>;
+    return (
+      <div className="min-h-screen flex flex-col bg-bg">
+        <AppHeader />
+        <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">
+          <Skeleton variant="text" width="40%" height={32} className="mb-6" />
+          <div className="grid gap-4">
+            {[1, 2, 3].map((i) => <Skeleton key={i} variant="rect" height={80} />)}
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
   }
 
   if (!isAuthenticated) return null;
 
+  const emptySubMessage =
+    filter === "all"
+      ? "Vous n'avez encore participé à aucun projet Simulated."
+      : "Aucun projet dans cette catégorie.";
+
   return (
-    <div className="min-h-screen dark:bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-bg">
       <Head>
         <title>Hub Projets - Mes projets Simulated</title>
       </Head>
 
-      <Header />
+      <AppHeader />
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold dark:text-white">Mes projets Simulated</h1>
-          <Link href="/simulated">
-            <a className="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 text-sm">
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">
+        <PageHead
+          title="Mes projets Simulated"
+          actions={
+            <Button variant="primary" as="a" href="/simulated">
               Choisir un projet
-            </a>
-          </Link>
-        </div>
+            </Button>
+          }
+        />
 
-        {/* Filtres */}
-        <div className="flex space-x-3 overflow-x-auto pb-2 mb-6">
-          {[
-            { key: "all", label: "Tous" },
-            { key: "pending", label: "En attente" },
-            { key: "pending_changes", label: "Modifs requises" },
-            { key: "approved", label: "Approuvés" },
-            { key: "completed", label: "Terminés" },
-            { key: "rejected", label: "Refusés" },
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setFilter(key)}
-              className={`px-4 py-2 rounded-md whitespace-nowrap text-sm ${
-                filter === key
-                  ? key === "all"
-                    ? "bg-blue-600 text-white dark:bg-blue-700"
-                    : key === "pending"
-                    ? "bg-yellow-500 text-white"
-                    : key === "pending_changes"
-                    ? "bg-orange-500 text-white"
-                    : key === "approved"
-                    ? "bg-green-600 text-white"
-                    : key === "completed"
-                    ? "bg-purple-600 text-white"
-                    : "bg-red-600 text-white"
-                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <FilterChips
+          className="mb-6"
+          options={FILTER_OPTIONS}
+          value={filter}
+          onChange={setFilter}
+        />
 
         {apiLoading ? (
-          <div className="text-center py-10 dark:text-white">Chargement...</div>
-        ) : filtered.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 text-center">
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
-              {filter === "all"
-                ? "Vous n'avez encore participé à aucun projet Simulated."
-                : "Aucun projet dans cette catégorie."}
-            </p>
-            {filter === "all" && (
-              <Link href="/simulated">
-                <a className="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-800 inline-block">
-                  Choisir mon premier projet
-                </a>
-              </Link>
-            )}
+          <div className="grid gap-4">
+            {[1, 2, 3].map((i) => <Skeleton key={i} variant="rect" height={80} />)}
           </div>
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            title="Aucun projet"
+            sub={emptySubMessage}
+            action={
+              filter === "all" ? (
+                <Button variant="primary" as="a" href="/simulated">
+                  Choisir mon premier projet
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
           <div className="grid gap-4">
             {filtered.map((enrollment) => (
-              <Link
+              <Card
                 key={enrollment._id}
-                href={`/simulated/${enrollment.simulatedProject.projectId}`}
+                interactive
+                onClick={() => router.push(`/simulated/${enrollment.simulatedProject.projectId}`)}
               >
-                <a className="block bg-white dark:bg-gray-800 shadow-md rounded-lg p-5 hover:shadow-lg transition-shadow">
-                  <div className="flex justify-between items-start gap-4 flex-wrap">
-                    <div className="min-w-0">
-                      <h2 className="text-lg font-semibold dark:text-white truncate">
-                        {enrollment.simulatedProject.title}
-                      </h2>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                        Cycle n°{enrollment.cycleNumber}
-                        {enrollment.isDoubleCycle && (
-                          <span className="ml-2 text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-1.5 py-0.5 rounded-full">
-                            Double cycle
-                          </span>
-                        )}
-                        {enrollment.startDate && enrollment.defenseDate && (
-                          <span className="ml-2">
-                            · du {new Date(enrollment.startDate).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })} au {new Date(enrollment.defenseDate).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })}
-                          </span>
-                        )}
+                <div className="flex justify-between items-start gap-4 flex-wrap">
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-semibold text-text truncate">
+                      {enrollment.simulatedProject.title}
+                    </h2>
+                    <p className="text-sm text-text-muted mt-0.5">
+                      Cycle n°{enrollment.cycleNumber}
+                      {enrollment.isDoubleCycle && (
+                        <Badge variant="neutral" size="sm" className="ml-2">Double cycle</Badge>
+                      )}
+                      {enrollment.startDate && enrollment.defenseDate && (
+                        <span className="ml-2">
+                          · du {new Date(enrollment.startDate).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })} au {new Date(enrollment.defenseDate).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+                        </span>
+                      )}
+                    </p>
+                    {enrollment.submissionDeadline && (
+                      <p className="text-xs text-text-dim mt-0.5">
+                        Deadline dépôt : {new Date(enrollment.submissionDeadline).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })}
                       </p>
-                      {enrollment.submissionDeadline && (
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                          Deadline dépôt : {new Date(enrollment.submissionDeadline).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })}
-                        </p>
-                      )}
-                      {enrollment.githubProjectLink && (
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 truncate max-w-md">
-                          {enrollment.githubProjectLink}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      {enrollment.status === "completed" && enrollment.totalCredits > 0 && (
-                        <span className="text-sm font-semibold text-green-700 dark:text-green-400">
-                          {enrollment.totalCredits} crédit{enrollment.totalCredits !== 1 ? "s" : ""} au total
-                        </span>
-                      )}
-                      {enrollment.status !== "completed" && enrollment.totalCredits > 0 && (
-                        <span className="text-sm font-medium text-green-700 dark:text-green-400">
-                          {enrollment.totalCredits} crédit{enrollment.totalCredits !== 1 ? "s" : ""}
-                        </span>
-                      )}
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          statusColors[enrollment.status]
-                        }`}
-                      >
-                        {statusLabels[enrollment.status]}
-                      </span>
-                    </div>
+                    )}
+                    {enrollment.githubProjectLink && (
+                      <p className="text-xs text-text-dim mt-1 truncate max-w-md">
+                        {enrollment.githubProjectLink}
+                      </p>
+                    )}
                   </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {enrollment.totalCredits > 0 && (
+                      <span
+                        className="text-sm font-semibold"
+                        style={{ color: 'rgb(var(--status-approved-text))' }}
+                      >
+                        {enrollment.totalCredits} crédit{enrollment.totalCredits !== 1 ? "s" : ""}
+                        {enrollment.status === "completed" && " au total"}
+                      </span>
+                    )}
+                    <StatusBadge status={enrollment.status} />
+                  </div>
+                </div>
 
-                  {/* Commentaire admin si applicable */}
-                  {enrollment.reviewedBy?.comments && enrollment.status === "pending_changes" && (
-                    <div className="mt-3 p-3 bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-400 rounded text-sm text-orange-700 dark:text-orange-400">
-                      {enrollment.reviewedBy.comments}
-                    </div>
-                  )}
-                </a>
-              </Link>
+                {enrollment.reviewedBy?.comments && enrollment.status === "pending_changes" && (
+                  <div
+                    className="mt-3 p-3 border-l-4 rounded text-sm"
+                    style={{
+                      backgroundColor: 'rgb(var(--status-changes-bg))',
+                      borderLeftColor: 'rgb(var(--status-changes-text))',
+                      color: 'rgb(var(--status-changes-text))',
+                    }}
+                  >
+                    {enrollment.reviewedBy.comments}
+                  </div>
+                )}
+              </Card>
             ))}
           </div>
         )}
       </main>
+
+      <Footer />
     </div>
   );
 }
