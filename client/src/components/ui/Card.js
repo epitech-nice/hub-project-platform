@@ -8,9 +8,22 @@ const PADDING = {
 };
 
 const Card = forwardRef(function Card(
-  { padding = 'default', interactive = false, as: Tag = 'div', children, className = '', ...props },
+  { padding = 'default', interactive = false, as: Tag = 'div', children, className = '', onKeyDown, onClick, ...props },
   ref
 ) {
+  const keyboardProps = interactive && onClick ? {
+    tabIndex: 0,
+    role: 'button',
+    onClick,
+    onKeyDown: (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onClick(e);
+      }
+      onKeyDown?.(e);
+    },
+  } : { onClick, onKeyDown };
+
   return (
     <Tag
       ref={ref}
@@ -18,8 +31,10 @@ const Card = forwardRef(function Card(
         'bg-surface border border-border rounded-lg shadow-sm',
         PADDING[padding] ?? PADDING.default,
         interactive && 'hover:shadow-md transition-shadow duration-200 ease-smooth cursor-pointer',
+        interactive && 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         className
       )}
+      {...keyboardProps}
       {...props}
     >
       {children}

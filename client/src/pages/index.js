@@ -11,7 +11,7 @@ export default function Home() {
   const { isAuthenticated } = useAuth();
 
   return (
-    <div className="min-h-screen bg-bg text-text">
+    <div className="min-h-screen flex flex-col bg-bg text-text">
       <Head>
         <title>Hub Projets - Accueil</title>
         <meta
@@ -22,7 +22,7 @@ export default function Home() {
 
       <AppHeader />
 
-      <main className="container mx-auto px-4 py-12 max-w-container">
+      <main className="flex-1 container mx-auto px-4 py-12 max-w-container">
         <div className="max-w-4xl mx-auto text-center">
           <div className="mb-4">
             <Badge variant="neutral">Epitech Nice</Badge>

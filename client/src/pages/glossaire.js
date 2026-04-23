@@ -7,7 +7,7 @@ import PageHead from "../components/ui/PageHead";
 
 export default function Glossaire() {
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="min-h-screen flex flex-col bg-bg">
       <Head>
         <title>Glossaire - Hub Projets</title>
         <meta
@@ -18,7 +18,7 @@ export default function Glossaire() {
 
       <AppHeader />
 
-      <main className="container mx-auto px-4 py-10 max-w-container">
+      <main className="flex-1 container mx-auto px-4 py-10 max-w-container">
         <PageHead
           title="Glossaire Scrum Agile"
           sub="Ce glossaire vous aide à comprendre les concepts clés de la méthodologie Scrum Agile"
