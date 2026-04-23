@@ -1,4 +1,5 @@
 import Head from "next/head";
+import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
 import AppHeader from "../components/layout/AppHeader";
 import Footer from "../components/layout/Footer";
@@ -38,7 +39,7 @@ const FEATURES = [
   {
     Icon: IconRealtime,
     iconBg: "bg-emerald-500/10",
-    iconColor: "text-emerald-400 dark:text-emerald-400",
+    iconColor: "text-emerald-400",
     title: "Suivi en temps réel",
     desc: "Suivez l'état de vos demandes et consultez les retours des pédagos.",
   },
@@ -78,15 +79,21 @@ export default function Home() {
             </p>
             {isAuthenticated ? (
               <div className="flex flex-wrap gap-3">
-                <a href="/dashboard" className="inline-flex items-center justify-center rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-blue-800 hover:bg-white/90 transition-colors">
-                  Accéder à mon tableau de bord
-                </a>
-                <a href="/submit-project" className="inline-flex items-center justify-center rounded-lg border border-white/30 px-5 py-2.5 text-sm font-semibold text-white/90 hover:bg-white/10 transition-colors">
-                  Soumettre un nouveau projet
-                </a>
-                <a href="/glossaire" className="inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold text-white/70 hover:text-white hover:bg-white/10 transition-colors">
-                  Comprendre la planification projet
-                </a>
+                <Link href="/dashboard">
+                  <a className="inline-flex items-center justify-center rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-blue-800 hover:bg-white/90 transition-colors">
+                    Accéder à mon tableau de bord
+                  </a>
+                </Link>
+                <Link href="/submit-project">
+                  <a className="inline-flex items-center justify-center rounded-lg border border-white/30 px-5 py-2.5 text-sm font-semibold text-white/90 hover:bg-white/10 transition-colors">
+                    Soumettre un nouveau projet
+                  </a>
+                </Link>
+                <Link href="/glossaire">
+                  <a className="inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+                    Comprendre la planification projet
+                  </a>
+                </Link>
               </div>
             ) : (
               <a
