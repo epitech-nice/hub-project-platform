@@ -4,6 +4,10 @@
 
 @layer base {
   :root {
+    /* Typographie */
+    --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
     /* Couleurs sémantiques — LIGHT */
     --primary: 59 130 246;
     --primary-hover: 37 99 235;
