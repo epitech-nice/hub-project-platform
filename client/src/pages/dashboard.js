@@ -3,7 +3,7 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import AppHeader from "../components/layout/AppHeader";
 import Footer from "../components/layout/Footer";
-import ProjectCard from "../components/patterns/ProjectCard";
+import ProjectCard from "../components/projects/ProjectCard";
 import Button from "../components/ui/Button";
 import Skeleton from "../components/ui/Skeleton";
 import BentoGrid from "../components/ui/BentoGrid";
