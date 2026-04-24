@@ -335,3 +335,38 @@ describe('GET /api/projects/stats', () => {
     expect(res.body.data.total).toBe(0);
   });
 });
+
+// ─────────────────────────────────────────────
+// POST /api/projects/notify-pending-changes
+// ─────────────────────────────────────────────
+describe('POST /api/projects/notify-pending-changes', () => {
+  it('admin triggers bulk notification → 200 with total count', async () => {
+    const admin = await createAdmin();
+    const student = await createUser();
+    await Project.create({
+      name: 'Projet Notif',
+      description: 'desc',
+      objectives: 'obj',
+      technologies: ['JS'],
+      studentCount: 1,
+      links: { github: 'https://github.com/a/b', projectGithub: 'https://github.com/a/c' },
+      status: 'pending_changes',
+      submittedBy: { userId: student._id, name: student.name, email: student.email },
+    });
+    const res = await request(app)
+      .post('/api/projects/notify-pending-changes')
+      .set(authHeader(admin));
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(typeof res.body.total).toBe('number');
+    expect(res.body.total).toBeGreaterThanOrEqual(1);
+  });
+
+  it('student cannot access → 403', async () => {
+    const student = await createUser();
+    const res = await request(app)
+      .post('/api/projects/notify-pending-changes')
+      .set(authHeader(student));
+    expect(res.status).toBe(403);
+  });
+});
