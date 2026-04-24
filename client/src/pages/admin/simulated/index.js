@@ -161,7 +161,9 @@ export default function AdminSimulated() {
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       link.download = `simulated_completed_${exportStartDate || "all"}_to_${exportEndDate || "all"}.csv`;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(link.href);
     } catch (e) {
       console.error(e);

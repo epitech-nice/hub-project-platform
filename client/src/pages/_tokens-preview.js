@@ -1,5 +1,7 @@
 import { useTheme } from 'next-themes';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import { useAuth } from '../context/AuthContext';
 import Modal from '../components/ui/Modal';
 import Dialog from '../components/ui/Dialog';
 import Tooltip from '../components/ui/Tooltip';
@@ -21,10 +23,18 @@ import Badge from '../components/ui/Badge';
 import Card from '../components/ui/Card';
 
 export default function TokensPreview() {
+  const { isAuthenticated, loading } = useAuth();
+  const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [season, setSeason] = useState('none');
   const [modalOpen, setModalOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated) router.push('/');
+  }, [isAuthenticated, loading, router]);
+
+  if (loading || !isAuthenticated) return null;
 
   useEffect(() => {
     return () => {
