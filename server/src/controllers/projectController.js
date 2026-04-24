@@ -681,3 +681,16 @@ exports.notifyPendingChanges = asyncHandler(async (req, res) => {
   });
   res.status(200).json({ success: true, total: projects.length });
 });
+
+// POST /api/projects/:id/resend-notification (admin)
+exports.resendNotification = asyncHandler(async (req, res, next) => {
+  const project = await Project.findById(req.params.id);
+  if (!project) {
+    return next(new ErrorResponse('Projet non trouvé', 404));
+  }
+  if (project.status !== 'pending_changes') {
+    return next(new ErrorResponse("Ce projet n'est pas en attente de modifications", 400));
+  }
+  backgroundJobs.addJob('sendStatusEmail', { project, status: 'pending_changes' });
+  res.status(200).json({ success: true });
+});

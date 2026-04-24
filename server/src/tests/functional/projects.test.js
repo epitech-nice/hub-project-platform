@@ -370,3 +370,73 @@ describe('POST /api/projects/notify-pending-changes', () => {
     expect(res.status).toBe(403);
   });
 });
+
+// ─────────────────────────────────────────────
+// POST /api/projects/:id/resend-notification
+// ─────────────────────────────────────────────
+describe('POST /api/projects/:id/resend-notification', () => {
+  it('admin resends notification for a pending_changes project → 200', async () => {
+    const admin = await createAdmin();
+    const student = await createUser();
+    const proj = await Project.create({
+      name: 'Projet Resend',
+      description: 'desc',
+      objectives: 'obj',
+      technologies: ['JS'],
+      studentCount: 1,
+      links: { github: 'https://github.com/a/b', projectGithub: 'https://github.com/a/c' },
+      status: 'pending_changes',
+      submittedBy: { userId: student._id, name: student.name, email: student.email },
+    });
+    const res = await request(app)
+      .post(`/api/projects/${proj._id}/resend-notification`)
+      .set(authHeader(admin));
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('returns 400 if project is not pending_changes', async () => {
+    const admin = await createAdmin();
+    const student = await createUser();
+    const proj = await Project.create({
+      name: 'Projet Approved',
+      description: 'desc',
+      objectives: 'obj',
+      technologies: ['JS'],
+      studentCount: 1,
+      links: { github: 'https://github.com/a/b', projectGithub: 'https://github.com/a/c' },
+      status: 'approved',
+      submittedBy: { userId: student._id, name: student.name, email: student.email },
+    });
+    const res = await request(app)
+      .post(`/api/projects/${proj._id}/resend-notification`)
+      .set(authHeader(admin));
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 for unknown id', async () => {
+    const admin = await createAdmin();
+    const res = await request(app)
+      .post('/api/projects/000000000000000000000000/resend-notification')
+      .set(authHeader(admin));
+    expect(res.status).toBe(404);
+  });
+
+  it('student cannot access → 403', async () => {
+    const student = await createUser();
+    const proj = await Project.create({
+      name: 'Projet X',
+      description: 'desc',
+      objectives: 'obj',
+      technologies: ['JS'],
+      studentCount: 1,
+      links: { github: 'https://github.com/a/b', projectGithub: 'https://github.com/a/c' },
+      status: 'pending_changes',
+      submittedBy: { userId: student._id, name: student.name, email: student.email },
+    });
+    const res = await request(app)
+      .post(`/api/projects/${proj._id}/resend-notification`)
+      .set(authHeader(student));
+    expect(res.status).toBe(403);
+  });
+});

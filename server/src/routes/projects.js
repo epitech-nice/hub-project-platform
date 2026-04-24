@@ -25,5 +25,6 @@ router.get('/', authenticateToken, isAdmin, projectController.getAllProjects);
 router.patch('/:id/review', authenticateToken, isAdmin, projectController.reviewProject);
 router.patch('/:id/request-changes', authenticateToken, isAdmin, projectController.requestChanges);
 router.patch('/:id/complete', authenticateToken, isAdmin, projectController.completeProject);
+router.post('/:id/resend-notification', authenticateToken, isAdmin, projectController.resendNotification);
 
 module.exports = router;
