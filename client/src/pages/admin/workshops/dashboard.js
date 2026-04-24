@@ -63,10 +63,10 @@ export default function AdminWorkshopsDashboard() {
 
   useEffect(() => {
     if (!isAuthenticated || !isAdmin) return;
-    get("/api/workshops/stats")
+    get("/api/workshops/stats", schoolYear ? { schoolYear } : {})
       .then((r) => setStats(r.data))
       .catch(() => {});
-  }, [isAuthenticated, isAdmin]);
+  }, [isAuthenticated, isAdmin, schoolYear]);
 
   useEffect(() => {
     const fetchWorkshops = async () => {
@@ -177,24 +177,46 @@ export default function AdminWorkshopsDashboard() {
           onChange={setFilter}
         />
 
-        <TableToolbar
-          className="mb-4"
-          search={searchTerm}
-          onSearch={setSearchTerm}
-          searchPlaceholder="Rechercher un workshop..."
-        >
-          <Select
-            value={schoolYear}
-            onChange={(e) => setSchoolYear(e.target.value)}
-            className="w-40"
-          >
-            <option value="">Toutes les années</option>
-            {schoolYearOptions.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </Select>
+        <TableToolbar className="mb-4">
+          <div className="flex w-full items-center gap-2">
+            <div className="relative flex-1">
+              <span
+                className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-text-dim"
+                aria-hidden="true"
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="h-4 w-4"
+                >
+                  <circle cx="7" cy="7" r="4.5" />
+                  <path d="M10.5 10.5l3 3" strokeLinecap="round" />
+                </svg>
+              </span>
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Rechercher un workshop..."
+                aria-label="Rechercher un workshop..."
+                className="h-9 w-full rounded-md border border-border bg-surface pl-9 pr-3 text-sm text-text placeholder:text-text-dim transition-colors duration-150 ease-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:border-primary/50"
+              />
+            </div>
+            <Select
+              value={schoolYear}
+              onChange={(e) => setSchoolYear(e.target.value)}
+              className="w-44 shrink-0"
+            >
+              <option value="">Toutes les années</option>
+              {schoolYearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </Select>
+          </div>
         </TableToolbar>
 
         <DataTable
