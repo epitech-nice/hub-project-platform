@@ -34,6 +34,7 @@ export default function SeasonalControl() {
     const season = resolveSeason(value);
     document.documentElement.classList.remove('christmas', 'spring');
     if (season) document.documentElement.classList.add(season);
+    window.dispatchEvent(new CustomEvent('seasonchange', { detail: { season } }));
     setOpen(false);
   }, []);
 

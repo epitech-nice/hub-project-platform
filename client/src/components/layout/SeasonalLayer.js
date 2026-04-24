@@ -183,7 +183,15 @@ export default function SeasonalLayer() {
     // Apply class on <html>
     document.documentElement.classList.remove('christmas', 'spring');
     if (active) document.documentElement.classList.add(active);
-    return () => document.documentElement.classList.remove('christmas', 'spring');
+
+    // Sync with SeasonalControl changes without reload
+    const handleChange = (e) => setSeason(e.detail.season);
+    window.addEventListener('seasonchange', handleChange);
+
+    return () => {
+      document.documentElement.classList.remove('christmas', 'spring');
+      window.removeEventListener('seasonchange', handleChange);
+    };
   }, []);
 
   if (!mounted || !season || reducedMotion) return null;

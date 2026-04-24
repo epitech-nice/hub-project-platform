@@ -41,7 +41,7 @@ function ToastWithTheme() {
 function MyApp({ Component, pageProps }) {
   return (
     <AuthProvider>
-      <ThemeProvider attribute="class">
+      <ThemeProvider attribute="class" defaultTheme="dark" disableTransitionOnChange>
         <div className="font-sans">
           <Head>
             <title>Hub Projets</title>

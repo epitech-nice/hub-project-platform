@@ -83,7 +83,7 @@ export default function NavDropdown({ label, sections = [] }) {
           'flex items-center gap-1 text-sm font-medium px-1 py-0.5 rounded',
           'transition-colors duration-150 ease-smooth',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-          isActive ? 'text-primary' : 'text-text-muted hover:text-text'
+          isActive ? 'text-white font-semibold' : 'text-white/75 hover:text-white'
         )}
       >
         {label}
@@ -105,8 +105,13 @@ export default function NavDropdown({ label, sections = [] }) {
             <div key={si}>
               {si > 0 && <div className="my-1 border-t border-border" />}
               {section.label && (
-                <div className="px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-snug text-text-dim">
-                  {section.label}
+                <div className="px-3 pt-2 pb-1">
+                  <p className="text-xs font-semibold uppercase tracking-snug text-text-dim">
+                    {section.label}
+                  </p>
+                  {section.sub && (
+                    <p className="text-xs text-primary mt-0.5">{section.sub}</p>
+                  )}
                 </div>
               )}
               {section.items.map((item) => {

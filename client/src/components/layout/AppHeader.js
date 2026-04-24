@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useTheme } from 'next-themes';
 import { useAuth } from '../../context/AuthContext';
+import { useApi } from '../../hooks/useApi';
 import { cn } from '../../lib/cn';
 import NavDropdown from '../patterns/NavDropdown';
 import MobileNavPanel from './MobileNavPanel';
@@ -90,9 +91,41 @@ function NavLink({ href, children }) {
 
 export default function AppHeader() {
   const { isAuthenticated, user, loading, logout } = useAuth();
+  const { get } = useApi();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [simulatedCycleLabel, setSimulatedCycleLabel] = useState(null);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
   const isAdmin = user?.role === 'admin';
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const fetchSimulated = async () => {
+      try {
+        // 1. Enrollment personnel actif
+        const me = await get('/api/simulated/me');
+        if (me.data) {
+          const e = me.data;
+          const dateStr = new Date(e.defenseDate).toLocaleDateString('fr-FR', {
+            weekday: 'long', day: 'numeric', month: 'long',
+          });
+          setSimulatedCycleLabel(`Cycle ${e.cycleNumber} · ${dateStr}`);
+          return;
+        }
+        // 2. Cycle global en cours (fallback admin / sans enrollment)
+        const cycleRes = await get('/api/simulated/cycles/current');
+        if (!cycleRes.data) return;
+        const { cycle, currentPhase } = cycleRes.data;
+        if (!cycle) return;
+        const defenseDate = currentPhase === 1 ? cycle.firstDefenseDate : cycle.secondDefenseDate;
+        const dateStr = new Date(defenseDate).toLocaleDateString('fr-FR', {
+          weekday: 'long', day: 'numeric', month: 'long',
+        });
+        const shortName = cycle.name.split(/\s*[—–-]\s*/)[0].trim();
+        setSimulatedCycleLabel(`${shortName} · ${dateStr}`);
+      } catch {}
+    };
+    fetchSimulated();
+  }, [isAuthenticated]);
 
   // Build nav sections shared between desktop dropdowns and mobile panel
   const soumettreDesktop = [
@@ -114,6 +147,7 @@ export default function AppHeader() {
     },
     {
       label: 'Simulated',
+      sub: simulatedCycleLabel,
       items: [
         { label: 'Choisir un projet', href: '/simulated' },
         { label: 'Mes projets', href: '/simulated/mes-projets' },
@@ -172,7 +206,7 @@ export default function AppHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 w-full border-b border-blue-700/50 bg-blue-600 backdrop-blur-md">
+      <header className="sticky top-0 z-30 w-full border-b border-blue-700/50 bg-blue-600 dark:bg-surface dark:border-border backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-7xl items-center px-4 sm:px-6">
           {/* Logo — left */}
           <div className="flex flex-1 items-center">
