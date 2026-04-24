@@ -1,26 +1,20 @@
 // pages/admin/simulated/enrollments/[id].js
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import Header from "../../../../components/layout/Header";
+import AppHeader from "../../../../components/layout/AppHeader";
+import Footer from "../../../../components/layout/Footer";
+import Card from "../../../../components/ui/Card";
+import Button from "../../../../components/ui/Button";
+import Badge from "../../../../components/ui/Badge";
+import Skeleton from "../../../../components/ui/Skeleton";
+import Radio from "../../../../components/ui/Radio";
+import Textarea from "../../../../components/ui/Textarea";
+import FormField from "../../../../components/ui/FormField";
+import StatusBadge from "../../../../components/domain/StatusBadge";
+import ChangeHistory from "../../../../components/domain/ChangeHistory";
 import { useAuth } from "../../../../context/AuthContext";
 import { useApi } from "../../../../hooks/useApi";
-
-const statusColors = {
-  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-800/20 dark:text-yellow-300",
-  pending_changes: "bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-300",
-  approved: "bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-300",
-  rejected: "bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-300",
-  completed: "bg-purple-100 text-purple-800 dark:bg-purple-800/20 dark:text-purple-300",
-};
-
-const statusLabels = {
-  pending: "En attente",
-  pending_changes: "Modifications requises",
-  approved: "Approuvé",
-  rejected: "Refusé",
-  completed: "Terminé",
-};
 
 const CREDITS_NORMAL = [0, 0.5, 1, 1.5];
 const CREDITS_DOUBLE = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4];
@@ -69,9 +63,7 @@ export default function AdminEnrollmentDetail() {
 
   const handleReviewSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccessMsg("");
-    setIsSubmitting(true);
+    setError(""); setSuccessMsg(""); setIsSubmitting(true);
     try {
       const res = await patch(`/api/simulated/enrollments/${id}/review`, reviewForm);
       setEnrollment(res.data);
@@ -91,8 +83,7 @@ export default function AdminEnrollmentDetail() {
 
   const handleDefendSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccessMsg("");
+    setError(""); setSuccessMsg("");
     if (defendForm.credits === null) {
       setError("Les crédits sont requis pour valider la défense.");
       return;
@@ -101,13 +92,13 @@ export default function AdminEnrollmentDetail() {
     try {
       const res = await patch(`/api/simulated/enrollments/${id}/defend`, defendForm);
       setEnrollment(res.data);
+      const phase = enrollment.phase;
       setDefendForm({ credits: null, comments: "" });
       setShowDefendForm(false);
-      const phase = enrollment.phase;
       setSuccessMsg(
         phase === 1
           ? `Défense phase 1 validée (${defendForm.credits} crédit(s)). L'étudiant peut maintenant mettre à jour son GitHub pour la phase 2.`
-          : `Défense phase 2 validée (${defendForm.credits} crédit(s)). Total projet : ${(res.data.totalCredits ?? 0)} crédit(s).`
+          : `Défense phase 2 validée (${defendForm.credits} crédit(s)). Total projet : ${res.data.totalCredits ?? 0} crédit(s).`
       );
     } catch (err) {
       setError(err.message || "Une erreur est survenue.");
@@ -117,8 +108,7 @@ export default function AdminEnrollmentDetail() {
   };
 
   const handleToggleDoubleCycle = async () => {
-    setError("");
-    setIsSubmitting(true);
+    setError(""); setIsSubmitting(true);
     try {
       const res = await patch(`/api/simulated/enrollments/${id}/toggle-double-cycle`, {});
       setEnrollment(res.data);
@@ -131,10 +121,8 @@ export default function AdminEnrollmentDetail() {
   };
 
   const handleComplete = async () => {
-    if (!window.confirm("Marquer ce projet comme terminé ? Cette action est irréversible."))
-      return;
-    setError("");
-    setIsSubmitting(true);
+    if (!window.confirm("Marquer ce projet comme terminé ? Cette action est irréversible.")) return;
+    setError(""); setIsSubmitting(true);
     try {
       const res = await patch(`/api/simulated/enrollments/${id}/complete`, {});
       setEnrollment(res.data);
@@ -147,8 +135,7 @@ export default function AdminEnrollmentDetail() {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Supprimer définitivement cet enrollment ? Cette action est irréversible."))
-      return;
+    if (!window.confirm("Supprimer définitivement cet enrollment ? Cette action est irréversible.")) return;
     setIsSubmitting(true);
     try {
       await deleteRequest(`/api/simulated/enrollments/${id}`);
@@ -160,10 +147,8 @@ export default function AdminEnrollmentDetail() {
   };
 
   const handleRelaunch = async () => {
-    if (!window.confirm("Relancer un nouveau cycle sur ce projet ? L'historique et les crédits seront conservés."))
-      return;
-    setError("");
-    setIsSubmitting(true);
+    if (!window.confirm("Relancer un nouveau cycle sur ce projet ? L'historique et les crédits seront conservés.")) return;
+    setError(""); setIsSubmitting(true);
     try {
       const res = await post(`/api/simulated/enrollments/${id}/relaunch`, {});
       setEnrollment(res.data);
@@ -175,8 +160,17 @@ export default function AdminEnrollmentDetail() {
     }
   };
 
-  if (authLoading || apiLoading) {
-    return <div className="text-center py-10 dark:text-white">Chargement...</div>;
+  if (authLoading || (apiLoading && !enrollment)) {
+    return (
+      <div className="min-h-screen flex flex-col bg-bg">
+        <AppHeader />
+        <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">
+          <Skeleton variant="text" width="40%" height={32} className="mb-4" />
+          <Skeleton variant="rect" height={300} className="mb-6" />
+        </main>
+        <Footer />
+      </div>
+    );
   }
 
   if (!enrollment) return null;
@@ -194,202 +188,199 @@ export default function AdminEnrollmentDetail() {
   const canRelaunch = enrollment.phase === 2 && enrollment.credits !== null &&
     ["approved", "completed"].includes(enrollment.status);
 
+  const historyEntries = (enrollment.changeHistory || []).map((h) => ({
+    date: h.date,
+    status: h.status,
+    changedBy: h.reviewer?.name ?? "—",
+    comment: h.comments,
+  }));
+
+  const backLink = (
+    <button
+      onClick={() => router.back()}
+      className="text-sm text-text-muted hover:text-primary transition-colors duration-150"
+    >
+      &larr; Retour
+    </button>
+  );
+
   return (
-    <div className="min-h-screen dark:bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-bg">
       <Head>
         <title>Hub Projets - Détail Enrollment Simulated</title>
       </Head>
 
-      <Header />
+      <AppHeader />
 
-      <main className="container mx-auto px-4 py-8">
-        {/* Retour + Supprimer */}
-        <div className="mb-6 flex justify-between items-center">
-          <button
-            onClick={() => router.back()}
-            className="text-blue-600 dark:text-blue-400 hover:underline flex items-center"
-          >
-            &larr; Retour
-          </button>
-          <button
-            onClick={handleDelete}
-            disabled={isSubmitting}
-            className="bg-red-600 dark:bg-red-700 text-white px-4 py-2 rounded-lg hover:bg-red-700 dark:hover:bg-red-800 disabled:opacity-50 flex items-center gap-2"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">
+        <div className="flex items-center justify-between mb-6">
+          {backLink}
+          <Button variant="danger" onClick={handleDelete} disabled={isSubmitting} loading={isSubmitting}>
             Supprimer
-          </button>
+          </Button>
         </div>
 
-        {/* Messages */}
         {error && (
-          <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-4">
+          <div className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
             {error}
           </div>
         )}
         {successMsg && (
-          <div className="bg-green-100 dark:bg-green-900/30 border border-green-400 dark:border-green-800 text-green-700 dark:text-green-400 px-4 py-3 rounded mb-4">
+          <div
+            className="mb-4 rounded-md border px-4 py-3 text-sm"
+            style={{
+              backgroundColor: 'rgb(var(--status-approved-bg))',
+              borderColor: 'rgb(var(--status-approved-text))',
+              color: 'rgb(var(--status-approved-text))',
+            }}
+          >
             {successMsg}
           </div>
         )}
 
-        {/* ── Informations générales ── */}
-        <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
-          <div className="flex justify-between items-start mb-4 flex-wrap gap-3">
+        <Card className="mb-6">
+          <div className="flex justify-between items-start mb-5 flex-wrap gap-3">
             <div>
-              <h1 className="text-2xl font-bold dark:text-white">
+              <h1 className="text-xl font-bold text-text">
                 {enrollment.simulatedProject.title}
               </h1>
-              <p className="text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-sm text-text-muted mt-1">
                 Phase {enrollment.phase} — Cycle n°{enrollment.cycleNumber}
                 {enrollment.isDoubleCycle && (
-                  <span className="ml-2 text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-0.5 rounded-full">
-                    Double cycle
-                  </span>
+                  <Badge variant="neutral" size="sm" className="ml-2">Double cycle</Badge>
                 )}
               </p>
             </div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${statusColors[enrollment.status]}`}>
-                {statusLabels[enrollment.status]}
-              </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <StatusBadge status={enrollment.status} />
               {enrollment.lockedByAdmin && !isCompleted && (
-                <span className="px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
-                  Verrouillé
-                </span>
+                <Badge variant="neutral">Verrouillé</Badge>
               )}
               {isCompleted && (
-                <span className="px-3 py-1 rounded-full text-sm font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-                  Lecture seule
-                </span>
+                <Badge variant="neutral">Lecture seule</Badge>
               )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Étudiant</p>
-              <p className="dark:text-white">{enrollment.student.name}</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{enrollment.student.email}</p>
+              <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-0.5">Étudiant</p>
+              <p className="text-text font-medium">{enrollment.student.name}</p>
+              <p className="text-sm text-text-muted">{enrollment.student.email}</p>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Soumis le</p>
-              <p className="dark:text-white">{new Date(enrollment.submittedAt).toLocaleString()}</p>
+              <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-0.5">Soumis le</p>
+              <p className="text-text">{new Date(enrollment.submittedAt).toLocaleString()}</p>
             </div>
             {enrollment.defenseDate && (
               <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Date de présentation</p>
-                <p className="dark:text-white">{new Date(enrollment.defenseDate).toLocaleDateString()}</p>
+                <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-0.5">Date de présentation</p>
+                <p className="text-text">{new Date(enrollment.defenseDate).toLocaleDateString()}</p>
               </div>
             )}
             {enrollment.submissionDeadline && (
               <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Deadline soumission</p>
-                <p className="dark:text-white">{new Date(enrollment.submissionDeadline).toLocaleDateString()}</p>
+                <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-0.5">Deadline soumission</p>
+                <p className="text-text">{new Date(enrollment.submissionDeadline).toLocaleDateString()}</p>
               </div>
             )}
           </div>
 
-          {/* GitHub Project Link */}
-          <div className="mt-4">
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">GitHub Project</p>
+          <div className="mb-4">
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">GitHub Project</p>
             {enrollment.githubProjectLink ? (
               <a
                 href={enrollment.githubProjectLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 dark:text-blue-400 hover:underline break-all"
+                className="text-primary hover:underline break-all text-sm"
               >
                 {enrollment.githubProjectLink}
               </a>
             ) : (
-              <p className="text-gray-400 italic">Non renseigné</p>
+              <p className="text-text-dim italic text-sm">Non renseigné</p>
             )}
           </div>
 
-          {/* ── Crédits du cycle courant ── */}
           {(enrollment.phase1Credits !== null || enrollment.credits !== null) && (
-            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg space-y-1">
-              <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">
+            <div
+              className="mb-4 p-3 rounded-lg space-y-1"
+              style={{
+                backgroundColor: 'rgb(var(--primary-ghost))',
+                borderColor: 'rgb(var(--primary-border))',
+              }}
+            >
+              <p className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">
                 Cycle n°{enrollment.cycleNumber} en cours
               </p>
               {enrollment.phase1Credits !== null && (
-                <p className="text-sm text-blue-700 dark:text-blue-300">
+                <p className="text-sm text-primary">
                   Défense phase 1 : <strong>{enrollment.phase1Credits}</strong> crédit(s)
                 </p>
               )}
               {enrollment.credits !== null && (
-                <p className="text-sm text-blue-700 dark:text-blue-300">
+                <p className="text-sm text-primary">
                   Défense phase 2 : <strong>{enrollment.credits}</strong> crédit(s)
                 </p>
               )}
             </div>
           )}
 
-          {/* ── Total crédits projet (toutes défenses) ── */}
           {enrollment.totalCredits > 0 && (
-            <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-              <p className="text-sm font-bold text-green-800 dark:text-green-300">
-                Total crédits sur ce projet : <strong>{enrollment.totalCredits}</strong> crédit(s)
-                <span className="ml-2 font-normal text-green-600 dark:text-green-400">
+            <div
+              className="mb-4 p-3 rounded-lg"
+              style={{
+                backgroundColor: 'rgb(var(--status-approved-bg))',
+                color: 'rgb(var(--status-approved-text))',
+              }}
+            >
+              <p className="text-sm font-bold">
+                Total crédits sur ce projet : <strong>{enrollment.totalCredits}</strong> crédit(s){' '}
+                <span className="font-normal">
                   ({enrollment.defenseHistory?.length ?? 0} défense(s) effectuée(s))
                 </span>
               </p>
             </div>
           )}
 
-          {/* ── Actions admin ── */}
           {!isCompleted && (
-            <div className="mt-6 pt-4 border-t dark:border-gray-700 space-y-4">
-              {/* Toggle double cycle */}
-              <div className="flex items-center justify-between">
+            <div className="mt-5 pt-4 border-t border-border space-y-5">
+              <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="font-medium dark:text-white">Double cycle</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <p className="font-medium text-text">Double cycle</p>
+                  <p className="text-sm text-text-muted">
                     {enrollment.isDoubleCycle
                       ? "Activé — crédits max 4 (par pas de 0.5)"
                       : "Désactivé — crédits max 1.5"}
                   </p>
                 </div>
-                <button
+                <Button
+                  variant={enrollment.isDoubleCycle ? "primary" : "outline"}
                   onClick={handleToggleDoubleCycle}
                   disabled={isSubmitting}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 ${
-                    enrollment.isDoubleCycle
-                      ? "bg-purple-600 hover:bg-purple-700 text-white"
-                      : "bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white"
-                  }`}
                 >
                   {enrollment.isDoubleCycle ? "Désactiver" : "Activer double cycle"}
-                </button>
+                </Button>
               </div>
 
-              {/* Bouton Défense projet */}
               {canDefend && (
-                <div className="pt-2 border-t dark:border-gray-700">
+                <div className="pt-4 border-t border-border">
                   {!showDefendForm ? (
                     <div>
-                      <button
-                        onClick={() => setShowDefendForm(true)}
-                        className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-800 text-white px-5 py-2 rounded-lg text-sm font-medium"
-                      >
+                      <Button variant="primary" onClick={() => setShowDefendForm(true)}>
                         Défense projet — Phase {enrollment.phase}
-                      </button>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      </Button>
+                      <p className="text-xs text-text-muted mt-1">
                         Valider la défense et assigner les crédits pour la phase {enrollment.phase}.
                       </p>
                     </div>
                   ) : (
                     <form onSubmit={handleDefendSubmit} className="space-y-4">
-                      <h3 className="font-semibold dark:text-white">
+                      <h3 className="font-semibold text-text">
                         Défense phase {enrollment.phase} — Assigner les crédits
                       </h3>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Crédits obtenus *
-                        </label>
+                        <p className="text-sm font-medium text-text mb-2">Crédits obtenus *</p>
                         <div className="flex flex-wrap gap-2">
                           {creditsOptions.map((credit) => (
                             <button
@@ -398,64 +389,59 @@ export default function AdminEnrollmentDetail() {
                               onClick={() => setDefendForm((prev) => ({ ...prev, credits: credit }))}
                               className={`px-4 py-2 rounded-lg font-medium border transition-colors ${
                                 defendForm.credits === credit
-                                  ? "bg-indigo-600 text-white border-indigo-600"
-                                  : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-indigo-400"
+                                  ? "text-white border-transparent"
+                                  : "bg-surface text-text border-border hover:border-primary"
                               }`}
+                              style={defendForm.credits === credit
+                                ? { backgroundColor: 'rgb(var(--primary))', borderColor: 'rgb(var(--primary))' }
+                                : {}}
                             >
                               {credit}
                             </button>
                           ))}
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <p className="text-xs text-text-muted mt-1">
                           {enrollment.isDoubleCycle
                             ? "Double cycle : 0 à 4 crédits (par pas de 0.5)"
                             : "Cycle normal : 0 à 1.5 crédit (par pas de 0.5)"}
                         </p>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Commentaires
-                        </label>
-                        <textarea
+                      <FormField label="Commentaires">
+                        <Textarea
                           value={defendForm.comments}
                           onChange={(e) => setDefendForm((prev) => ({ ...prev, comments: e.target.value }))}
-                          rows="3"
+                          rows={3}
                           placeholder="Retour sur la défense..."
-                          className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg text-sm"
                         />
-                      </div>
+                      </FormField>
                       <div className="flex gap-3">
-                        <button
+                        <Button
                           type="submit"
+                          variant="primary"
+                          loading={isSubmitting}
                           disabled={isSubmitting || defendForm.credits === null}
-                          className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-800 text-white px-5 py-2 rounded-lg disabled:opacity-50 text-sm font-medium"
                         >
-                          {isSubmitting ? "Validation..." : "Valider la défense"}
-                        </button>
-                        <button
+                          Valider la défense
+                        </Button>
+                        <Button
                           type="button"
+                          variant="subtle"
                           onClick={() => { setShowDefendForm(false); setDefendForm({ credits: null, comments: "" }); }}
-                          className="px-4 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                         >
                           Annuler
-                        </button>
+                        </Button>
                       </div>
                     </form>
                   )}
                 </div>
               )}
 
-              {/* Marquer comme terminé — après défense 2 */}
               {canComplete && (
-                <div className="pt-2 border-t dark:border-gray-700">
-                  <button
-                    onClick={handleComplete}
-                    disabled={isSubmitting}
-                    className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800 text-white px-4 py-2 rounded-lg disabled:opacity-50 text-sm font-medium"
-                  >
+                <div className="pt-4 border-t border-border">
+                  <Button variant="subtle" onClick={handleComplete} disabled={isSubmitting} loading={isSubmitting}>
                     Marquer comme terminé
-                  </button>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  </Button>
+                  <p className="text-xs text-text-muted mt-1">
                     Action irréversible — le projet passera en lecture seule.
                   </p>
                 </div>
@@ -463,174 +449,128 @@ export default function AdminEnrollmentDetail() {
             </div>
           )}
 
-          {/* Relancer pour un nouveau cycle — après défense 2 */}
           {canRelaunch && (
-            <div className="mt-4 pt-4 border-t dark:border-gray-700">
-              <button
-                onClick={handleRelaunch}
-                disabled={isSubmitting}
-                className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 text-white px-4 py-2 rounded-lg disabled:opacity-50 text-sm font-medium"
-              >
+            <div className="mt-4 pt-4 border-t border-border">
+              <Button variant="primary" onClick={handleRelaunch} disabled={isSubmitting} loading={isSubmitting}>
                 Relancer pour un nouveau cycle
-              </button>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              </Button>
+              <p className="text-xs text-text-muted mt-1">
                 Lance le cycle n°{enrollment.cycleNumber + 1}. L&apos;historique et les crédits sont conservés.
               </p>
             </div>
           )}
-        </div>
+        </Card>
 
-        {/* ── Historique des défenses ── */}
-        {enrollment.defenseHistory && enrollment.defenseHistory.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4 dark:text-white">
+        {enrollment.defenseHistory?.length > 0 && (
+          <Card className="mb-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-4">
               Historique des défenses
-              <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+              <span className="ml-2 normal-case font-normal text-text-muted">
                 Total : {enrollment.totalCredits ?? 0} crédit(s)
               </span>
             </h2>
-            <div className="border dark:border-gray-700 rounded-lg overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-700">
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-2 border-b border-border">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Défense</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Cycle</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Phase</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Crédits</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Commentaires</th>
+                    {['Défense', 'Cycle', 'Phase', 'Crédits', 'Date', 'Commentaires'].map((col) => (
+                      <th key={col} className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-text-dim">
+                        {col}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-border bg-surface">
                   {enrollment.defenseHistory.map((d, i) => (
-                    <tr key={i}>
-                      <td className="px-4 py-3 text-sm font-semibold text-indigo-700 dark:text-indigo-400">
-                        Défense {d.defenseNumber}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                        Cycle {d.cycleNumber}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                        Phase {d.phase}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-bold text-green-700 dark:text-green-400">
+                    <tr key={i} className="hover:bg-surface-2 transition-colors">
+                      <td className="px-4 py-3 font-semibold text-primary">Défense {d.defenseNumber}</td>
+                      <td className="px-4 py-3 text-text-muted">Cycle {d.cycleNumber}</td>
+                      <td className="px-4 py-3 text-text-muted">Phase {d.phase}</td>
+                      <td className="px-4 py-3 font-bold" style={{ color: 'rgb(var(--status-approved-text))' }}>
                         {d.credits} crédit(s)
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                        {new Date(d.date).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                        {d.comments || "—"}
-                      </td>
+                      <td className="px-4 py-3 text-text-muted whitespace-nowrap">{new Date(d.date).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-text-muted">{d.comments || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          </Card>
+        )}
+
+        {historyEntries.length > 0 && (
+          <div className="mb-6">
+            <ChangeHistory entries={historyEntries} />
           </div>
         )}
 
-        {/* ── Historique des modifications ── */}
-        {enrollment.changeHistory && enrollment.changeHistory.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4 dark:text-white">Historique des modifications</h2>
-            <div className="border dark:border-gray-700 rounded-lg overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-700">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Statut</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Par</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Commentaires</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {enrollment.changeHistory.map((h, i) => (
-                    <tr key={i}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {new Date(h.date).toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[h.status]}`}>
-                          {statusLabels[h.status]}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {h.reviewer?.name}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {h.comments}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ── Formulaire d'évaluation du GitHub ── */}
         {!isCompleted && (
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
-            <h2 className="text-xl font-bold mb-1 dark:text-white">Évaluation du GitHub Project</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          <Card>
+            <h2 className="text-lg font-bold text-text mb-1">Évaluation du GitHub Project</h2>
+            <p className="text-sm text-text-muted mb-4">
               Valider ou demander des modifications sur le lien GitHub soumis par l&apos;étudiant.
               Les crédits sont assignés lors de la défense.
             </p>
-            <form onSubmit={handleReviewSubmit}>
-              <div className="mb-4">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2">
-                  Décision *
-                </label>
-                <div className="flex flex-wrap gap-4">
-                  {[
-                    { value: "approved", label: "Approuver le GitHub" },
-                    { value: "rejected", label: "Refuser" },
-                    { value: "pending_changes", label: "Demander des modifications" },
-                  ].map(({ value, label }) => (
-                    <label key={value} className="inline-flex items-center dark:text-gray-300">
-                      <input
-                        type="radio"
-                        name="status"
-                        value={value}
-                        checked={reviewForm.status === value}
-                        onChange={handleReviewChange}
-                        className="mr-2"
-                        required
-                      />
-                      {label}
-                    </label>
-                  ))}
+            <form onSubmit={handleReviewSubmit} className="space-y-4">
+              <fieldset>
+                <legend className="text-sm font-medium text-text mb-2">
+                  Décision <span className="text-danger" aria-hidden="true">*</span>
+                </legend>
+                <div className="space-y-1">
+                  <Radio
+                    label="Approuver le GitHub"
+                    name="status"
+                    value="approved"
+                    checked={reviewForm.status === "approved"}
+                    onChange={handleReviewChange}
+                    required
+                  />
+                  <Radio
+                    label="Refuser"
+                    name="status"
+                    value="rejected"
+                    checked={reviewForm.status === "rejected"}
+                    onChange={handleReviewChange}
+                    required
+                  />
+                  <Radio
+                    label="Demander des modifications"
+                    name="status"
+                    value="pending_changes"
+                    checked={reviewForm.status === "pending_changes"}
+                    onChange={handleReviewChange}
+                    required
+                  />
                 </div>
-              </div>
+              </fieldset>
 
-              <div className="mb-6">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2">
-                  Commentaires
-                </label>
-                <textarea
+              <FormField label="Commentaires">
+                <Textarea
                   name="comments"
                   value={reviewForm.comments}
                   onChange={handleReviewChange}
-                  rows="4"
+                  rows={4}
                   placeholder="Retour à l'étudiant..."
-                  className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
                 />
-              </div>
+              </FormField>
 
               <div className="flex justify-end">
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
+                  loading={isSubmitting}
                   disabled={isSubmitting || !reviewForm.status}
-                  className="bg-blue-600 dark:bg-blue-700 text-white px-6 py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-50"
                 >
-                  {isSubmitting ? "Envoi en cours..." : "Envoyer l'évaluation"}
-                </button>
+                  Envoyer l'évaluation
+                </Button>
               </div>
             </form>
-          </div>
+          </Card>
         )}
       </main>
+
+      <Footer />
     </div>
   );
 }

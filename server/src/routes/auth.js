@@ -36,7 +36,7 @@ router.get(
           .status(500)
           .send("Erreur d'authentification: utilisateur non trouvé");
       }
-      console.log("Utilisateur authentifié:", req.user);
+      console.log("Auth callback: user authenticated", req.user._id);
 
       // Générer le token JWT
       const token = jwt.sign(

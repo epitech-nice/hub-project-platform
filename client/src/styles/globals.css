@@ -2,177 +2,275 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body {
-    height: 100%;
-    margin: 0;
-    color: rgb(var(--foreground));
-    background: rgb(var(--background));
-  }
-  
-  body > div#__next {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-  }
-  
-  main {
-    flex: 1 0 auto;
-  }
-  
-  footer {
-    flex-shrink: 0;
-  }
+@layer base {
+  :root {
+    /* Typographie */
+    --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
-  @layer base {
-    /* Normal Theme - Light Mode */
-    :root {
-      --background: 255 255 255;
-      --foreground: 10 10 10;
-      --card: 255 255 255;
-      --card-foreground: 10 10 10;
-      --primary: 47 112 193;
-      --primary-foreground: 250 250 250;
-      --secondary: 21 128 61;
-      --secondary-foreground: 255 255 255;
-      --accent: 234 179 8;
-      --accent-foreground: 10 10 10;
-      --muted: 241 245 249;
-      --muted-foreground: 100 116 139;
-      --border: 226 232 240;
-    }
+    /* Couleurs sémantiques — LIGHT */
+    --primary: 59 130 246;
+    --primary-hover: 37 99 235;
+    --primary-ghost: 239 246 255;
+    --primary-border: 191 219 254;
+    --secondary: 21 128 61;
+    --accent: 234 179 8;
+    --danger: 220 38 38;
 
-    /* Normal Theme - Dark Mode */
-    .dark {
-      --background: 20 20 20;
-      --foreground: 250 250 250;
-      --card: 32 32 32;
-      --card-foreground: 250 250 250;
-      --primary: 62 135 226;
-      --primary-foreground: 250 250 250;
-      --secondary: 34 197 94;
-      --secondary-foreground: 255 255 255;
-      --accent: 250 204 21;
-      --accent-foreground: 20 20 20;
-      --muted: 51 65 85;
-      --muted-foreground: 148 163 184;
-      --border: 51 65 85;
-    }
+    --bg: 247 249 252;
+    --surface: 255 255 255;
+    --surface-2: 250 251 252;
+    --border: 228 231 236;
+    --border-strong: 203 213 225;
+    --text: 15 23 42;
+    --text-muted: 71 85 105;
+    --text-dim: 100 116 139;
 
-    /* Christmas Winter Theme - Light Mode */
-    :root.christmas {
-      --background: 248 250 252; /* Soft snow white */
-      --foreground: 30 41 59; /* Deep winter blue-gray */
-      --card: 255 255 255; /* Pure white like fresh snow */
-      --card-foreground: 30 41 59;
-      --primary: 220 38 38; /* Christmas red */
-      --primary-foreground: 255 255 255;
-      --secondary: 21 128 61; /* Christmas green */
-      --secondary-foreground: 255 255 255;
-      --accent: 234 179 8; /* Gold/star yellow */
-      --accent-foreground: 30 41 59;
-      --muted: 226 232 240; /* Light frost */
-      --muted-foreground: 100 116 139;
-      --border: 226 232 240;
-      --winter-blue: 59 130 246; /* Icy blue */
-      --winter-silver: 148 163 184; /* Silver/frost */
-    }
+    /* Status — LIGHT */
+    --status-pending-bg: 239 246 255;
+    --status-pending-text: 37 99 235;
+    --status-approved-bg: 220 252 231;
+    --status-approved-text: 21 128 61;
+    --status-changes-bg: 254 243 199;
+    --status-changes-text: 180 83 9;
+    --status-rejected-bg: 254 226 226;
+    --status-rejected-text: 185 28 28;
+    --status-neutral-bg: 241 245 249;
+    --status-neutral-text: 71 85 105;
+    --status-new-bg: 237 233 254;
+    --status-new-text: 109 40 217;
 
-    /* Christmas Winter Theme - Dark Mode */
-    .dark.christmas {
-      --background: 15 23 42; /* Deep midnight blue */
-      --foreground: 248 250 252; /* Soft white */
-      --card: 30 41 59; /* Dark winter blue */
-      --card-foreground: 248 250 252;
-      --primary: 239 68 68; /* Bright Christmas red */
-      --primary-foreground: 255 255 255;
-      --secondary: 34 197 94; /* Bright Christmas green */
-      --secondary-foreground: 255 255 255;
-      --accent: 250 204 21; /* Bright gold */
-      --accent-foreground: 15 23 42;
-      --muted: 51 65 85; /* Dark frost */
-      --muted-foreground: 148 163 184;
-      --border: 51 65 85;
-      --winter-blue: 96 165 250; /* Light icy blue */
-      --winter-silver: 203 213 225; /* Bright silver */
-    }
+    /* Ombres */
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, .04);
+    --shadow-md: 0 4px 10px rgba(16, 24, 40, .06), 0 2px 4px rgba(16, 24, 40, .04);
+    --shadow-lg: 0 14px 28px rgba(16, 24, 40, .10), 0 4px 8px rgba(16, 24, 40, .06);
   }
 
-  /* Spring Theme - Light Mode */
+  .dark {
+    --primary: 96 165 250;
+    --primary-hover: 59 130 246;
+    --primary-ghost: 30 58 138;
+    --primary-border: 59 130 246;
+    --secondary: 74 222 128;
+    --accent: 250 204 21;
+    --danger: 248 113 113;
+
+    --bg: 18 24 42;
+    --surface: 26 34 58;
+    --surface-2: 22 29 50;
+    --border: 44 54 80;
+    --border-strong: 58 72 106;
+    --text: 241 245 249;
+    --text-muted: 160 176 204;
+    --text-dim: 120 136 165;
+
+    --status-pending-bg: 30 58 138;
+    --status-pending-text: 147 197 253;
+    --status-approved-bg: 20 83 45;
+    --status-approved-text: 134 239 172;
+    --status-changes-bg: 113 63 18;
+    --status-changes-text: 253 224 71;
+    --status-rejected-bg: 127 29 29;
+    --status-rejected-text: 252 165 165;
+    --status-neutral-bg: 31 38 55;
+    --status-neutral-text: 148 163 184;
+    --status-new-bg: 46 16 101;
+    --status-new-text: 196 181 253;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+    --shadow-md: 0 6px 18px rgba(0, 0, 0, .4);
+    --shadow-lg: 0 20px 45px rgba(0, 0, 0, .5);
+  }
+
+  /* Thèmes saisonniers — accent only */
+  :root.christmas {
+    --primary: 220 38 38;
+    --primary-hover: 185 28 28;
+    --primary-ghost: 254 226 226;
+    --primary-border: 252 165 165;
+    --accent: 234 179 8;
+  }
+
+  .dark.christmas {
+    --primary: 248 113 113;
+    --primary-hover: 239 68 68;
+    --primary-ghost: 127 29 29;
+    --primary-border: 185 28 28;
+    --accent: 250 204 21;
+  }
+
   :root.spring {
-    --background: 253 251 247; /* Warm cream white */
-    --foreground: 30 41 59;
-    --card: 255 255 255;
-    --card-foreground: 30 41 59;
-    --primary: 236 72 153; /* Spring pink */
-    --primary-foreground: 255 255 255;
-    --secondary: 34 197 94; /* Spring green */
-    --secondary-foreground: 255 255 255;
-    --accent: 251 191 36; /* Sunny yellow */
-    --accent-foreground: 30 41 59;
-    --muted: 240 249 255; /* Light sky */
-    --muted-foreground: 100 116 139;
-    --border: 251 207 232; /* Soft pink border */
-    --spring-sky: 56 189 248;
+    --primary: 236 72 153;
+    --primary-hover: 219 39 119;
+    --primary-ghost: 253 242 248;
+    --primary-border: 251 207 232;
+    --accent: 34 197 94;
   }
 
-  /* Spring Theme - Dark Mode */
   .dark.spring {
-    --background: 15 23 42;
-    --foreground: 253 251 247;
-    --card: 30 41 59;
-    --card-foreground: 253 251 247;
-    --primary: 244 114 182; /* Bright spring pink */
-    --primary-foreground: 255 255 255;
-    --secondary: 74 222 128; /* Bright spring green */
-    --secondary-foreground: 255 255 255;
-    --accent: 253 224 71; /* Bright yellow */
-    --accent-foreground: 15 23 42;
-    --muted: 51 65 85;
-    --muted-foreground: 148 163 184;
-    --border: 51 65 85;
-    --spring-sky: 125 211 252;
+    --primary: 244 114 182;
+    --primary-hover: 236 72 153;
+    --primary-ghost: 131 24 67;
+    --primary-border: 190 24 93;
+    --accent: 74 222 128;
   }
 
-  /* Christmas decorative animations */
-  @keyframes snowfall {
-    0% { transform: translateY(-10px) translateX(0); }
-    100% { transform: translateY(100vh) translateX(10px); }
+  html {
+    font-family: var(--font-sans), system-ui, sans-serif;
+    font-feature-settings: 'ss01', 'cv11';
   }
 
-  @keyframes twinkle {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+  body {
+    background-color: rgb(var(--bg));
+    color: rgb(var(--text));
+    -webkit-font-smoothing: antialiased;
   }
 
-  /* Festive styling classes */
-  .christmas-card {
-    background: linear-gradient(135deg, rgb(var(--card)) 0%, rgb(var(--muted)) 100%);
-    border: 1px solid rgb(var(--border));
-    box-shadow: 0 4px 6px -1px rgba(220, 38, 38, 0.1), 0 2px 4px -1px rgba(21, 128, 61, 0.06);
+  /* Focus visible global */
+  *:focus-visible {
+    outline: 2px solid rgb(var(--primary) / .5);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 
-  .dark .christmas-card {
-    box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.2), 0 2px 4px -1px rgba(34, 197, 94, 0.1);
+  /* Respect prefers-reduced-motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
+}
 
-  .festive-hover {
-    transition: all 0.3s ease;
-  }
+/* Animations */
+/* Seasonal particle animations */
+@keyframes seasonal-fall {
+  0%   { transform: translateY(-10px) translateX(0); }
+  100% { transform: translateY(100vh) translateX(15px); }
+}
+@keyframes seasonal-petal {
+  0%   { transform: translateY(-20px) translateX(0) rotate(0deg); }
+  50%  { transform: translateY(50vh) translateX(30px) rotate(180deg); }
+  100% { transform: translateY(100vh) translateX(-10px) rotate(360deg); }
+}
+@keyframes seasonal-sway {
+  0%, 100% { transform: rotate(-3deg); }
+  50%       { transform: rotate(3deg); }
+}
+@keyframes seasonal-flutter {
+  0%, 100% { transform: translateY(0) rotate(-5deg); }
+  25%       { transform: translateY(-8px) rotate(5deg); }
+  75%       { transform: translateY(-4px) rotate(-3deg); }
+}
+@keyframes seasonal-twinkle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(1.2); }
+}
+@keyframes seasonal-bounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-5px); }
+}
 
-  .festive-hover:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(220, 38, 38, 0.2);
-  }
- 
-  .dark .Toastify__close-button {
-    color: #f3f4f6;
-  }
-  
-  .dark .Toastify__progress-bar {
-    background-color: #60a5fa;
-  }
+.seasonal-particle-fall {
+  animation: seasonal-fall linear infinite;
+  will-change: transform;
+}
+.seasonal-particle-petal {
+  animation: seasonal-petal linear infinite;
+  will-change: transform;
+}
+.seasonal-sway    { animation: seasonal-sway 4s ease-in-out infinite; }
+.seasonal-flutter { animation: seasonal-flutter 3s ease-in-out infinite; }
+.seasonal-twinkle { animation: seasonal-twinkle 2.5s ease-in-out infinite; }
+.seasonal-bounce  { animation: seasonal-bounce 2s ease-in-out infinite; }
 
-  /* Style de base pour tous les toasts */
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.5s linear infinite;
+}
+
+@keyframes slide-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.animate-slide-up {
+  animation: slide-up 300ms cubic-bezier(.4, 0, .2, 1) both;
+}
+
+@keyframes fade-scale {
+  from { transform: scale(.97) translateY(-4px); opacity: 0; }
+  to   { transform: scale(1)   translateY(0);    opacity: 1; }
+}
+
+.animate-fade-scale {
+  animation: fade-scale 160ms cubic-bezier(.4, 0, .2, 1) both;
+}
+
+/* Layout structurel */
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body > div#__next {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main {
+  flex: 1 0 auto;
+}
+
+footer {
+  flex-shrink: 0;
+}
+
+/* Christmas decorative animations */
+@keyframes snowfall {
+  0% { transform: translateY(-10px) translateX(0); }
+  100% { transform: translateY(100vh) translateX(10px); }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Festive styling classes */
+.christmas-card {
+  background: linear-gradient(135deg, rgb(var(--surface)) 0%, rgb(var(--surface-2)) 100%);
+  border: 1px solid rgb(var(--border));
+  box-shadow: 0 4px 6px -1px rgba(220, 38, 38, 0.1), 0 2px 4px -1px rgba(21, 128, 61, 0.06);
+}
+
+.dark .christmas-card {
+  box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.2), 0 2px 4px -1px rgba(34, 197, 94, 0.1);
+}
+
+.festive-hover {
+  transition: all 0.3s ease;
+}
+
+.festive-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(220, 38, 38, 0.2);
+}
+
+/* React-Toastify overrides */
+.dark .Toastify__close-button {
+  color: #f3f4f6;
+}
+
+.dark .Toastify__progress-bar {
+  background-color: #60a5fa;
+}
+
 .Toastify__toast {
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -194,7 +292,6 @@ html, body {
   border-left: 4px solid #3B82F6;
 }
 
-/* Support pour le mode sombre */
 .dark .Toastify__toast {
   color: #F3F4F6;
 }

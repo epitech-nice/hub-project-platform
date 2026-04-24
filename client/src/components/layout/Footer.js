@@ -1,13 +1,12 @@
-import React from 'react';
-
-const Footer = () => {
+export default function Footer() {
   return (
-    <footer className="bg-gray-800 dark:bg-gray-900 text-white py-6 mt-auto">
-      <div className="container mx-auto px-4 text-center">
-        <p>&copy; {new Date().getFullYear()} Hub Projets. Tous droits réservés.</p>
+    <footer className="border-t border-blue-700/50 bg-blue-600 dark:bg-surface dark:border-border">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
+        <p className="text-xs text-white/70">
+          &copy; {new Date().getFullYear()} Hub Projets — Epitech Nice
+        </p>
+        <p className="text-xs text-white/70">Tous droits réservés.</p>
       </div>
     </footer>
   );
-};
-
-export default Footer;
+}

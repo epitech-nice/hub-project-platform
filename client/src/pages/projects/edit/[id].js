@@ -1,9 +1,18 @@
-import React, { useEffect, useState } from "react";
-import Head from "next/head";
-import { useRouter } from "next/router";
-import Header from "../../../components/layout/Header";
-import { useAuth } from "../../../context/AuthContext";
-import { useApi } from "../../../hooks/useApi";
+import { useEffect, useState } from 'react';
+import Head from 'next/head';
+import { useRouter } from 'next/router';
+import AppHeader from '../../../components/layout/AppHeader';
+import Footer from '../../../components/layout/Footer';
+import PageHead from '../../../components/ui/PageHead';
+import Card from '../../../components/ui/Card';
+import Button from '../../../components/ui/Button';
+import Input from '../../../components/ui/Input';
+import Textarea from '../../../components/ui/Textarea';
+import FormField from '../../../components/ui/FormField';
+import FormActions from '../../../components/ui/FormActions';
+import Skeleton from '../../../components/ui/Skeleton';
+import { useAuth } from '../../../context/AuthContext';
+import { useApi } from '../../../hooks/useApi';
 import { toast } from 'react-toastify';
 
 export default function EditProject() {
@@ -13,28 +22,22 @@ export default function EditProject() {
   const { get, put, loading: apiLoading } = useApi();
 
   const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    objectives: "",
-    technologies: "",
+    name: '',
+    description: '',
+    objectives: '',
+    technologies: '',
     studentCount: 1,
-    studentEmails: "",
-    links: {
-      github: "",
-      projectGithub: "",
-      other: "",
-    },
+    studentEmails: '',
+    links: { github: '', projectGithub: '', other: '' },
   });
-
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [project, setProject] = useState(null);
-  const [githubError, setGithubError] = useState("");
+  const [githubError, setGithubError] = useState('');
 
   useEffect(() => {
-    // Rediriger si non authentifié
     if (!authLoading && !isAuthenticated) {
-      router.push("/");
+      router.push('/');
     }
   }, [isAuthenticated, authLoading, router]);
 
@@ -43,44 +46,32 @@ export default function EditProject() {
       if (isAuthenticated && id) {
         try {
           const response = await get(`/api/projects/${id}`);
-          const project = response.data;
+          const data = response.data;
 
-          // Vérifier si le projet est en attente ou en attente de modifications
-          if (
-            project.status !== "pending" &&
-            project.status !== "pending_changes"
-          ) {
-            toast.warning(
-              "Seuls les projets en attente ou en attente de modifications peuvent être modifiés."
-            );
-            router.push("/dashboard");
+          if (data.status !== 'pending' && data.status !== 'pending_changes') {
+            toast.warning('Seuls les projets en attente ou en attente de modifications peuvent être modifiés.');
+            router.push('/dashboard');
             return;
           }
 
-          setProject(project);
-
-          // Formater les données pour le formulaire
+          setProject(data);
           setFormData({
-            name: project.name,
-            description: project.description,
-            objectives: project.objectives,
-            technologies: project.technologies.join(", "),
-            studentCount: project.studentCount,
-            studentEmails: project.studentEmails
-              ? project.studentEmails.join(", ")
-              : "",
+            name: data.name,
+            description: data.description,
+            objectives: data.objectives,
+            technologies: data.technologies.join(', '),
+            studentCount: data.studentCount,
+            studentEmails: data.studentEmails ? data.studentEmails.join(', ') : '',
             links: {
-              github: project.links.github || "",
-              projectGithub: project.links.projectGithub || "",
-              other: project.links.other ? project.links.other.join(", ") : "",
+              github: data.links.github || '',
+              projectGithub: data.links.projectGithub || '',
+              other: data.links.other ? data.links.other.join(', ') : '',
             },
           });
-        } catch (error) {
-          console.error("Erreur lors de la récupération du projet:", error);
-          toast.error(
-            "Erreur lors de la récupération du projet. Redirection vers le tableau de bord."
-          );
-          router.push("/dashboard");
+        } catch (err) {
+          console.error('Erreur lors de la récupération du projet:', err);
+          toast.error('Erreur lors de la récupération du projet. Redirection vers le tableau de bord.');
+          router.push('/dashboard');
         }
       }
     };
@@ -88,375 +79,265 @@ export default function EditProject() {
     fetchProject();
   }, [isAuthenticated, id, router]);
 
-  // Fonction pour valider uniquement le lien GitHub personnel
   const validateGithubUrl = async (url) => {
     if (!url) {
-      setGithubError("Ce champ est obligatoire");
+      setGithubError('Ce champ est obligatoire');
       return false;
     }
-
-    // Vérifier si l'URL ressemble à un lien GitHub
     const githubRegex = /^https:\/\/github\.com\/[\w-]+\/[\w-]+\/?$/;
     if (!githubRegex.test(url)) {
-      setGithubError(
-        "URL GitHub invalide (ex: https://github.com/username/repo)"
-      );
+      setGithubError('URL GitHub invalide (ex: https://github.com/username/repo)');
       return false;
     }
-
     try {
-      // Vérifier si le dépôt est public en essayant d'y accéder via l'API GitHub
-      const repoUrl = url.replace(
-        "https://github.com/",
-        "https://api.github.com/repos/"
-      );
+      const repoUrl = url.replace('https://github.com/', 'https://api.github.com/repos/');
       const response = await fetch(repoUrl);
-
       if (response.status === 200) {
-        setGithubError("");
+        setGithubError('');
         return true;
       } else if (response.status === 404) {
         setGithubError("Ce dépôt n'existe pas ou est privé");
         return false;
       } else {
-        setGithubError("Erreur lors de la vérification du dépôt");
+        setGithubError('Erreur lors de la vérification du dépôt');
         return false;
       }
-    } catch (error) {
-      console.error("Erreur lors de la vérification du dépôt GitHub:", error);
-      setGithubError("Erreur de connexion lors de la vérification");
+    } catch (err) {
+      console.error('Erreur lors de la vérification du dépôt GitHub:', err);
+      setGithubError('Erreur de connexion lors de la vérification');
       return false;
     }
   };
 
-  // Valider le lien GitHub personnel lorsqu'il change
   useEffect(() => {
-    const validatePersonalGithub = async () => {
-      if (formData.links.github) {
-        await validateGithubUrl(formData.links.github);
-      }
-    };
-
-    const timeoutId = setTimeout(validatePersonalGithub, 800); // Délai pour éviter trop de requêtes
+    const timeoutId = setTimeout(() => {
+      if (formData.links.github) validateGithubUrl(formData.links.github);
+    }, 800);
     return () => clearTimeout(timeoutId);
   }, [formData.links.github]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
-    if (name.includes(".")) {
-      const [parent, child] = name.split(".");
-      setFormData({
-        ...formData,
-        [parent]: {
-          ...formData[parent],
-          [child]: value,
-        },
-      });
+    if (name.includes('.')) {
+      const [parent, child] = name.split('.');
+      setFormData({ ...formData, [parent]: { ...formData[parent], [child]: value } });
     } else {
-      setFormData({
-        ...formData,
-        [name]: value,
-      });
+      setFormData({ ...formData, [name]: value });
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setError("");
+    setError('');
 
     try {
-      // Valider le lien GitHub personnel avant de soumettre
       const isGithubValid = await validateGithubUrl(formData.links.github);
-
       if (!isGithubValid) {
-        throw new Error(
-          "Veuillez corriger les erreurs dans le lien GitHub personnel"
-        );
+        throw new Error('Veuillez corriger les erreurs dans le lien GitHub personnel');
       }
-
-      // Vérification des champs obligatoires
       if (!formData.links.projectGithub) {
-        throw new Error("Le lien GitHub project est obligatoire");
+        throw new Error('Le lien GitHub project est obligatoire');
       }
-
-      // Validation des emails si studentCount > 1
       if (formData.studentCount > 1 && !formData.studentEmails.trim()) {
-        throw new Error(
-          "Veuillez indiquer les adresses e-mail des étudiants lorsque le projet implique plusieurs personnes"
-        );
+        throw new Error('Veuillez indiquer les adresses e-mail des étudiants lorsque le projet implique plusieurs personnes');
       }
 
-      // Transformer les technologies en array
       const formattedData = {
         ...formData,
-        technologies: formData.technologies
-          .split(",")
-          .map((tech) => tech.trim()),
-        studentEmails:
-          formData.studentCount > 1
-            ? formData.studentEmails.split(",").map((email) => email.trim())
-            : [],
+        technologies: formData.technologies.split(',').map((t) => t.trim()),
+        studentEmails: formData.studentCount > 1
+          ? formData.studentEmails.split(',').map((e) => e.trim())
+          : [],
         links: {
           ...formData.links,
           other: formData.links.other
-            ? formData.links.other.split(",").map((link) => link.trim())
+            ? formData.links.other.split(',').map((l) => l.trim())
             : [],
         },
       };
 
       await put(`/api/projects/${id}`, formattedData);
-      toast.success("Projet mis à jour avec succès !");
-      router.push("/dashboard");
+      toast.success('Projet mis à jour avec succès !');
+      router.push('/dashboard');
     } catch (err) {
-      setError(
-        err.message ||
-        "Une erreur est survenue lors de la mise à jour du projet"
-      );
+      setError(err.message || 'Une erreur est survenue lors de la mise à jour du projet');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (authLoading || apiLoading || !project) {
+  if (authLoading || (apiLoading && !project)) {
     return (
-      <div className="text-center py-10 dark:text-white">Chargement...</div>
+      <div className="min-h-screen flex flex-col bg-bg">
+        <AppHeader />
+        <main className="flex-1 container mx-auto px-4 py-8 max-w-3xl">
+          <Skeleton variant="text" width="40%" height={32} className="mb-6" />
+          <Skeleton variant="rect" height={500} />
+        </main>
+        <Footer />
+      </div>
     );
   }
 
+  if (!project) return null;
+
+  const backLink = (
+    <button
+      onClick={() => router.back()}
+      className="text-sm text-text-muted hover:text-primary transition-colors duration-150"
+    >
+      &larr; Retour
+    </button>
+  );
+
   return (
-    <div className="min-h-screen dark:bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-bg">
       <Head>
         <title>Hub Projets - Modifier le projet</title>
       </Head>
 
-      <Header />
+      <AppHeader />
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-6">
-          <button
-            onClick={() => router.back()}
-            className="text-blue-600 dark:text-blue-400 hover:underline flex items-center"
-          >
-            &larr; Retour
-          </button>
-        </div>
-
-        <h1 className="text-3xl font-bold mb-6 dark:text-white">
-          Modifier le projet
-        </h1>
+      <main className="flex-1 container mx-auto px-4 py-8">
+        <PageHead title="Modifier le projet" back={backLink} />
 
         <div className="max-w-3xl mx-auto">
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6">
+          <Card>
             {error && (
-              <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-4">
+              <div className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
                 {error}
               </div>
             )}
 
-            <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label
-                  className="block text-gray-700 dark:text-gray-300 font-bold mb-2"
-                  htmlFor="name"
-                >
-                  Nom du projet *
-                </label>
-                <input
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <FormField label="Nom du projet" required>
+                <Input
                   type="text"
-                  id="name"
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
                   required
                 />
-              </div>
+              </FormField>
 
-              <div className="mb-4">
-                <label
-                  className="block text-gray-700 dark:text-gray-300 font-bold mb-2"
-                  htmlFor="description"
-                >
-                  Description détaillée *
-                </label>
-                <textarea
-                  id="description"
+              <FormField label="Description détaillée" required>
+                <Textarea
                   name="description"
                   value={formData.description}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
-                  rows="4"
+                  rows={4}
                   required
                 />
-              </div>
+              </FormField>
 
-              <div className="mb-4">
-                <label
-                  className="block text-gray-700 dark:text-gray-300 font-bold mb-2"
-                  htmlFor="objectives"
-                >
-                  Objectifs *
-                </label>
-                <textarea
-                  id="objectives"
+              <FormField label="Objectifs" required>
+                <Textarea
                   name="objectives"
                   value={formData.objectives}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
-                  rows="3"
+                  rows={3}
                   required
                 />
-              </div>
+              </FormField>
 
-              <div className="mb-4">
-                <label
-                  className="block text-gray-700 dark:text-gray-300 font-bold mb-2"
-                  htmlFor="technologies"
-                >
-                  Technologies utilisées * (séparées par des virgules)
-                </label>
-                <input
+              <FormField label="Technologies utilisées (séparées par des virgules)" required>
+                <Input
                   type="text"
-                  id="technologies"
                   name="technologies"
                   value={formData.technologies}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
                   placeholder="React, Node.js, MongoDB, etc."
                   required
                 />
-              </div>
+              </FormField>
 
-              <div className="mb-4">
-                <label
-                  className="block text-gray-700 dark:text-gray-300 font-bold mb-2"
-                  htmlFor="studentCount"
-                >
-                  Nombre d'étudiants impliqués *
-                </label>
-                <input
+              <FormField label="Nombre d'étudiants impliqués" required>
+                <Input
                   type="number"
-                  id="studentCount"
                   name="studentCount"
                   value={formData.studentCount}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
                   min="1"
                   required
                 />
-              </div>
+              </FormField>
 
-              {/* Champ conditionnel pour les emails des étudiants */}
               {formData.studentCount > 1 && (
-                <div className="mb-4">
-                  <label
-                    className="block text-gray-700 dark:text-gray-300 font-bold mb-2"
-                    htmlFor="studentEmails"
-                  >
-                    Adresses e-mail des étudiants * (séparées par des virgules)
-                  </label>
-                  <input
+                <FormField
+                  label="Adresses e-mail des étudiants (séparées par des virgules)"
+                  required
+                  hint={`Indiquez les adresses e-mail des ${formData.studentCount - 1} autres étudiants impliqués dans ce projet.`}
+                >
+                  <Input
                     type="text"
-                    id="studentEmails"
                     name="studentEmails"
                     value={formData.studentEmails}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
                     placeholder="etudiant1@email.com, etudiant2@email.com, ..."
                     required
                   />
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Indiquez les adresses e-mail des {formData.studentCount - 1}{" "}
-                    autres étudiants impliqués dans ce projet.
-                  </p>
-                </div>
+                </FormField>
               )}
 
-              <div className="mb-4">
-                <label
-                  className="block text-gray-700 dark:text-gray-300 font-bold mb-2"
-                  htmlFor="links.github"
-                >
-                  Lien repo GitHub *
-                </label>
-                <input
+              <FormField
+                label="Lien repo GitHub"
+                required
+                error={githubError || undefined}
+                hint="Le lien vers le repo GitHub (doit être public)"
+              >
+                <Input
                   type="url"
-                  id="links.github"
                   name="links.github"
                   value={formData.links.github}
                   onChange={handleChange}
-                  className={`w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg ${githubError ? "border-red-500 dark:border-red-800" : ""
-                    }`}
                   placeholder="https://github.com/username/repo"
+                  error={!!githubError}
                   required
                 />
-                {githubError && (
-                  <p className="text-red-500 dark:text-red-400 text-sm mt-1">
-                    {githubError}
-                  </p>
-                )}
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Le lien vers le repo GitHub (doit être public)
-                </p>
-              </div>
+              </FormField>
 
-              <div className="mb-4">
-                <label
-                  className="block text-gray-700 dark:text-gray-300 font-bold mb-2"
-                  htmlFor="links.projectGithub"
-                >
-                  Lien GitHub Project *
-                </label>
-                <input
+              <FormField
+                label="Lien GitHub Project"
+                required
+                hint="Le lien vers le GitHub Project"
+              >
+                <Input
                   type="url"
-                  id="links.projectGithub"
                   name="links.projectGithub"
                   value={formData.links.projectGithub}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
                   placeholder="https://github.com/organization/project"
                   required
                 />
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Le lien vers le GitHub Project
-                </p>
-              </div>
+              </FormField>
 
-              <div className="mb-6">
-                <label
-                  className="block text-gray-700 dark:text-gray-300 font-bold mb-2"
-                  htmlFor="links.other"
-                >
-                  Autres liens (séparés par des virgules)
-                </label>
-                <input
+              <FormField label="Autres liens (séparés par des virgules)">
+                <Input
                   type="text"
-                  id="links.other"
                   name="links.other"
                   value={formData.links.other}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border dark:border-gray-700 dark:bg-gray-700 dark:text-white rounded-lg"
                   placeholder="https://example.com, https://another-site.com"
                 />
-              </div>
+              </FormField>
 
-              <div className="flex justify-end">
-                <button
+              <FormActions>
+                <Button
                   type="submit"
-                  className="bg-blue-600 dark:bg-blue-700 text-white px-6 py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-50"
-                  disabled={isSubmitting || githubError}
+                  variant="primary"
+                  loading={isSubmitting}
+                  disabled={isSubmitting || !!githubError}
                 >
-                  {isSubmitting
-                    ? "Mise à jour en cours..."
-                    : "Mettre à jour le projet"}
-                </button>
-              </div>
+                  Mettre à jour le projet
+                </Button>
+              </FormActions>
             </form>
-          </div>
+          </Card>
         </div>
       </main>
+
+      <Footer />
     </div>
   );
 }

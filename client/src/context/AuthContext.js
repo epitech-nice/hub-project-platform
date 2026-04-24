@@ -87,15 +87,17 @@ export const AuthProvider = ({ children }) => {
       }
 
       localStorage.setItem('token', token);
-      setToken(token);
 
-      // Décodage immédiat du token pour obtenir les informations de base
+      // Décodage immédiat du token pour obtenir les informations de base.
+      // setUser est appelé AVANT setToken pour que le rôle soit disponible
+      // quand setToken déclenche les useEffect dépendants (ex: auth/callback.js).
       try {
         const decoded = jwtDecode(token);
         setUser({
           _id: decoded.id,
           role: decoded.role || 'student'
         });
+        setToken(token);
 
         // Récupération complète des informations utilisateur depuis l'API
         const fetchUserInfo = async () => {
@@ -109,18 +111,29 @@ export const AuthProvider = ({ children }) => {
           }
         };
         fetchUserInfo();
+
+        // Redirection sécurisée — localStorage a priorité (QR scan etc.),
+        // puis le redirectTo du hash (défaut serveur), puis le rôle.
+        const storedRedirect = localStorage.getItem('postLoginRedirect');
+        if (storedRedirect) localStorage.removeItem('postLoginRedirect');
+
+        const safeLocal =
+          storedRedirect &&
+          storedRedirect.startsWith('/') &&
+          !storedRedirect.startsWith('//')
+            ? storedRedirect
+            : null;
+        const safeHash =
+          redirectTo &&
+          redirectTo.startsWith('/') &&
+          !redirectTo.startsWith('//')
+            ? decodeURIComponent(redirectTo)
+            : null;
+        const safePath = safeLocal || safeHash || (decoded.role === 'admin' ? '/admin/dashboard' : '/dashboard');
+        router.push(safePath);
       } catch (decodeError) {
         console.error("Erreur lors du décodage du token:", decodeError);
       }
-
-      // Redirection sécurisée — uniquement vers des chemins internes
-      const safePath =
-        redirectTo &&
-        redirectTo.startsWith('/') &&
-        !redirectTo.startsWith('//')
-          ? decodeURIComponent(redirectTo)
-          : '/dashboard';
-      router.push(safePath);
     }
   }, [router.pathname]);
   

@@ -1,184 +1,277 @@
-// pages/workshops/dashboard.js
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Head from "next/head";
-import Link from "next/link";
 import { useRouter } from "next/router";
-import Header from "../../components/layout/Header";
-import WorkshopCard from "../../components/workshops/WorkshopCard";
+import { toast } from "react-toastify";
+import AppHeader from "../../components/layout/AppHeader";
+import Footer from "../../components/layout/Footer";
+import Button from "../../components/ui/Button";
+import Skeleton from "../../components/ui/Skeleton";
+import Input from "../../components/ui/Input";
+import EmptyState from "../../components/ui/EmptyState";
+import StatusBadge from "../../components/domain/StatusBadge";
 import { useAuth } from "../../context/AuthContext";
 import { useApi } from "../../hooks/useApi";
+
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `il y a ${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `il y a ${hrs} h`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return "hier";
+  if (days < 7) return `il y a ${days} j`;
+  return new Date(dateStr).toLocaleDateString("fr-FR");
+}
+
+const FILTER_OPTIONS = [
+  { value: "all",      label: "Tous" },
+  { value: "pending",  label: "En attente" },
+  { value: "approved", label: "Validés" },
+  { value: "changes",  label: "À revoir" },
+  { value: "rejected", label: "Refusés" },
+];
 
 export default function WorkshopsDashboard() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
-  const { get, loading: apiLoading } = useApi();
+  const { get, delete: deleteRequest, loading: apiLoading } = useApi();
   const [workshops, setWorkshops] = useState([]);
+  const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    // Rediriger si non authentifié
-    if (!authLoading && !isAuthenticated) {
-      router.push("/");
-    }
+    if (!authLoading && !isAuthenticated) router.push("/");
   }, [isAuthenticated, authLoading, router]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     const fetchWorkshops = async () => {
-      if (isAuthenticated) {
-        try {
-          const response = await get("/api/workshops/me");
-          setWorkshops(response.data);
-        } catch (error) {
-          console.error("Erreur lors de la récupération des workshops:", error);
-        }
+      try {
+        const response = await get("/api/workshops/me");
+        setWorkshops(response.data);
+      } catch (error) {
+        console.error("Erreur lors de la récupération des workshops:", error);
       }
     };
-
     fetchWorkshops();
   }, [isAuthenticated]);
 
-  const filteredWorkshops =
-    filter === "all"
-      ? workshops
-      : workshops.filter((workshop) => workshop.status === filter);
+  const handleDelete = async (workshopId) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer ce workshop ? Cette action est irréversible.")) return;
+    try {
+      await deleteRequest(`/api/workshops/${workshopId}`);
+      setWorkshops((prev) => prev.filter((w) => w._id !== workshopId));
+    } catch {
+      toast.error("Une erreur est survenue lors de la suppression.");
+    }
+  };
 
   if (authLoading) {
-    return <div className="text-center py-10 dark:text-white">Chargement...</div>;
+    return (
+      <div className="flex justify-center py-16">
+        <Skeleton variant="rect" width={320} height={48} />
+      </div>
+    );
   }
+  if (!isAuthenticated) return null;
 
-  if (!isAuthenticated) {
-    return null;
-  }
+  // Stats
+  const statPending  = workshops.filter((w) => w.status === "pending").length;
+  const statApproved = workshops.filter((w) => w.status === "approved" || w.status === "completed").length;
+  const statChanges  = workshops.filter((w) => w.status === "pending_changes").length;
 
-  // Fonction pour gérer la suppression d'un workshop
-  const handleWorkshopDelete = (workshopId) => {
-    setWorkshops(workshops.filter((workshop) => workshop._id !== workshopId));
+  const filterFns = {
+    all:      () => true,
+    pending:  (w) => w.status === "pending",
+    approved: (w) => w.status === "approved" || w.status === "completed",
+    changes:  (w) => w.status === "pending_changes",
+    rejected: (w) => w.status === "rejected",
+  };
+  const filteredWorkshops = workshops
+    .filter(filterFns[filter] ?? (() => true))
+    .filter((w) => !search || w.title.toLowerCase().includes(search.toLowerCase()));
+
+  const filterCounts = {
+    all:      workshops.length,
+    pending:  statPending,
+    approved: statApproved,
+    changes:  statChanges,
+    rejected: workshops.filter((w) => w.status === "rejected").length,
   };
 
   return (
-    <div className="min-h-screen dark:bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-bg">
       <Head>
         <title>Hub Projets - Workshops</title>
       </Head>
 
-      <Header />
+      <AppHeader />
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold dark:text-white">Mes workshops</h1>
-          <Link href="/submit-workshop">
-            <a className="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800">
-              Soumettre un nouveau workshop
-            </a>
-          </Link>
-        </div>
-
-        <div className="mb-6">
-          <div className="flex space-x-4 overflow-x-auto pb-2">
-            <button
-              className={`px-4 py-2 rounded-md ${
-                filter === "all" 
-                  ? "bg-blue-600 text-white dark:bg-blue-700" 
-                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-              }`}
-              onClick={() => setFilter("all")}
-            >
-              Tous
-            </button>
-            <button
-              className={`px-4 py-2 rounded-md ${
-                filter === "pending"
-                  ? "bg-yellow-500 text-white dark:bg-yellow-600"
-                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-              }`}
-              onClick={() => setFilter("pending")}
-            >
-              En attente
-            </button>
-            <button
-              className={`px-4 py-2 rounded-md ${
-                filter === "pending_changes"
-                  ? "bg-orange-500 text-white dark:bg-orange-600"
-                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-              }`}
-              onClick={() => setFilter("pending_changes")}
-            >
-              Modifs requises
-            </button>
-            <button
-              className={`px-4 py-2 rounded-md ${
-                filter === "approved"
-                  ? "bg-green-600 text-white dark:bg-green-700"
-                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-              }`}
-              onClick={() => setFilter("approved")}
-            >
-              Approuvés
-            </button>
-            <button
-              className={`px-4 py-2 rounded-md ${
-                filter === "rejected" 
-                  ? "bg-red-600 text-white dark:bg-red-700" 
-                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-              }`}
-              onClick={() => setFilter("rejected")}
-            >
-              Refusés
-            </button>
-            <button
-              className={`px-4 py-2 rounded-md ${
-                filter === "completed"
-                  ? "bg-purple-600 text-white dark:bg-purple-700"
-                  : "bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-              }`}
-              onClick={() => setFilter("completed")}
-            >
-              Terminés
-            </button>
+      <main className="flex-1">
+        {/* Header */}
+        <section className="border-b border-border bg-surface">
+          <div className="container mx-auto px-4 py-8 max-w-container">
+            <p className="text-text-muted text-sm mb-1">Hub · Workshops</p>
+            <h1 className="text-2xl font-bold tracking-tight text-text">Mes workshops</h1>
           </div>
-        </div>
+        </section>
 
-        {apiLoading ? (
-          <div className="text-center py-10 dark:text-white">Chargement des workshops...</div>
-        ) : filteredWorkshops.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-8 text-center">
-            <h3 className="text-xl font-bold mb-3 dark:text-white">Aucun workshop à afficher</h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
-              {filter === "all"
-                ? "Vous n'avez pas encore soumis de workshop."
-                : `Vous n'avez pas de workshops ${
-                    filter === "pending"
-                      ? "en attente"
-                      : filter === "approved"
-                      ? "approuvés"
-                      : filter === "rejected"
-                      ? "refusés"
-                      : filter === "completed"
-                      ? "terminés"
-                      : "en attente de modifications"
-                  }.`}
-            </p>
-            {filter === "all" && (
-              <Link href="/submit-workshop">
-                <a className="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-800 inline-block">
-                  Soumettre mon premier workshop
-                </a>
-              </Link>
-            )}
+        <section className="container mx-auto px-4 py-8 pb-12 max-w-container">
+          {/* Section header */}
+          <div className="flex items-end justify-between mb-6">
+            <h2 className="text-xl font-bold text-text">Mes soumissions</h2>
+            <Button variant="primary" size="sm" as="a" href="/submit-workshop">
+              + Nouveau workshop
+            </Button>
           </div>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredWorkshops.map((workshop) => (
-              <WorkshopCard
-                key={workshop._id}
-                workshop={workshop}
-                onDelete={handleWorkshopDelete}
-                isMain={workshop.isMain}
-              />
+
+          {/* Stats row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            {[
+              { label: "EN ATTENTE", value: statPending,       color: "text-primary"   },
+              { label: "VALIDÉS",    value: statApproved,      color: "text-secondary" },
+              { label: "À REVOIR",   value: statChanges,       color: "text-accent"    },
+              { label: "TOTAL",      value: workshops.length,  color: "text-text"      },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="rounded-xl border border-border bg-surface p-4">
+                <p className="text-xs font-semibold text-text-dim tracking-wider mb-2">{label}</p>
+                <p className={`text-2xl font-bold ${color}`}>{value}</p>
+              </div>
             ))}
           </div>
-        )}
+
+          {/* Table panel */}
+          <div className="rounded-xl border border-border bg-surface overflow-hidden">
+            {/* Toolbar */}
+            <div className="p-4 border-b border-border flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+              <Input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher un workshop..."
+                className="w-full sm:w-64"
+              />
+              <div className="flex flex-wrap gap-2">
+                {FILTER_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setFilter(opt.value)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors duration-150 ${
+                      filter === opt.value
+                        ? "bg-primary text-white"
+                        : "bg-surface-2 text-text-muted hover:text-text border border-border"
+                    }`}
+                  >
+                    {opt.label} · {filterCounts[opt.value]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Content */}
+            {apiLoading ? (
+              <div className="p-6 space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} variant="rect" height={52} />
+                ))}
+              </div>
+            ) : filteredWorkshops.length === 0 ? (
+              <div className="p-8">
+                <EmptyState
+                  title="Aucun workshop à afficher"
+                  sub={
+                    search
+                      ? "Aucun workshop ne correspond à votre recherche."
+                      : filter === "all"
+                      ? "Vous n'avez pas encore soumis de workshop."
+                      : "Aucun workshop avec ce statut."
+                  }
+                  action={
+                    filter === "all" && !search ? (
+                      <Button variant="primary" as="a" href="/submit-workshop">
+                        Soumettre mon premier workshop
+                      </Button>
+                    ) : null
+                  }
+                />
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-text-dim tracking-wider">
+                      WORKSHOP
+                    </th>
+                    <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-semibold text-text-dim tracking-wider">
+                      STATUT
+                    </th>
+                    <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-text-dim tracking-wider">
+                      MAJ
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-text-dim tracking-wider">
+                      ACTIONS
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredWorkshops.map((workshop) => {
+                    const canEdit =
+                      workshop.isMain &&
+                      (workshop.status === "pending" || workshop.status === "pending_changes");
+                    return (
+                      <tr
+                        key={workshop._id}
+                        className="border-b border-border last:border-0 hover:bg-surface-2 cursor-pointer transition-colors duration-100"
+                        onClick={() => router.push(`/workshops/${workshop._id}`)}
+                      >
+                        <td className="px-4 py-3.5">
+                          <p className="text-sm font-medium text-text">{workshop.title}</p>
+                          <p className="text-xs text-text-dim mt-0.5">
+                            {workshop.isMain ? "Soumis" : "Intervenant"} le{" "}
+                            {new Date(workshop.createdAt).toLocaleDateString("fr-FR")}
+                          </p>
+                        </td>
+                        <td className="hidden sm:table-cell px-4 py-3.5">
+                          <StatusBadge status={workshop.status} />
+                        </td>
+                        <td className="hidden md:table-cell px-4 py-3.5 text-sm text-text-muted">
+                          {timeAgo(workshop.updatedAt || workshop.createdAt)}
+                        </td>
+                        <td
+                          className="px-4 py-3.5 text-right"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {canEdit ? (
+                            <div className="flex justify-end gap-1">
+                              <button
+                                className="px-2.5 py-1 text-xs text-text-muted hover:text-text border border-border rounded-md hover:bg-surface-2 transition-colors"
+                                onClick={() => router.push(`/workshops/edit/${workshop._id}`)}
+                              >
+                                Modifier
+                              </button>
+                              <button
+                                className="px-2.5 py-1 text-xs text-danger/80 hover:text-danger border border-border rounded-md hover:bg-danger/5 transition-colors"
+                                onClick={() => handleDelete(workshop._id)}
+                              >
+                                Supprimer
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-text-dim select-none">→</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
       </main>
+
+      <Footer />
     </div>
   );
 }

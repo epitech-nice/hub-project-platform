@@ -234,6 +234,25 @@ exports.getProjectById = asyncHandler(async (req, res, next) => {
 exports.updateAdditionalInfo = asyncHandler(async (req, res, next) => {
   const { personalGithub, projectGithub, documents } = req.body;
 
+  const isHttpsUrl = (val) => typeof val === 'string' && val.startsWith('https://');
+
+  if (personalGithub && !isHttpsUrl(personalGithub)) {
+    return next(new ErrorResponse("personalGithub doit être une URL HTTPS valide", 400));
+  }
+  if (projectGithub && !isHttpsUrl(projectGithub)) {
+    return next(new ErrorResponse("projectGithub doit être une URL HTTPS valide", 400));
+  }
+  if (documents) {
+    if (!Array.isArray(documents)) {
+      return next(new ErrorResponse("documents doit être un tableau", 400));
+    }
+    for (const doc of documents) {
+      if (!isHttpsUrl(doc)) {
+        return next(new ErrorResponse("Chaque document doit être une URL HTTPS valide", 400));
+      }
+    }
+  }
+
   const project = await Project.findById(req.params.id);
 
   if (!project) {
@@ -580,6 +599,20 @@ exports.deleteProject = asyncHandler(async (req, res, next) => {
     message: "Projet supprimé avec succès",
     data: {}
   });
+});
+
+// GET /api/projects/stats  (admin)
+// Retourne le nombre de projets par statut + total
+exports.getProjectStats = asyncHandler(async (_req, res) => {
+  const rows = await Project.aggregate([
+    { $group: { _id: "$status", count: { $sum: 1 } } },
+  ]);
+  const stats = { pending: 0, pending_changes: 0, approved: 0, rejected: 0, completed: 0, total: 0 };
+  rows.forEach(({ _id, count }) => {
+    if (_id in stats) stats[_id] = count;
+    stats.total += count;
+  });
+  res.status(200).json({ success: true, data: stats });
 });
 
 // Exporter les projets terminés en CSV avec filtre de date

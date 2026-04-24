@@ -184,9 +184,21 @@ exports.generateCycles = asyncHandler(async (req, res, next) => {
   };
   let currentStart = String(firstStartDate).slice(0, 10); // ISO string YYYY-MM-DD
 
+  // Determine the next number by finding the highest existing number for this prefix
+  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const existing = await SimulatedCycle.find(
+    { name: { $regex: `^${escapedPrefix} \\d+$` } },
+    { name: 1 }
+  ).lean();
+  const maxExisting = existing.reduce((max, c) => {
+    const num = parseInt(c.name.split(" ").pop(), 10);
+    return isNaN(num) ? max : Math.max(max, num);
+  }, 0);
+  const startNumber = maxExisting + 1;
+
   for (let i = 0; i < n; i++) {
     toInsert.push({
-      name: `${prefix} ${i + 1}`,
+      name: `${prefix} ${startNumber + i}`,
       startDate: addDays(currentStart, 0),
       firstSubmissionDeadline: endOfDay(addDays(currentStart, 5)),   // W1 mercredi fin de journée
       firstDefenseDate: addDays(currentStart, 14),                   // W2 vendredi
