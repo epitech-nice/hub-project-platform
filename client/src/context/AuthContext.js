@@ -87,15 +87,17 @@ export const AuthProvider = ({ children }) => {
       }
 
       localStorage.setItem('token', token);
-      setToken(token);
 
-      // Décodage immédiat du token pour obtenir les informations de base
+      // Décodage immédiat du token pour obtenir les informations de base.
+      // setUser est appelé AVANT setToken pour que le rôle soit disponible
+      // quand setToken déclenche les useEffect dépendants (ex: auth/callback.js).
       try {
         const decoded = jwtDecode(token);
         setUser({
           _id: decoded.id,
           role: decoded.role || 'student'
         });
+        setToken(token);
 
         // Récupération complète des informations utilisateur depuis l'API
         const fetchUserInfo = async () => {

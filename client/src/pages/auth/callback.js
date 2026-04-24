@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 
 export default function AuthCallback() {
   const router = useRouter();
-  const { token, loading } = useAuth();
+  const { token, loading, isAdmin } = useAuth();
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -14,9 +14,9 @@ export default function AuthCallback() {
 
     // Cas edge : utilisateur déjà connecté qui arrive sur /auth/callback sans fragment.
     if (!loading && token) {
-      router.push('/dashboard');
+      router.push(isAdmin ? '/admin/dashboard' : '/dashboard');
     }
-  }, [token, loading, router.isReady]);
+  }, [token, loading, isAdmin, router.isReady]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg">
