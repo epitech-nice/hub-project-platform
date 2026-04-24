@@ -431,12 +431,9 @@ export default function AdminDashboard() {
         }
       >
         <p className="text-sm text-text">
-          Vous êtes sur le point de relancer la notification email pour{" "}
-          <span className="font-semibold text-accent">
-            {stats?.pending_changes ?? 0} projet
-            {(stats?.pending_changes ?? 0) !== 1 ? "s" : ""}
-          </span>{" "}
-          en attente de modifications.
+          Vous allez relancer la notification email pour{" "}
+          <span className="font-semibold text-accent">tous les projets</span>{" "}
+          en attente de modifications. Le nombre exact s'affichera dans la confirmation.
         </p>
       </Modal>
     </div>

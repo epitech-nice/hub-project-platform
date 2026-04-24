@@ -83,7 +83,7 @@ exports.getAllWorkshops = asyncHandler(async (req, res, next) => {
     if (!isNaN(startYear)) {
       query.createdAt = {
         $gte: new Date(startYear, 8, 1),
-        $lte: new Date(startYear + 1, 7, 31, 23, 59, 59),
+        $lt: new Date(startYear + 1, 8, 1),
       };
     }
   }
@@ -468,7 +468,7 @@ exports.getWorkshopStats = asyncHandler(async (req, res) => {
         $match: {
           createdAt: {
             $gte: new Date(startYear, 8, 1),
-            $lte: new Date(startYear + 1, 7, 31, 23, 59, 59),
+            $lt: new Date(startYear + 1, 8, 1),
           },
         },
       });
