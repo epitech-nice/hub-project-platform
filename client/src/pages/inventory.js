@@ -236,8 +236,8 @@ export default function InventoryPage() {
                         className="flex flex-col"
                         onClick={() => setSelectedTool(tool)}
                       >
-                        <div className="flex items-start justify-between mb-2">
-                          <h3 className="font-semibold text-text leading-tight pr-2">{tool.name}</h3>
+                        <div className="flex items-start gap-2 mb-2">
+                          <h3 className="font-semibold text-text leading-tight min-w-0 break-words flex-1">{tool.name}</h3>
                           <Badge variant={variant} size="sm" className="shrink-0">{label}</Badge>
                         </div>
                         {tool.description && (

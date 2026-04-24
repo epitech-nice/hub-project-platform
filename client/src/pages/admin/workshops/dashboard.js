@@ -53,12 +53,20 @@ export default function AdminWorkshopsDashboard() {
   const [filter, setFilter] = useState("pending");
   const [searchTerm, setSearchTerm] = useState("");
   const [schoolYear, setSchoolYear] = useState("");
+  const [stats, setStats] = useState(null);
 
   useEffect(() => {
     if (!authLoading && (!isAuthenticated || !isAdmin)) {
       router.push("/");
     }
   }, [isAuthenticated, isAdmin, authLoading, router]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !isAdmin) return;
+    get("/api/workshops/stats")
+      .then((r) => setStats(r.data))
+      .catch(() => {});
+  }, [isAuthenticated, isAdmin]);
 
   useEffect(() => {
     const fetchWorkshops = async () => {
@@ -144,6 +152,24 @@ export default function AdminWorkshopsDashboard() {
           sub="Gérez les soumissions de workshops des intervenants"
         />
 
+        {stats && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+            {[
+              { label: "Total",      value: stats.total,           color: "text-text"      },
+              { label: "En attente", value: stats.pending,         color: "text-primary"   },
+              { label: "À modifier", value: stats.pending_changes, color: "text-accent"    },
+              { label: "Approuvés",  value: stats.approved,        color: "text-secondary" },
+              { label: "Refusés",    value: stats.rejected,        color: "text-danger"    },
+              { label: "Terminés",   value: stats.completed,       color: "text-text-muted"},
+            ].map(({ label, value, color }) => (
+              <div key={label} className="rounded-xl border border-border bg-surface p-4">
+                <p className="text-xs font-semibold text-text-dim tracking-wider mb-2 uppercase">{label}</p>
+                <p className={`text-2xl font-bold ${color}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
         <FilterChips
           className="mb-4"
           options={FILTER_OPTIONS}
@@ -179,6 +205,12 @@ export default function AdminWorkshopsDashboard() {
           emptyLabel={emptySubMessage}
           loading={apiLoading}
         />
+
+        {filteredWorkshops.length > 0 && (
+          <p className="mt-4 text-sm text-text-muted">
+            Affichage 1–{filteredWorkshops.length} sur {filteredWorkshops.length} workshop{filteredWorkshops.length !== 1 ? "s" : ""}
+          </p>
+        )}
       </main>
 
       <Footer />

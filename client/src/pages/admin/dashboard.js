@@ -60,6 +60,7 @@ export default function AdminDashboard() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [filter, setFilter] = useState("pending");
+  const [stats, setStats] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [schoolYear, setSchoolYear] = useState("");
   const [showExportModal, setShowExportModal] = useState(false);
@@ -74,6 +75,13 @@ export default function AdminDashboard() {
       router.push("/");
     }
   }, [isAuthenticated, isAdmin, authLoading, router]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !isAdmin) return;
+    get("/api/projects/stats")
+      .then((r) => setStats(r.data))
+      .catch(() => {});
+  }, [isAuthenticated, isAdmin]);
 
   const fetchProjects = useCallback(async (page) => {
     try {
@@ -215,6 +223,24 @@ export default function AdminDashboard() {
           }
         />
 
+        {stats && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+            {[
+              { label: "Total",      value: stats.total,           color: "text-text"      },
+              { label: "En attente", value: stats.pending,         color: "text-primary"   },
+              { label: "À modifier", value: stats.pending_changes, color: "text-accent"    },
+              { label: "Approuvés",  value: stats.approved,        color: "text-secondary" },
+              { label: "Refusés",    value: stats.rejected,        color: "text-danger"    },
+              { label: "Terminés",   value: stats.completed,       color: "text-text-muted"},
+            ].map(({ label, value, color }) => (
+              <div key={label} className="rounded-xl border border-border bg-surface p-4">
+                <p className="text-xs font-semibold text-text-dim tracking-wider mb-2 uppercase">{label}</p>
+                <p className={`text-2xl font-bold ${color}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
         <FilterChips
           className="mb-4"
           options={FILTER_OPTIONS}
@@ -257,16 +283,18 @@ export default function AdminDashboard() {
           loading={apiLoading}
         />
 
-        {!searchTerm && totalPages > 1 && (
+        {!searchTerm && total > 0 && (
           <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-sm text-text-muted">
-              {total} projet{total !== 1 ? "s" : ""}
+              Affichage {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, total)} sur {total} projet{total !== 1 ? "s" : ""}
             </p>
-            <Pagination
-              page={currentPage}
-              totalPages={totalPages}
-              onChange={handlePageChange}
-            />
+            {totalPages > 1 && (
+              <Pagination
+                page={currentPage}
+                totalPages={totalPages}
+                onChange={handlePageChange}
+              />
+            )}
           </div>
         )}
       </main>
