@@ -248,3 +248,47 @@ describe('PATCH /api/projects/:id/review', () => {
     expect(res.status).toBe(400);
   });
 });
+
+// ─────────────────────────────────────────────
+// GET /api/projects/stats
+// ─────────────────────────────────────────────
+describe('GET /api/projects/stats', () => {
+  it('returns all-time stats when no schoolYear param → 200', async () => {
+    const admin = await createAdmin();
+    const student = await createUser();
+    await request(app)
+      .post('/api/projects')
+      .set(authHeader(student))
+      .send({
+        name: 'Projet Stats',
+        description: 'desc',
+        objectives: 'obj',
+        technologies: ['Node.js'],
+        studentCount: 1,
+        links: { github: 'https://github.com/a/b', projectGithub: 'https://github.com/a/c' },
+      });
+    const res = await request(app)
+      .get('/api/projects/stats')
+      .set(authHeader(admin));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveProperty('total');
+    expect(res.body.data.total).toBeGreaterThanOrEqual(1);
+  });
+
+  it('returns 0 total for a future school year with no projects → 200', async () => {
+    const admin = await createAdmin();
+    const res = await request(app)
+      .get('/api/projects/stats?schoolYear=2099-2100')
+      .set(authHeader(admin));
+    expect(res.status).toBe(200);
+    expect(res.body.data.total).toBe(0);
+  });
+
+  it('student cannot access stats → 403', async () => {
+    const student = await createUser();
+    const res = await request(app)
+      .get('/api/projects/stats')
+      .set(authHeader(student));
+    expect(res.status).toBe(403);
+  });
+});
