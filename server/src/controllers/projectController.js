@@ -673,3 +673,11 @@ exports.exportCompletedProjectsCSV = asyncHandler(async (req, res, next) => {
   res.write(csvContent);
   res.end();
 });
+// POST /api/projects/notify-pending-changes (admin)
+exports.notifyPendingChanges = asyncHandler(async (req, res) => {
+  const projects = await Project.find({ status: 'pending_changes' });
+  projects.forEach((project) => {
+    backgroundJobs.addJob('sendStatusEmail', { project, status: 'pending_changes' });
+  });
+  res.status(200).json({ success: true, total: projects.length });
+});

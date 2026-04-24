@@ -13,6 +13,7 @@ router.get('/export/completed-csv', authenticateToken, isAdmin, projectControlle
 
 // Routes pour les étudiants
 router.post('/', authenticateToken, projectValidationRules(), validate, projectController.createProject);
+router.post('/notify-pending-changes', authenticateToken, isAdmin, projectController.notifyPendingChanges);
 router.get('/:id', authenticateToken, projectController.getProjectById);
 router.patch('/:id/additional-info', authenticateToken, projectController.updateAdditionalInfo);
 router.put('/:id', authenticateToken, projectValidationRules(), validate, projectController.updateProject);
