@@ -291,4 +291,47 @@ describe('GET /api/projects/stats', () => {
       .set(authHeader(student));
     expect(res.status).toBe(403);
   });
+
+  it('malformed schoolYear param falls back to all-time stats → 200', async () => {
+    const admin = await createAdmin();
+    const student = await createUser();
+    await request(app)
+      .post('/api/projects')
+      .set(authHeader(student))
+      .send({
+        name: 'Projet Malformed',
+        description: 'desc',
+        objectives: 'obj',
+        technologies: ['Node.js'],
+        studentCount: 1,
+        links: { github: 'https://github.com/a/b', projectGithub: 'https://github.com/a/c' },
+      });
+    const res = await request(app)
+      .get('/api/projects/stats?schoolYear=invalid-year')
+      .set(authHeader(admin));
+    expect(res.status).toBe(200);
+    expect(res.body.data.total).toBeGreaterThanOrEqual(1);
+  });
+
+  it('project created now is excluded from a different school year → total 0 or less', async () => {
+    const admin = await createAdmin();
+    const student = await createUser();
+    // Create a project (will be in current year, not 2090-2091)
+    await request(app)
+      .post('/api/projects')
+      .set(authHeader(student))
+      .send({
+        name: 'Projet Exclusion Test',
+        description: 'desc',
+        objectives: 'obj',
+        technologies: ['Node.js'],
+        studentCount: 1,
+        links: { github: 'https://github.com/a/b', projectGithub: 'https://github.com/a/c' },
+      });
+    const res = await request(app)
+      .get('/api/projects/stats?schoolYear=2090-2091')
+      .set(authHeader(admin));
+    expect(res.status).toBe(200);
+    expect(res.body.data.total).toBe(0);
+  });
 });
