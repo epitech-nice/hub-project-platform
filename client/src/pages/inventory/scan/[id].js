@@ -23,13 +23,15 @@ export default function ScanPage() {
   const [actionSuccess, setActionSuccess] = useState('');
   const [quantity, setQuantity] = useState(1);
 
-  // Redirect to Microsoft auth, passing current path so we return here after login
+  // Redirect to Microsoft auth, storing current path in localStorage so we
+  // can return here after login regardless of OAuth state round-trip reliability.
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       const returnPath = router.asPath;
-      window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/microsoft?redirectTo=${encodeURIComponent(returnPath)}`;
+      localStorage.setItem('postLoginRedirect', returnPath);
+      window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/microsoft`;
     }
-  }, [isAuthenticated, authLoading, router]);
+  }, [isAuthenticated, authLoading]);
 
   useEffect(() => {
     if (isAuthenticated && id) fetchToolData(id);

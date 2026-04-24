@@ -111,18 +111,29 @@ export const AuthProvider = ({ children }) => {
           }
         };
         fetchUserInfo();
+
+        // Redirection sécurisée — localStorage a priorité (QR scan etc.),
+        // puis le redirectTo du hash (défaut serveur), puis le rôle.
+        const storedRedirect = localStorage.getItem('postLoginRedirect');
+        if (storedRedirect) localStorage.removeItem('postLoginRedirect');
+
+        const safeLocal =
+          storedRedirect &&
+          storedRedirect.startsWith('/') &&
+          !storedRedirect.startsWith('//')
+            ? storedRedirect
+            : null;
+        const safeHash =
+          redirectTo &&
+          redirectTo.startsWith('/') &&
+          !redirectTo.startsWith('//')
+            ? decodeURIComponent(redirectTo)
+            : null;
+        const safePath = safeLocal || safeHash || (decoded.role === 'admin' ? '/admin/dashboard' : '/dashboard');
+        router.push(safePath);
       } catch (decodeError) {
         console.error("Erreur lors du décodage du token:", decodeError);
       }
-
-      // Redirection sécurisée — uniquement vers des chemins internes
-      const safePath =
-        redirectTo &&
-        redirectTo.startsWith('/') &&
-        !redirectTo.startsWith('//')
-          ? decodeURIComponent(redirectTo)
-          : '/dashboard';
-      router.push(safePath);
     }
   }, [router.pathname]);
   
