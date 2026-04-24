@@ -144,10 +144,12 @@ exports.getAllProjects = asyncHandler(async (req, res, next) => {
 
   if (schoolYear) {
     const startYear = parseInt(schoolYear.split('-')[0], 10);
-    query.createdAt = {
-      $gte: new Date(startYear, 8, 1),
-      $lte: new Date(startYear + 1, 7, 31, 23, 59, 59),
-    };
+    if (!isNaN(startYear)) {
+      query.createdAt = {
+        $gte: new Date(startYear, 8, 1),
+        $lte: new Date(startYear + 1, 7, 31, 23, 59, 59),
+      };
+    }
   }
 
   // Si recherche active : retourner tous les résultats sans pagination
