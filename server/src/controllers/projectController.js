@@ -147,7 +147,7 @@ exports.getAllProjects = asyncHandler(async (req, res, next) => {
     if (!isNaN(startYear)) {
       query.createdAt = {
         $gte: new Date(startYear, 8, 1),
-        $lte: new Date(startYear + 1, 7, 31, 23, 59, 59),
+        $lt: new Date(startYear + 1, 8, 1),
       };
     }
   }
@@ -615,7 +615,7 @@ exports.getProjectStats = asyncHandler(async (req, res) => {
         $match: {
           createdAt: {
             $gte: new Date(startYear, 8, 1),
-            $lte: new Date(startYear + 1, 7, 31, 23, 59, 59),
+            $lt: new Date(startYear + 1, 8, 1),
           },
         },
       });
@@ -677,7 +677,7 @@ exports.exportCompletedProjectsCSV = asyncHandler(async (req, res, next) => {
 });
 // POST /api/projects/notify-pending-changes (admin)
 exports.notifyPendingChanges = asyncHandler(async (req, res) => {
-  const projects = await Project.find({ status: 'pending_changes' });
+  const projects = await Project.find({ status: PROJECT_STATUSES.PENDING_CHANGES });
   projects.forEach((project) => {
     backgroundJobs.addJob('sendStatusEmail', { project, status: 'pending_changes' });
   });
@@ -690,7 +690,7 @@ exports.resendNotification = asyncHandler(async (req, res, next) => {
   if (!project) {
     return next(new ErrorResponse('Projet non trouvé', 404));
   }
-  if (project.status !== 'pending_changes') {
+  if (project.status !== PROJECT_STATUSES.PENDING_CHANGES) {
     return next(new ErrorResponse("Ce projet n'est pas en attente de modifications", 400));
   }
   backgroundJobs.addJob('sendStatusEmail', { project, status: 'pending_changes' });
