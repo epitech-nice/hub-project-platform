@@ -11,6 +11,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const mongoSanitize = require("express-mongo-sanitize");
 const xss = require("xss-clean");
+const jwt = require("jsonwebtoken");
 
 const app = express();
 
@@ -35,14 +36,41 @@ const path = require("path");
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // Limitation de requêtes (Rate limiting)
-const limiter = rateLimit({
+
+// 1. Limite globale par IP (Protection collective)
+const ipLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === "production" ? 100 : 2000, // 100 en prod, 2000 en dev
-  message: "Trop de requêtes depuis cette IP, veuillez réessayer plus tard.",
-  standardHeaders: true, // Renvoie les headers d'info RateLimit
-  legacyHeaders: false, // Désactive les headers 'X-RateLimit-*'
+  max: process.env.NODE_ENV === "production" ? 500 : 2000, // 500 en prod (NAT bureau), 2000 en dev
+  message: "Limite de requêtes collective atteinte pour cette IP, veuillez réessayer plus tard.",
+  standardHeaders: true,
+  legacyHeaders: false,
 });
-app.use('/api', limiter);
+
+// 2. Limite individuelle par utilisateur (Protection par compte)
+const userLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === "production" ? 150 : 2000, // 150 en prod, 2000 en dev
+  message: "Vous avez dépassé votre limite de requêtes individuelle, veuillez réessayer plus tard.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    // On extrait l'ID utilisateur du token JWT s'il existe
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      try {
+        const token = req.headers.authorization.split(' ')[1];
+        const decoded = jwt.decode(token);
+        return decoded?.id || req.ip;
+      } catch (err) {
+        return req.ip;
+      }
+    }
+    return req.ip;
+  },
+  skip: (req) => !req.headers.authorization, // Ne s'applique qu'aux requêtes authentifiées
+});
+
+app.use('/api', ipLimiter);
+app.use('/api', userLimiter);
 
 // CORS : restreindre aux origines connues (frontend + localhost en dev)
 const allowedOrigins = [

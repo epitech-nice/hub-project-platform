@@ -440,9 +440,23 @@ exports.deleteWorkshop = asyncHandler(async (req, res, next) => {
   }
 
   await Workshop.findByIdAndDelete(req.params.id);
-  res.status(200).json({ 
-    success: true, 
+  res.status(200).json({
+    success: true,
     message: "Workshop supprimé avec succès",
-    data: {} 
+    data: {}
   });
+});
+
+// GET /api/workshops/stats  (admin)
+// Retourne le nombre de workshops par statut + total
+exports.getWorkshopStats = asyncHandler(async (_req, res) => {
+  const rows = await Workshop.aggregate([
+    { $group: { _id: "$status", count: { $sum: 1 } } },
+  ]);
+  const stats = { pending: 0, pending_changes: 0, approved: 0, rejected: 0, completed: 0, total: 0 };
+  rows.forEach(({ _id, count }) => {
+    if (_id in stats) stats[_id] = count;
+    stats.total += count;
+  });
+  res.status(200).json({ success: true, data: stats });
 });
