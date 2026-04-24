@@ -608,14 +608,16 @@ exports.getProjectStats = asyncHandler(async (req, res) => {
   const pipeline = [];
   if (schoolYear) {
     const startYear = parseInt(schoolYear.split('-')[0], 10);
-    pipeline.push({
-      $match: {
-        createdAt: {
-          $gte: new Date(startYear, 8, 1),
-          $lte: new Date(startYear + 1, 7, 31, 23, 59, 59),
+    if (!isNaN(startYear)) {
+      pipeline.push({
+        $match: {
+          createdAt: {
+            $gte: new Date(startYear, 8, 1),
+            $lte: new Date(startYear + 1, 7, 31, 23, 59, 59),
+          },
         },
-      },
-    });
+      });
+    }
   }
   pipeline.push({ $group: { _id: '$status', count: { $sum: 1 } } });
   const rows = await Project.aggregate(pipeline);
