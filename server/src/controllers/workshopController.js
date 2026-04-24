@@ -72,11 +72,20 @@ exports.createWorkshop = asyncHandler(async (req, res, next) => {
 
 // Récupérer tous les workshops (pour admin)
 exports.getAllWorkshops = asyncHandler(async (req, res, next) => {
-  const { status, page = 1, limit = 20 } = req.query;
+  const { status, schoolYear, page = 1, limit = 20 } = req.query;
 
   const query = {};
   if (status) {
     query.status = status;
+  }
+  if (schoolYear) {
+    const startYear = parseInt(schoolYear.split('-')[0], 10);
+    if (!isNaN(startYear)) {
+      query.createdAt = {
+        $gte: new Date(startYear, 8, 1),
+        $lte: new Date(startYear + 1, 7, 31, 23, 59, 59),
+      };
+    }
   }
 
   const pageNum = parseInt(page, 10);
