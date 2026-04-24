@@ -18,10 +18,30 @@ Utilisateur → clic "Se connecter"
     → Microsoft → GET /api/auth/microsoft/callback
     → Backend crée ou met à jour le User en base
     → Génère un JWT signé
-    → Redirect frontend : /auth/callback?token=<JWT>
-    → Frontend stocke le token (localStorage)
-    → Redirect vers /dashboard
+    → Redirect frontend : /auth/callback#token=<JWT>&redirectTo=<path>
+    → AuthContext lit le fragment (#), efface le hash de l'URL
+    → Stocke le JWT dans localStorage
+    → Redirige selon la priorité ci-dessous
 ```
+
+### Priorité de redirection après login
+
+1. **`localStorage.postLoginRedirect`** — chemin stocké avant de quitter l'app vers OAuth (ex : scan QR code inventaire). Effacé immédiatement après lecture.
+2. **`redirectTo` dans le fragment** — chemin transmis par le serveur dans le hash (défaut basé sur le rôle).
+3. **Rôle** — `/admin/dashboard` pour les admins, `/dashboard` pour les étudiants.
+
+> Le token est transmis via le fragment URL (`#`) et non en query param (`?`) pour qu'il ne soit jamais envoyé au serveur lors de futures navigations et n'apparaisse pas dans les logs nginx.
+
+### Redirect post-login depuis une page protégée
+
+Certaines pages (ex : `/inventory/scan/[id]`) détectent l'absence d'authentification et initient elles-mêmes l'OAuth :
+
+```js
+localStorage.setItem('postLoginRedirect', router.asPath);
+window.location.href = `${API_URL}/api/auth/microsoft`;
+```
+
+`AuthContext` lit et efface cette clé lors du traitement du callback OAuth.
 
 ---
 
@@ -74,7 +94,9 @@ Expiration : définie dans la configuration Passport (`passport.js`).
 
 Expose aux composants frontend :
 - `user` — objet utilisateur décodé depuis le JWT
+- `token` — JWT brut
 - `isAuthenticated` — booléen
+- `isAdmin` — booléen (`user.role === 'admin'`)
 - `loading` — booléen (pendant la vérification initiale)
 - `logout()` — supprime le token et redirige vers `/`
 
