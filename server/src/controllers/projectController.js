@@ -144,10 +144,12 @@ exports.getAllProjects = asyncHandler(async (req, res, next) => {
 
   if (schoolYear) {
     const startYear = parseInt(schoolYear.split('-')[0], 10);
-    query.createdAt = {
-      $gte: new Date(startYear, 8, 1),
-      $lte: new Date(startYear + 1, 7, 31, 23, 59, 59),
-    };
+    if (!isNaN(startYear)) {
+      query.createdAt = {
+        $gte: new Date(startYear, 8, 1),
+        $lt: new Date(startYear + 1, 8, 1),
+      };
+    }
   }
 
   // Si recherche active : retourner tous les résultats sans pagination
@@ -603,10 +605,24 @@ exports.deleteProject = asyncHandler(async (req, res, next) => {
 
 // GET /api/projects/stats  (admin)
 // Retourne le nombre de projets par statut + total
-exports.getProjectStats = asyncHandler(async (_req, res) => {
-  const rows = await Project.aggregate([
-    { $group: { _id: "$status", count: { $sum: 1 } } },
-  ]);
+exports.getProjectStats = asyncHandler(async (req, res) => {
+  const { schoolYear } = req.query;
+  const pipeline = [];
+  if (schoolYear) {
+    const startYear = parseInt(schoolYear.split('-')[0], 10);
+    if (!isNaN(startYear)) {
+      pipeline.push({
+        $match: {
+          createdAt: {
+            $gte: new Date(startYear, 8, 1),
+            $lt: new Date(startYear + 1, 8, 1),
+          },
+        },
+      });
+    }
+  }
+  pipeline.push({ $group: { _id: '$status', count: { $sum: 1 } } });
+  const rows = await Project.aggregate(pipeline);
   const stats = { pending: 0, pending_changes: 0, approved: 0, rejected: 0, completed: 0, total: 0 };
   rows.forEach(({ _id, count }) => {
     if (_id in stats) stats[_id] = count;
@@ -658,4 +674,25 @@ exports.exportCompletedProjectsCSV = asyncHandler(async (req, res, next) => {
   res.write('\uFEFF');
   res.write(csvContent);
   res.end();
+});
+// POST /api/projects/notify-pending-changes (admin)
+exports.notifyPendingChanges = asyncHandler(async (req, res) => {
+  const projects = await Project.find({ status: PROJECT_STATUSES.PENDING_CHANGES });
+  projects.forEach((project) => {
+    backgroundJobs.addJob('sendStatusEmail', { project, status: 'pending_changes' });
+  });
+  res.status(200).json({ success: true, total: projects.length });
+});
+
+// POST /api/projects/:id/resend-notification (admin)
+exports.resendNotification = asyncHandler(async (req, res, next) => {
+  const project = await Project.findById(req.params.id);
+  if (!project) {
+    return next(new ErrorResponse('Projet non trouvé', 404));
+  }
+  if (project.status !== PROJECT_STATUSES.PENDING_CHANGES) {
+    return next(new ErrorResponse("Ce projet n'est pas en attente de modifications", 400));
+  }
+  backgroundJobs.addJob('sendStatusEmail', { project, status: 'pending_changes' });
+  res.status(200).json({ success: true });
 });

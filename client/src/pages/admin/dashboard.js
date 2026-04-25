@@ -1,5 +1,6 @@
 // pages/admin/dashboard.js
 import { useEffect, useState, useRef, useCallback } from "react";
+import { toast } from "react-toastify";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useAuth } from "../../context/AuthContext";
@@ -54,7 +55,7 @@ const ITEMS_PER_PAGE = 20;
 export default function AdminDashboard() {
   const { isAuthenticated, isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
-  const { get, loading: apiLoading } = useApi();
+  const { get, post, loading: apiLoading } = useApi();
   const [projects, setProjects] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -67,6 +68,8 @@ export default function AdminDashboard() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isExporting, setIsExporting] = useState(false);
+  const [showResendModal, setShowResendModal] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
   const prevSearchTermRef = useRef("");
 
@@ -78,10 +81,10 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!isAuthenticated || !isAdmin) return;
-    get("/api/projects/stats")
+    get("/api/projects/stats", schoolYear ? { schoolYear } : {})
       .then((r) => setStats(r.data))
       .catch(() => {});
-  }, [isAuthenticated, isAdmin]);
+  }, [isAuthenticated, isAdmin, schoolYear]);
 
   const fetchProjects = useCallback(async (page) => {
     try {
@@ -118,6 +121,21 @@ export default function AdminDashboard() {
   const handlePageChange = async (newPage) => {
     if (newPage < 1 || newPage > totalPages) return;
     fetchProjects(newPage);
+  };
+
+  const handleResendAll = async () => {
+    try {
+      setIsResending(true);
+      const res = await post("/api/projects/notify-pending-changes", {});
+      setShowResendModal(false);
+      toast.success(
+        `${res.total} notification${res.total !== 1 ? "s" : ""} relancée${res.total !== 1 ? "s" : ""}`
+      );
+    } catch (err) {
+      toast.error(err.message || "Erreur lors de l'envoi");
+    } finally {
+      setIsResending(false);
+    }
   };
 
   const currentYear = new Date().getFullYear();
@@ -211,7 +229,11 @@ export default function AdminDashboard() {
           title="Administration des projets"
           sub="Gérez les soumissions de projets des étudiants"
           actions={
-            filter === "completed" ? (
+            filter === "pending_changes" ? (
+              <Button variant="primary" size="sm" onClick={() => setShowResendModal(true)}>
+                Relancer les notifications
+              </Button>
+            ) : filter === "completed" ? (
               <Button
                 variant="primary"
                 size="sm"
@@ -248,24 +270,46 @@ export default function AdminDashboard() {
           onChange={setFilter}
         />
 
-        <TableToolbar
-          className="mb-4"
-          search={searchTerm}
-          onSearch={setSearchTerm}
-          searchPlaceholder="Rechercher un projet..."
-        >
-          <Select
-            value={schoolYear}
-            onChange={(e) => setSchoolYear(e.target.value)}
-            className="w-40"
-          >
-            <option value="">Toutes les années</option>
-            {schoolYearOptions.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </Select>
+        <TableToolbar className="mb-4">
+          <div className="flex w-full items-center gap-2">
+            <div className="relative flex-1">
+              <span
+                className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-text-dim"
+                aria-hidden="true"
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="h-4 w-4"
+                >
+                  <circle cx="7" cy="7" r="4.5" />
+                  <path d="M10.5 10.5l3 3" strokeLinecap="round" />
+                </svg>
+              </span>
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Rechercher un projet..."
+                aria-label="Rechercher un projet..."
+                className="h-9 w-full rounded-md border border-border bg-surface pl-9 pr-3 text-sm text-text placeholder:text-text-dim transition-colors duration-150 ease-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:border-primary/50"
+              />
+            </div>
+            <Select
+              value={schoolYear}
+              onChange={(e) => setSchoolYear(e.target.value)}
+              className="w-44 shrink-0"
+            >
+              <option value="">Toutes les années</option>
+              {schoolYearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </Select>
+          </div>
         </TableToolbar>
 
         {searchTerm && (
@@ -360,6 +404,37 @@ export default function AdminDashboard() {
             Laissez vide pour exporter tous les projets terminés.
           </p>
         </div>
+      </Modal>
+
+      <Modal
+        open={showResendModal}
+        onClose={() => setShowResendModal(false)}
+        title="Relancer les notifications"
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="subtle"
+              onClick={() => setShowResendModal(false)}
+              disabled={isResending}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleResendAll}
+              loading={isResending}
+              disabled={isResending}
+            >
+              Envoyer
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-text">
+          Vous allez relancer la notification email pour{" "}
+          <span className="font-semibold text-accent">tous les projets</span>{" "}
+          en attente de modifications. Le nombre exact s'affichera dans la confirmation.
+        </p>
       </Modal>
     </div>
   );

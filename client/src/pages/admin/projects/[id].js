@@ -24,7 +24,7 @@ export default function AdminProjectDetail() {
   const { isAuthenticated, isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
   const { id } = router.query;
-  const { get, patch, delete: deleteRequest, loading: apiLoading } = useApi();
+  const { get, patch, post, delete: deleteRequest, loading: apiLoading } = useApi();
   const [project, setProject] = useState(null);
   const [reviewForm, setReviewForm] = useState({
     status: "",
@@ -33,6 +33,7 @@ export default function AdminProjectDetail() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [isResending, setIsResending] = useState(false);
 
   useEffect(() => {
     if (!authLoading && (!isAuthenticated || !isAdmin)) {
@@ -153,6 +154,18 @@ export default function AdminProjectDetail() {
       } finally {
         setIsSubmitting(false);
       }
+    }
+  };
+
+  const handleResendNotification = async () => {
+    try {
+      setIsResending(true);
+      await post(`/api/projects/${id}/resend-notification`, {});
+      toast.success("Notification relancée avec succès");
+    } catch (err) {
+      toast.error(err.message || "Erreur lors de l'envoi");
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -585,6 +598,26 @@ export default function AdminProjectDetail() {
                   className="w-full"
                 >
                   Marquer comme terminé
+                </Button>
+              </Card>
+            )}
+
+            {project.status === "pending_changes" && (
+              <Card>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-text-dim mb-2">
+                  Relancer la notification
+                </h3>
+                <p className="text-sm text-text-muted mb-4">
+                  Renvoyer l'email de demande de modifications à l'étudiant.
+                </p>
+                <Button
+                  variant="subtle"
+                  onClick={handleResendNotification}
+                  disabled={isResending}
+                  loading={isResending}
+                  className="w-full"
+                >
+                  Relancer la notification email
                 </Button>
               </Card>
             )}

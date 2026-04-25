@@ -63,10 +63,10 @@ export default function AdminWorkshopsDashboard() {
 
   useEffect(() => {
     if (!isAuthenticated || !isAdmin) return;
-    get("/api/workshops/stats")
+    get("/api/workshops/stats", schoolYear ? { schoolYear } : {})
       .then((r) => setStats(r.data))
       .catch(() => {});
-  }, [isAuthenticated, isAdmin]);
+  }, [isAuthenticated, isAdmin, schoolYear]);
 
   useEffect(() => {
     const fetchWorkshops = async () => {
@@ -74,6 +74,7 @@ export default function AdminWorkshopsDashboard() {
         try {
           const response = await get("/api/workshops", {
             status: filter !== "all" ? filter : undefined,
+            schoolYear: schoolYear || undefined,
           });
           setWorkshops(response.data);
         } catch (error) {
@@ -83,7 +84,7 @@ export default function AdminWorkshopsDashboard() {
     };
 
     fetchWorkshops();
-  }, [isAuthenticated, isAdmin, filter]);
+  }, [isAuthenticated, isAdmin, filter, schoolYear]);
 
   // Générer les options d'années scolaires (de 2020 jusqu'à l'année en cours)
   const currentYear = new Date().getFullYear();
@@ -92,24 +93,13 @@ export default function AdminWorkshopsDashboard() {
     schoolYearOptions.push(`${y}-${y + 1}`);
   }
 
-  // Filtrer par année scolaire (1 sept → 31 août)
-  const isInSchoolYear = (date, yearLabel) => {
-    if (!yearLabel) return true;
-    const startYear = parseInt(yearLabel.split("-")[0], 10);
-    const start = new Date(startYear, 8, 1); // 1 septembre
-    const end = new Date(startYear + 1, 7, 31, 23, 59, 59); // 31 août
-    const d = new Date(date);
-    return d >= start && d <= end;
-  };
-
-  // Filtrer les workshops en fonction du terme de recherche et de l'année scolaire
+  // Filtrer les workshops en fonction du terme de recherche
   const filteredWorkshops = workshops.filter((workshop) => {
-    const matchesSearch =
+    return (
       !searchTerm ||
       workshop.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      workshop.submittedBy?.name?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesYear = isInSchoolYear(workshop.createdAt, schoolYear);
-    return matchesSearch && matchesYear;
+      workshop.submittedBy?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   });
 
   if (authLoading) {
@@ -177,24 +167,46 @@ export default function AdminWorkshopsDashboard() {
           onChange={setFilter}
         />
 
-        <TableToolbar
-          className="mb-4"
-          search={searchTerm}
-          onSearch={setSearchTerm}
-          searchPlaceholder="Rechercher un workshop..."
-        >
-          <Select
-            value={schoolYear}
-            onChange={(e) => setSchoolYear(e.target.value)}
-            className="w-40"
-          >
-            <option value="">Toutes les années</option>
-            {schoolYearOptions.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </Select>
+        <TableToolbar className="mb-4">
+          <div className="flex w-full items-center gap-2">
+            <div className="relative flex-1">
+              <span
+                className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-text-dim"
+                aria-hidden="true"
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="h-4 w-4"
+                >
+                  <circle cx="7" cy="7" r="4.5" />
+                  <path d="M10.5 10.5l3 3" strokeLinecap="round" />
+                </svg>
+              </span>
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Rechercher un workshop..."
+                aria-label="Rechercher un workshop..."
+                className="h-9 w-full rounded-md border border-border bg-surface pl-9 pr-3 text-sm text-text placeholder:text-text-dim transition-colors duration-150 ease-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:border-primary/50"
+              />
+            </div>
+            <Select
+              value={schoolYear}
+              onChange={(e) => setSchoolYear(e.target.value)}
+              className="w-44 shrink-0"
+            >
+              <option value="">Toutes les années</option>
+              {schoolYearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </Select>
+          </div>
         </TableToolbar>
 
         <DataTable
