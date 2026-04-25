@@ -72,11 +72,20 @@ exports.createWorkshop = asyncHandler(async (req, res, next) => {
 
 // Récupérer tous les workshops (pour admin)
 exports.getAllWorkshops = asyncHandler(async (req, res, next) => {
-  const { status, page = 1, limit = 20 } = req.query;
+  const { status, schoolYear, page = 1, limit = 20 } = req.query;
 
   const query = {};
   if (status) {
     query.status = status;
+  }
+  if (schoolYear) {
+    const startYear = parseInt(schoolYear.split('-')[0], 10);
+    if (!isNaN(startYear)) {
+      query.createdAt = {
+        $gte: new Date(startYear, 8, 1),
+        $lt: new Date(startYear + 1, 8, 1),
+      };
+    }
   }
 
   const pageNum = parseInt(page, 10);
@@ -449,10 +458,24 @@ exports.deleteWorkshop = asyncHandler(async (req, res, next) => {
 
 // GET /api/workshops/stats  (admin)
 // Retourne le nombre de workshops par statut + total
-exports.getWorkshopStats = asyncHandler(async (_req, res) => {
-  const rows = await Workshop.aggregate([
-    { $group: { _id: "$status", count: { $sum: 1 } } },
-  ]);
+exports.getWorkshopStats = asyncHandler(async (req, res) => {
+  const { schoolYear } = req.query;
+  const pipeline = [];
+  if (schoolYear) {
+    const startYear = parseInt(schoolYear.split('-')[0], 10);
+    if (!isNaN(startYear)) {
+      pipeline.push({
+        $match: {
+          createdAt: {
+            $gte: new Date(startYear, 8, 1),
+            $lt: new Date(startYear + 1, 8, 1),
+          },
+        },
+      });
+    }
+  }
+  pipeline.push({ $group: { _id: '$status', count: { $sum: 1 } } });
+  const rows = await Workshop.aggregate(pipeline);
   const stats = { pending: 0, pending_changes: 0, approved: 0, rejected: 0, completed: 0, total: 0 };
   rows.forEach(({ _id, count }) => {
     if (_id in stats) stats[_id] = count;
