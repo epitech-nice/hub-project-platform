@@ -37,40 +37,62 @@ app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // Limitation de requêtes (Rate limiting)
 
-// 1. Limite globale par IP (Protection collective)
+const getTokenPayload = (req) => {
+  if (!req.headers.authorization?.startsWith('Bearer ')) return null;
+  try {
+    return jwt.decode(req.headers.authorization.split(' ')[1]);
+  } catch {
+    return null;
+  }
+};
+
+// 1. Limite globale par IP — backstop collectif (NAT école)
 const ipLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === "production" ? 500 : 2000, // 500 en prod (NAT bureau), 2000 en dev
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === "production" ? 2000 : 5000,
   message: "Limite de requêtes collective atteinte pour cette IP, veuillez réessayer plus tard.",
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// 2. Limite individuelle par utilisateur (Protection par compte)
+// 2. Limite par étudiant authentifié (150/15min)
 const userLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === "production" ? 150 : 2000, // 150 en prod, 2000 en dev
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === "production" ? 150 : 2000,
   message: "Vous avez dépassé votre limite de requêtes individuelle, veuillez réessayer plus tard.",
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
-    // On extrait l'ID utilisateur du token JWT s'il existe
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-      try {
-        const token = req.headers.authorization.split(' ')[1];
-        const decoded = jwt.decode(token);
-        return decoded?.id || req.ip;
-      } catch (err) {
-        return req.ip;
-      }
-    }
-    return req.ip;
+    const payload = getTokenPayload(req);
+    return payload?.id || req.ip;
   },
-  skip: (req) => !req.headers.authorization, // Ne s'applique qu'aux requêtes authentifiées
+  skip: (req) => {
+    if (!req.headers.authorization) return true;
+    const payload = getTokenPayload(req);
+    return payload?.role === 'admin';
+  },
+});
+
+// 3. Limite par admin authentifié (600/15min)
+const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === "production" ? 600 : 2000,
+  message: "Vous avez dépassé votre limite de requêtes administrateur, veuillez réessayer plus tard.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const payload = getTokenPayload(req);
+    return payload?.id || req.ip;
+  },
+  skip: (req) => {
+    const payload = getTokenPayload(req);
+    return payload?.role !== 'admin';
+  },
 });
 
 app.use('/api', ipLimiter);
 app.use('/api', userLimiter);
+app.use('/api', adminLimiter);
 
 // CORS : restreindre aux origines connues (frontend + localhost en dev)
 const allowedOrigins = [
