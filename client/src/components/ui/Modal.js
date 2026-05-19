@@ -111,7 +111,7 @@ export default function Modal({
         className={cn(
           'relative z-10 flex flex-col bg-surface shadow-lg',
           'w-full max-w-none h-full rounded-none',
-          `sm:rounded-xl sm:h-auto ${MAX_W}`,
+          `sm:rounded-xl sm:h-auto sm:max-h-[90vh] ${MAX_W}`,
           'animate-slide-up',
           className
         )}

@@ -97,6 +97,7 @@ export default function NavDropdown({ label, sections = [] }) {
           onKeyDown={handleMenuKeyDown}
           className={cn(
             'absolute left-0 top-full mt-2 z-50 min-w-52',
+            'max-h-[calc(100vh-5rem)] overflow-y-auto',
             'rounded-lg border border-border bg-surface shadow-lg py-1',
             'animate-fade-scale'
           )}
