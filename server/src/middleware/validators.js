@@ -169,6 +169,24 @@ exports.bulkImportValidationRules = () => {
   ];
 };
 
+// Validateur pour la vérification d'inventaire
+exports.verifyInventoryValidationRules = () => [
+  check('rfids')
+    .isArray({ min: 1 }).withMessage('Un tableau de codes RFID est requis')
+    .custom((rfids) => {
+      if (!Array.isArray(rfids)) return true;
+      for (const rfid of rfids) {
+        if (typeof rfid !== 'string' || !rfid.trim()) {
+          throw new Error('Chaque code RFID doit être une chaîne non vide');
+        }
+      }
+      return true;
+    }),
+  check('tags')
+    .optional()
+    .isArray().withMessage('tags doit être un tableau de chaînes'),
+];
+
 // Validateur pour les Enrollments Simulated
 exports.simulatedEnrollValidationRules = () => {
   return [
