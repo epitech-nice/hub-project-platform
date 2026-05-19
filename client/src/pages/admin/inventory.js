@@ -96,6 +96,16 @@ export default function AdminInventoryPage() {
   const fileInputRef = useRef(null);
   const [fromImport, setFromImport]         = useState(false);
 
+  // ── State vérification inventaire ─────────────────────────────────────────
+  const [showVerify, setShowVerify]         = useState(false);
+  const [verifyRaw, setVerifyRaw]           = useState('');
+  const [verifyTags, setVerifyTags]         = useState([]);
+  const [verifyDragOver, setVerifyDragOver] = useState(false);
+  const [verifyLoading, setVerifyLoading]   = useState(false);
+  const [verifyResults, setVerifyResults]   = useState(null);
+  const [verifyError, setVerifyError]       = useState('');
+  const verifyFileInputRef = useRef(null);
+
   // ── Auth guard ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!authLoading && (!isAuthenticated || !isAdmin)) router.push('/');
@@ -242,9 +252,9 @@ export default function AdminInventoryPage() {
   };
 
   // ── Import RFID ────────────────────────────────────────────────────────────
-  const readFile = (file) => {
+  const readFile = (file, setter) => {
     const reader = new FileReader();
-    reader.onload = (ev) => setImportRaw(ev.target.result);
+    reader.onload = (ev) => setter(ev.target.result);
     reader.readAsText(file);
   };
 
@@ -252,12 +262,12 @@ export default function AdminInventoryPage() {
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file) readFile(file);
+    if (file) readFile(file, setImportRaw);
   };
 
   const handleFileInput = (e) => {
     const file = e.target.files[0];
-    if (file) readFile(file);
+    if (file) readFile(file, setImportRaw);
   };
 
   const handleImportAnalyze = async () => {
@@ -327,6 +337,30 @@ export default function AdminInventoryPage() {
     setFromImport(false);
   };
 
+  // ── Vérification inventaire ────────────────────────────────────────────────
+  const handleVerify = async () => {
+    const rfids = parseRfidText(verifyRaw);
+    if (rfids.length === 0) return;
+    setVerifyLoading(true);
+    setVerifyResults(null);
+    setVerifyError('');
+    try {
+      const body = { rfids };
+      if (verifyTags.length > 0) body.tags = verifyTags;
+      const res = await post('/api/tools/verify-inventory', body);
+      setVerifyResults(res.data);
+    } catch (err) {
+      setVerifyError(err.message || 'Une erreur est survenue');
+    } finally {
+      setVerifyLoading(false);
+    }
+  };
+
+  const toggleVerifyTag = (tag) =>
+    setVerifyTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+
   // ── Rendu ─────────────────────────────────────────────────────────────────
   if (authLoading || pageLoading) {
     return <div className="text-center py-10 text-text-muted">Chargement...</div>;
@@ -334,6 +368,7 @@ export default function AdminInventoryPage() {
   if (!isAuthenticated || !isAdmin) return null;
 
   const rfidCount = parseRfidText(importRaw).length;
+  const verifyRfidCount = parseRfidText(verifyRaw).length;
 
   // ── Colonnes DataTable ────────────────────────────────────────────────────
   const COLUMNS = [
@@ -423,6 +458,18 @@ export default function AdminInventoryPage() {
             <div className="flex gap-2">
               <Button variant="outline" onClick={handleExportCSV} loading={isExporting}>
                 Exporter CSV
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setVerifyRaw('');
+                  setVerifyTags([]);
+                  setVerifyResults(null);
+                  setVerifyError('');
+                  setShowVerify(true);
+                }}
+              >
+                Vérifier inventaire
               </Button>
               <Button
                 variant="ghost"
@@ -578,6 +625,183 @@ export default function AdminInventoryPage() {
                         key={rfid}
                         className="flex items-center justify-between px-3 py-2 border border-border rounded-md"
                       >
+                        <span className="font-mono text-sm text-text">{rfid}</span>
+                        <Button variant="primary" size="sm" onClick={() => openAddFromImport(rfid)}>
+                          Créer l&apos;outil →
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* ── Modal : Vérifier inventaire ────────────────────────────────────── */}
+      <Modal
+        open={showVerify}
+        onClose={() => setShowVerify(false)}
+        title="Vérifier l'inventaire"
+        size="lg"
+        footer={
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setShowVerify(false)}>Fermer</Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-text-muted">
+            Scannez ou collez les codes RFID relevés physiquement. Le résultat compare avec l&apos;inventaire en base.
+          </p>
+
+          {/* Filtre par tag */}
+          {allTags.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">
+                Filtrer par tag <span className="font-normal normal-case">(aucun = tout l&apos;inventaire RFID)</span>
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleVerifyTag(tag)}
+                    className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                      verifyTags.includes(tag)
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-text-muted hover:border-primary hover:text-primary'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Drag & drop zone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setVerifyDragOver(true); }}
+            onDragLeave={() => setVerifyDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setVerifyDragOver(false);
+              const file = e.dataTransfer.files[0];
+              if (file) readFile(file, setVerifyRaw);
+            }}
+            onClick={() => verifyFileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
+              verifyDragOver
+                ? 'border-primary bg-primary-ghost'
+                : 'border-border hover:border-primary hover:bg-primary-ghost'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mx-auto mb-1 text-text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v8" />
+            </svg>
+            <p className="text-sm text-text-muted">
+              Glissez un fichier ici, ou <span className="text-primary underline">parcourir</span>
+            </p>
+            <input ref={verifyFileInputRef} type="file" accept=".txt,.csv" className="hidden" onChange={(e) => {
+              const file = e.target.files[0];
+              if (file) readFile(file, setVerifyRaw);
+            }} />
+          </div>
+
+          <Textarea
+            value={verifyRaw}
+            onChange={(e) => setVerifyRaw(e.target.value)}
+            placeholder={"A3B4C5D6\n9F8E7D6C\n1A2B3C4D\n..."}
+            rows={6}
+            className="font-mono"
+          />
+
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-text-dim">
+              {verifyRfidCount} code{verifyRfidCount > 1 ? 's' : ''} détecté{verifyRfidCount > 1 ? 's' : ''}
+              {verifyTags.length > 0 && (
+                <span className="ml-2 text-primary">· tags : {verifyTags.join(', ')}</span>
+              )}
+            </span>
+            <Button
+              variant="outline"
+              onClick={handleVerify}
+              disabled={verifyLoading || verifyRfidCount === 0}
+              loading={verifyLoading}
+            >
+              Vérifier
+            </Button>
+          </div>
+
+          {verifyError && (
+            <div className="rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+              {verifyError}
+            </div>
+          )}
+
+          {verifyResults && (
+            <div className="space-y-4 pt-4 border-t border-border">
+              {/* Stats */}
+              <div className="flex gap-3 flex-wrap">
+                <Badge variant="neutral">{verifyResults.stats.expected} attendu{verifyResults.stats.expected > 1 ? 's' : ''}</Badge>
+                <Badge variant="neutral">{verifyResults.stats.scanned} scanné{verifyResults.stats.scanned > 1 ? 's' : ''}</Badge>
+                <Badge variant="approved">{verifyResults.stats.presentCount} présent{verifyResults.stats.presentCount > 1 ? 's' : ''}</Badge>
+                <Badge variant={verifyResults.stats.missingCount > 0 ? 'rejected' : 'neutral'}>
+                  {verifyResults.stats.missingCount} manquant{verifyResults.stats.missingCount > 1 ? 's' : ''}
+                </Badge>
+                <Badge variant={verifyResults.stats.unknownCount > 0 ? 'changes' : 'neutral'}>
+                  {verifyResults.stats.unknownCount} inconnu{verifyResults.stats.unknownCount > 1 ? 's' : ''}
+                </Badge>
+              </div>
+
+              {verifyResults.stats.missingCount === 0 && verifyResults.stats.unknownCount === 0 && (
+                <div className="rounded-md border border-success/40 bg-success/10 px-4 py-3 text-sm text-success font-medium">
+                  Inventaire complet — tous les éléments sont présents.
+                </div>
+              )}
+
+              {verifyResults.present.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-text mb-2">Présents</p>
+                  <div className="space-y-1.5">
+                    {verifyResults.present.map((tool) => (
+                      <div key={tool._id} className="flex items-center justify-between px-3 py-2 bg-surface-2 border border-border rounded-md">
+                        <div>
+                          <span className="text-sm font-medium text-text">{tool.name}</span>
+                          <span className="ml-2 font-mono text-xs text-text-dim">{tool.rfid}</span>
+                        </div>
+                        <Badge variant="approved" size="sm">Présent</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {verifyResults.missing.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-text mb-2">Manquants — attendus mais non scannés</p>
+                  <div className="space-y-1.5">
+                    {verifyResults.missing.map((tool) => (
+                      <div key={tool._id} className="flex items-center justify-between px-3 py-2 bg-surface-2 border border-border rounded-md">
+                        <div>
+                          <span className="text-sm font-medium text-text">{tool.name}</span>
+                          <span className="ml-2 font-mono text-xs text-text-dim">{tool.rfid}</span>
+                        </div>
+                        <Badge variant="rejected" size="sm">Manquant</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {verifyResults.unknown.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-text mb-2">Inconnus — scannés mais non enregistrés</p>
+                  <div className="space-y-1.5">
+                    {verifyResults.unknown.map((rfid) => (
+                      <div key={rfid} className="flex items-center justify-between px-3 py-2 border border-border rounded-md">
                         <span className="font-mono text-sm text-text">{rfid}</span>
                         <Button variant="primary" size="sm" onClick={() => openAddFromImport(rfid)}>
                           Créer l&apos;outil →
