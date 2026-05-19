@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken, isAdmin } = require('../middleware/auth');
-const { toolValidationRules, bulkImportValidationRules, validate } = require('../middleware/validators');
+const { toolValidationRules, bulkImportValidationRules, verifyInventoryValidationRules, validate } = require('../middleware/validators');
 const {
   getAllTools,
   getAllTags,
@@ -11,6 +11,7 @@ const {
   updateTool,
   deleteTool,
   bulkImport,
+  verifyInventory,
   exportInventoryCSV,
   borrowTool,
   returnTool,
@@ -22,6 +23,7 @@ router.get('/tags', authenticateToken, getAllTags);
 router.get('/loans/history', authenticateToken, getLoanHistory);
 router.get('/export/csv', authenticateToken, isAdmin, exportInventoryCSV);
 router.post('/bulk-import', authenticateToken, isAdmin, bulkImportValidationRules(), validate, bulkImport);
+router.post('/verify-inventory', authenticateToken, isAdmin, verifyInventoryValidationRules(), validate, verifyInventory);
 
 // Routes accessibles aux utilisateurs authentifiés (students + admin)
 router.get('/', authenticateToken, getAllTools);
