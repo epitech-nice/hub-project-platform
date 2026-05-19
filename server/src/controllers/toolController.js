@@ -236,6 +236,41 @@ exports.bulkImport = asyncHandler(async (req, res, next) => {
   });
 });
 
+// POST /api/tools/verify-inventory — admin uniquement
+exports.verifyInventory = asyncHandler(async (req, res) => {
+  let { rfids, tags } = req.body;
+  rfids = [...new Set(rfids.map((r) => r.trim().toUpperCase()).filter(Boolean))];
+
+  const query = { rfid: { $exists: true, $ne: null } };
+  if (Array.isArray(tags) && tags.length > 0) {
+    query.tags = { $in: tags };
+  }
+
+  const expected = await Tool.find(query).lean();
+  const scannedSet = new Set(rfids);
+  const expectedRfidSet = new Set(expected.map((t) => t.rfid));
+
+  const present = expected.filter((t) => scannedSet.has(t.rfid));
+  const missing = expected.filter((t) => !scannedSet.has(t.rfid));
+  const unknown = rfids.filter((r) => !expectedRfidSet.has(r));
+
+  res.status(200).json({
+    success: true,
+    data: {
+      stats: {
+        expected: expected.length,
+        scanned: rfids.length,
+        presentCount: present.length,
+        missingCount: missing.length,
+        unknownCount: unknown.length,
+      },
+      present,
+      missing,
+      unknown,
+    },
+  });
+});
+
 // POST /api/tools/:id/borrow
 exports.borrowTool = asyncHandler(async (req, res, next) => {
   const requestedQuantity = Math.max(1, parseInt(req.body.quantity, 10) || 1);
