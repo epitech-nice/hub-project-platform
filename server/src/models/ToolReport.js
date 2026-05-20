@@ -15,7 +15,10 @@ const toolReportSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: Object.values(REPORT_CATEGORIES),
+      enum: {
+        values: Object.values(REPORT_CATEGORIES),
+        message: 'Catégorie invalide : {VALUE}',
+      },
       required: true,
     },
     message: {
@@ -25,7 +28,10 @@ const toolReportSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: Object.values(REPORT_STATUS),
+      enum: {
+        values: Object.values(REPORT_STATUS),
+        message: 'Statut invalide : {VALUE}',
+      },
       default: REPORT_STATUS.OPEN,
     },
     resolvedBy: {

@@ -44,16 +44,16 @@ const LOAN_STATUS = {
 
 // Catégories pour les signalements de problèmes d'outils
 const REPORT_CATEGORIES = {
-  BROKEN:     'broken',
-  MISSING:    'missing',
+  BROKEN: 'broken',
+  MISSING: 'missing',
   INCOMPLETE: 'incomplete',
-  DEFECTIVE:  'defective',
-  OTHER:      'other',
+  DEFECTIVE: 'defective',
+  OTHER: 'other',
 };
 
 // Statuts pour les signalements de problèmes
 const REPORT_STATUS = {
-  OPEN:     'open',
+  OPEN: 'open',
   RESOLVED: 'resolved',
 };
 
