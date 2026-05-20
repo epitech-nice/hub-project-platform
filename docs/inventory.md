@@ -21,6 +21,7 @@ Le système permet de référencer le matériel physique (câbles, Raspberry Pi,
 2. Il peut définir un **Max / Étudiant** (`maxBorrowPerUser`) empêchant un abus d'emprunt du même outil.
 3. Il clique sur le bouton **QR Code** pour générer automatiquement l'image imprimable liée à l'URL de l'outil.
 4. L'historique en temps réel est accessible via le panneau d'inventaire.
+5. Il peut lancer une **vérification d'inventaire** en comparant un scan RFID avec la base — les résultats indiquent les éléments présents, manquants ou inconnus, avec un filtre optionnel par tag.
 
 ---
 
@@ -88,3 +89,4 @@ Le modèle gardant une trace immuable des activités d'emprunts et de retours.
 ### (Admin Uniquement)
 - `GET /api/tools/export/csv` : Export sécurisé de l'inventaire avec protection contre les injections de formules.
 - `POST /api/tools/bulk-import` : Traitement par lots des scans RFID.
+- `POST /api/tools/verify-inventory` : Compare une liste de codes RFID scannés avec l'inventaire en base. Accepte `rfids[]` (obligatoire) et `tags[]` (optionnel pour restreindre le périmètre). Retourne trois listes : `present` (trouvés), `missing` (attendus mais absents du scan), `unknown` (scannés mais non enregistrés), accompagnées de stats (`expected`, `scanned`, `presentCount`, `missingCount`, `unknownCount`).
