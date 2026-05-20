@@ -22,7 +22,7 @@ Le système permet de référencer le matériel physique (câbles, Raspberry Pi,
 3. Il clique sur le bouton **QR Code** pour générer automatiquement l'image imprimable liée à l'URL de l'outil.
 4. L'historique en temps réel est accessible via le panneau d'inventaire.
 5. Il peut lancer une **vérification d'inventaire** en comparant un scan RFID avec la base — les résultats indiquent les éléments présents, manquants ou inconnus, avec un filtre optionnel par tag.
-6. Il peut consulter les **signalements de problèmes** sur chaque outil via un badge rouge visible dans la liste (nombre de signalements ouverts). Au clic sur le bouton "Rapports", une modal liste les signalements avec la possibilité de les résoudre en ajoutant un commentaire.
+6. Il peut consulter les **signalements de problèmes** directement depuis la colonne "Outil" : un badge rouge cliquable indique le nombre de signalements ouverts, et un lien "Historique (N)" discret apparaît quand tous les signalements sont résolus. Au clic, une modal liste les signalements ouverts et résolus avec la possibilité de les résoudre en ajoutant un commentaire.
 
 ---
 
@@ -78,7 +78,7 @@ Le modèle gardant une trace immuable des activités d'emprunts et de retours.
 
 ### `GET /api/tools`
 - **Requis** : Token Auth
-- **Enrichissement** : Injecte `currentUserBorrowCount` pour chaque outil, permettant au front-end d'afficher dynamiquement la capacité d'emprunt restante de l'utilisateur.
+- **Enrichissement** : Injecte `currentUserBorrowCount` (quota d'emprunt restant), `openReportCount` (signalements ouverts) et `resolvedReportCount` (signalements résolus) pour chaque outil, calculés en une seule aggregation MongoDB.
 - **Filtrage** : Recherche plein texte et filtrage par tags/statut via un moteur de requête unifié.
 
 ### `POST /api/tools/:id/borrow`
