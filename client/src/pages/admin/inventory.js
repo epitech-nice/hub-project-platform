@@ -466,6 +466,8 @@ export default function AdminInventoryPage() {
                   setVerifyTags([]);
                   setVerifyResults(null);
                   setVerifyError('');
+                  setVerifyLoading(false);
+                  setVerifyDragOver(false);
                   setShowVerify(true);
                 }}
               >
