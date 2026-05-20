@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken, isAdmin } = require('../middleware/auth');
-const { toolValidationRules, bulkImportValidationRules, verifyInventoryValidationRules, validate } = require('../middleware/validators');
+const { toolValidationRules, bulkImportValidationRules, verifyInventoryValidationRules, toolReportValidationRules, resolveReportValidationRules, validate } = require('../middleware/validators');
 const {
   getAllTools,
   getAllTags,
@@ -17,6 +17,7 @@ const {
   returnTool,
   getLoanHistory,
 } = require('../controllers/toolController');
+const { createReport, getReports, resolveReport } = require('../controllers/toolReportController');
 
 // IMPORTANT : routes spécifiques avant /:id pour éviter les collisions de nommage
 router.get('/tags', authenticateToken, getAllTags);
@@ -24,6 +25,11 @@ router.get('/loans/history', authenticateToken, getLoanHistory);
 router.get('/export/csv', authenticateToken, isAdmin, exportInventoryCSV);
 router.post('/bulk-import', authenticateToken, isAdmin, bulkImportValidationRules(), validate, bulkImport);
 router.post('/verify-inventory', authenticateToken, isAdmin, verifyInventoryValidationRules(), validate, verifyInventory);
+
+// Routes signalements
+router.post('/:id/report', authenticateToken, toolReportValidationRules(), validate, createReport);
+router.get('/:id/reports', authenticateToken, isAdmin, getReports);
+router.patch('/:id/reports/:reportId/resolve', authenticateToken, isAdmin, resolveReportValidationRules(), validate, resolveReport);
 
 // Routes accessibles aux utilisateurs authentifiés (students + admin)
 router.get('/', authenticateToken, getAllTools);

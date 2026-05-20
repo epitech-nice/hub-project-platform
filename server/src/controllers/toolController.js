@@ -1,5 +1,6 @@
 const Tool = require('../models/Tool');
 const Loan = require('../models/Loan');
+const ToolReport = require('../models/ToolReport');
 const ErrorResponse = require('../utils/errorResponse');
 const asyncHandler = require('../middleware/asyncHandler');
 const { TOOL_STATUS, LOAN_STATUS } = require('../utils/constants');
@@ -88,6 +89,16 @@ exports.getAllTools = asyncHandler(async (req, res, next) => {
   ]);
 
   await enrichWithUserLoans(tools, req.user?.id);
+
+  const openReportAgg = await ToolReport.aggregate([
+    { $match: { status: 'open' } },
+    { $group: { _id: '$tool', count: { $sum: 1 } } },
+  ]);
+  const reportCountMap = openReportAgg.reduce((acc, r) => {
+    acc[r._id.toString()] = r.count;
+    return acc;
+  }, {});
+  tools.forEach((t) => { t.openReportCount = reportCountMap[t._id.toString()] || 0; });
 
   res.status(200).json({
     success: true,
