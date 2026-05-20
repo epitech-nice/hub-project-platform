@@ -42,10 +42,27 @@ const LOAN_STATUS = {
   RETURNED: 'returned'
 };
 
+// Catégories pour les signalements de problèmes d'outils
+const REPORT_CATEGORIES = {
+  BROKEN:     'broken',
+  MISSING:    'missing',
+  INCOMPLETE: 'incomplete',
+  DEFECTIVE:  'defective',
+  OTHER:      'other',
+};
+
+// Statuts pour les signalements de problèmes
+const REPORT_STATUS = {
+  OPEN:     'open',
+  RESOLVED: 'resolved',
+};
+
 module.exports = {
   PROJECT_STATUSES,
   WORKSHOP_STATUSES,
   SIMULATED_STATUSES,
   TOOL_STATUS,
-  LOAN_STATUS
+  LOAN_STATUS,
+  REPORT_CATEGORIES,
+  REPORT_STATUS
 };
