@@ -59,7 +59,7 @@ export default function AdminInventoryPage() {
   const { isAuthenticated, isAdmin, loading: authLoading, token } = useAuth();
   const router = useRouter();
 
-  const { get, post, put, delete: deleteRequest } = useApi();
+  const { get, post, put, patch, delete: deleteRequest } = useApi();
 
   // ── State données ─────────────────────────────────────────────────────────
   const [tools, setTools]         = useState([]);
@@ -105,6 +105,16 @@ export default function AdminInventoryPage() {
   const [verifyResults, setVerifyResults]   = useState(null);
   const [verifyError, setVerifyError]       = useState('');
   const verifyFileInputRef = useRef(null);
+
+  // ── State signalements ────────────────────────────────────────────────
+  const [showReports, setShowReports]           = useState(false);
+  const [reportsToolId, setReportsToolId]       = useState(null);
+  const [reportsToolName, setReportsToolName]   = useState('');
+  const [reports, setReports]                   = useState([]);
+  const [reportsLoading, setReportsLoading]     = useState(false);
+  const [resolvingId, setResolvingId]           = useState(null);
+  const [resolveMsg, setResolveMsg]             = useState('');
+  const [resolveLoading, setResolveLoading]     = useState(false);
 
   // ── Auth guard ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -361,6 +371,47 @@ export default function AdminInventoryPage() {
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     );
 
+  // ── Signalements ──────────────────────────────────────────────────────
+  const openReportsModal = async (tool) => {
+    setReportsToolId(tool._id);
+    setReportsToolName(tool.name);
+    setResolvingId(null);
+    setResolveMsg('');
+    setReports([]);
+    setShowReports(true);
+    setReportsLoading(true);
+    try {
+      const res = await get(`/api/tools/${tool._id}/reports`);
+      setReports(res.data);
+    } catch (err) {
+      console.error('Erreur chargement signalements:', err);
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  const handleResolve = async (reportId) => {
+    setResolveLoading(true);
+    try {
+      const body = resolveMsg.trim() ? { resolveMessage: resolveMsg.trim() } : {};
+      await patch(`/api/tools/${reportsToolId}/reports/${reportId}/resolve`, body);
+      setReports((prev) =>
+        prev.map((r) =>
+          r._id === reportId
+            ? { ...r, status: 'resolved', resolveMessage: resolveMsg.trim() || undefined, resolvedAt: new Date().toISOString() }
+            : r
+        )
+      );
+      setResolvingId(null);
+      setResolveMsg('');
+      await fetchTools();
+    } catch (err) {
+      console.error('Erreur résolution signalement:', err);
+    } finally {
+      setResolveLoading(false);
+    }
+  };
+
   // ── Rendu ─────────────────────────────────────────────────────────────────
   if (authLoading || pageLoading) {
     return <div className="text-center py-10 text-text-muted">Chargement...</div>;
@@ -377,7 +428,12 @@ export default function AdminInventoryPage() {
       label: 'Outil',
       render: (v, row) => (
         <div>
-          <p className="font-medium text-text">{v}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-medium text-text">{v}</p>
+            {row.openReportCount > 0 && (
+              <Badge variant="rejected" size="sm">{row.openReportCount}</Badge>
+            )}
+          </div>
           {row.description && (
             <p className="text-xs text-text-muted truncate max-w-xs">{row.description}</p>
           )}
@@ -425,6 +481,11 @@ export default function AdminInventoryPage() {
       align: 'center',
       render: (v, row) => (
         <div className="flex justify-center gap-2">
+          {row.openReportCount > 0 && (
+            <Button variant="outline" size="sm" onClick={() => openReportsModal(row)}>
+              Rapports ({row.openReportCount})
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -816,6 +877,137 @@ export default function AdminInventoryPage() {
             </div>
           )}
         </div>
+      </Modal>
+
+      {/* ── Modal : Signalements ─────────────────────────────────────────────── */}
+      <Modal
+        open={showReports}
+        onClose={() => { setShowReports(false); setResolvingId(null); setResolveMsg(''); }}
+        title={`Signalements — ${reportsToolName}`}
+        size="lg"
+        footer={
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => { setShowReports(false); setResolvingId(null); setResolveMsg(''); }}>
+              Fermer
+            </Button>
+          </div>
+        }
+      >
+        {reportsLoading ? (
+          <p className="text-sm text-text-muted text-center py-6">Chargement...</p>
+        ) : (
+          <div className="space-y-6">
+            {(() => {
+              const open = reports.filter((r) => r.status === 'open');
+              const categoryLabels = {
+                broken:     'Cassé / Endommagé',
+                missing:    'Manquant / Introuvable',
+                incomplete: 'Incomplet — pièces manquantes',
+                defective:  'Défectueux — fonctionne mais problème',
+                other:      'Autre',
+              };
+              if (open.length === 0) return (
+                <div className="rounded-md border border-success/40 bg-success/10 px-4 py-3 text-sm text-success font-medium text-center">
+                  Aucun signalement ouvert.
+                </div>
+              );
+              return (
+                <div>
+                  <p className="text-sm font-semibold text-text mb-2">Ouverts ({open.length})</p>
+                  <div className="space-y-3">
+                    {open.map((r) => (
+                      <div key={r._id} className="border border-border rounded-md p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <Badge variant="rejected" size="sm">{categoryLabels[r.category] || r.category}</Badge>
+                            <span className="ml-2 text-xs text-text-muted">
+                              {r.student.name} · {new Date(r.createdAt).toLocaleDateString('fr-FR')}
+                            </span>
+                          </div>
+                          {resolvingId !== r._id && (
+                            <Button variant="outline" size="sm" onClick={() => { setResolvingId(r._id); setResolveMsg(''); }}>
+                              Résoudre
+                            </Button>
+                          )}
+                        </div>
+                        {r.message && (
+                          <p className="text-sm text-text-muted italic">&ldquo;{r.message}&rdquo;</p>
+                        )}
+                        {resolvingId === r._id && (
+                          <div className="space-y-2 pt-2 border-t border-border">
+                            <textarea
+                              value={resolveMsg}
+                              onChange={(e) => setResolveMsg(e.target.value.slice(0, 500))}
+                              placeholder="Commentaire de résolution (optionnel)..."
+                              rows={2}
+                              className="w-full border border-border rounded-md px-3 py-2 text-sm bg-surface text-text resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            />
+                            <p className="text-xs text-text-dim text-right">{resolveMsg.length}/500</p>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => handleResolve(r._id)}
+                                loading={resolveLoading}
+                              >
+                                Confirmer
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => { setResolvingId(null); setResolveMsg(''); }}
+                                disabled={resolveLoading}
+                              >
+                                Annuler
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {(() => {
+              const resolved = reports.filter((r) => r.status === 'resolved');
+              const categoryLabels = {
+                broken:     'Cassé / Endommagé',
+                missing:    'Manquant / Introuvable',
+                incomplete: 'Incomplet — pièces manquantes',
+                defective:  'Défectueux — fonctionne mais problème',
+                other:      'Autre',
+              };
+              if (resolved.length === 0) return null;
+              return (
+                <div>
+                  <p className="text-sm font-semibold text-text-muted mb-2">Résolus ({resolved.length})</p>
+                  <div className="space-y-2">
+                    {resolved.map((r) => (
+                      <div key={r._id} className="border border-border rounded-md p-3 opacity-60">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="approved" size="sm">{categoryLabels[r.category] || r.category}</Badge>
+                          <span className="text-xs text-text-muted">
+                            {r.student.name} · {new Date(r.createdAt).toLocaleDateString('fr-FR')}
+                          </span>
+                          {r.resolvedBy && (
+                            <span className="text-xs text-text-dim">
+                              · Résolu par {r.resolvedBy.name} le {new Date(r.resolvedAt).toLocaleDateString('fr-FR')}
+                            </span>
+                          )}
+                        </div>
+                        {r.resolveMessage && (
+                          <p className="text-xs text-text-muted mt-1 italic">&ldquo;{r.resolveMessage}&rdquo;</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
       </Modal>
 
       {/* ── Modal : Ajout / Modification ─────────────────────────────────────── */}
