@@ -90,15 +90,21 @@ exports.getAllTools = asyncHandler(async (req, res, next) => {
 
   await enrichWithUserLoans(tools, req.user?.id);
 
-  const openReportAgg = await ToolReport.aggregate([
-    { $match: { status: 'open' } },
-    { $group: { _id: '$tool', count: { $sum: 1 } } },
+  const reportAgg = await ToolReport.aggregate([
+    { $group: { _id: '$tool',
+      openCount:     { $sum: { $cond: [{ $eq: ['$status', 'open'] },     1, 0] } },
+      resolvedCount: { $sum: { $cond: [{ $eq: ['$status', 'resolved'] }, 1, 0] } },
+    }},
   ]);
-  const reportCountMap = openReportAgg.reduce((acc, r) => {
-    acc[r._id.toString()] = r.count;
+  const reportCountMap = reportAgg.reduce((acc, r) => {
+    acc[r._id.toString()] = { open: r.openCount, resolved: r.resolvedCount };
     return acc;
   }, {});
-  tools.forEach((t) => { t.openReportCount = reportCountMap[t._id.toString()] || 0; });
+  tools.forEach((t) => {
+    const counts = reportCountMap[t._id.toString()] || { open: 0, resolved: 0 };
+    t.openReportCount     = counts.open;
+    t.resolvedReportCount = counts.resolved;
+  });
 
   res.status(200).json({
     success: true,

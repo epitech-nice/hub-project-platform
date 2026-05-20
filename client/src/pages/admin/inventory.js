@@ -431,11 +431,22 @@ export default function AdminInventoryPage() {
           <div className="flex items-center gap-2">
             <p className="font-medium text-text">{v}</p>
             {row.openReportCount > 0 && (
-              <Badge variant="rejected" size="sm">{row.openReportCount}</Badge>
+              <button type="button" onClick={() => openReportsModal(row)} className="cursor-pointer">
+                <Badge variant="rejected" size="sm">{row.openReportCount}</Badge>
+              </button>
             )}
           </div>
           {row.description && (
             <p className="text-xs text-text-muted truncate max-w-xs">{row.description}</p>
+          )}
+          {row.resolvedReportCount > 0 && row.openReportCount === 0 && (
+            <button
+              type="button"
+              onClick={() => openReportsModal(row)}
+              className="text-xs text-text-dim hover:text-text-muted transition-colors mt-0.5 block"
+            >
+              Historique ({row.resolvedReportCount})
+            </button>
           )}
         </div>
       ),
@@ -481,11 +492,6 @@ export default function AdminInventoryPage() {
       align: 'center',
       render: (v, row) => (
         <div className="flex justify-center gap-2">
-          {row.openReportCount > 0 && (
-            <Button variant="outline" size="sm" onClick={() => openReportsModal(row)}>
-              Rapports ({row.openReportCount})
-            </Button>
-          )}
           <Button
             variant="outline"
             size="sm"
