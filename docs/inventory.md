@@ -22,6 +22,7 @@ Le système permet de référencer le matériel physique (câbles, Raspberry Pi,
 3. Il clique sur le bouton **QR Code** pour générer automatiquement l'image imprimable liée à l'URL de l'outil.
 4. L'historique en temps réel est accessible via le panneau d'inventaire.
 5. Il peut lancer une **vérification d'inventaire** en comparant un scan RFID avec la base — les résultats indiquent les éléments présents, manquants ou inconnus, avec un filtre optionnel par tag.
+6. Il peut consulter les **signalements de problèmes** sur chaque outil via un badge rouge visible dans la liste (nombre de signalements ouverts). Au clic sur le bouton "Rapports", une modal liste les signalements avec la possibilité de les résoudre en ajoutant un commentaire.
 
 ---
 
@@ -90,3 +91,6 @@ Le modèle gardant une trace immuable des activités d'emprunts et de retours.
 - `GET /api/tools/export/csv` : Export sécurisé de l'inventaire avec protection contre les injections de formules.
 - `POST /api/tools/bulk-import` : Traitement par lots des scans RFID.
 - `POST /api/tools/verify-inventory` : Compare une liste de codes RFID scannés avec l'inventaire en base. Accepte `rfids[]` (obligatoire) et `tags[]` (optionnel pour restreindre le périmètre). Retourne trois listes : `present` (trouvés), `missing` (attendus mais absents du scan), `unknown` (scannés mais non enregistrés), accompagnées de stats (`expected`, `scanned`, `presentCount`, `missingCount`, `unknownCount`).
+- `POST /api/tools/:id/report` : (tout utilisateur authentifié) Crée un signalement de problème sur un outil. Accepte `category` (obligatoire : `broken` | `missing` | `incomplete` | `defective` | `other`) et `message` (optionnel, max 100 chars). Envoie un email aux admins (non-bloquant).
+- `GET /api/tools/:id/reports` : (admin) Liste tous les signalements d'un outil, triés du plus récent au plus ancien.
+- `PATCH /api/tools/:id/reports/:reportId/resolve` : (admin) Marque un signalement comme résolu. Accepte `resolveMessage` (optionnel, max 500 chars).
