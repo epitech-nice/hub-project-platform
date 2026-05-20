@@ -22,6 +22,12 @@ export default function ScanPage() {
   const [error, setError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
   const [quantity, setQuantity] = useState(1);
+  const [showReportForm, setShowReportForm]   = useState(false);
+  const [reportCategory, setReportCategory]   = useState('');
+  const [reportMessage, setReportMessage]     = useState('');
+  const [reportLoading, setReportLoading]     = useState(false);
+  const [reportSuccess, setReportSuccess]     = useState('');
+  const [reportError, setReportError]         = useState('');
 
   // Redirect to Microsoft auth, storing current path in localStorage so we
   // can return here after login regardless of OAuth state round-trip reliability.
@@ -69,6 +75,25 @@ export default function ScanPage() {
       setQuantity(1);
     } catch (err) {
       setError(err.message || 'Erreur lors du retour');
+    }
+  };
+
+  const handleReport = async () => {
+    if (!reportCategory) return;
+    setReportLoading(true);
+    setReportError('');
+    try {
+      const body = { category: reportCategory };
+      if (reportMessage.trim()) body.message = reportMessage.trim();
+      await post(`/api/tools/${id}/report`, body);
+      setReportSuccess('Signalement envoyé, merci !');
+      setShowReportForm(false);
+      setReportCategory('');
+      setReportMessage('');
+    } catch (err) {
+      setReportError(err.message || 'Erreur lors du signalement');
+    } finally {
+      setReportLoading(false);
     }
   };
 
@@ -215,6 +240,87 @@ export default function ScanPage() {
               </div>
             </div>
           )}
+
+          {/* ── Signalement de problème ──────────────────────────── */}
+          <div className="mt-6 pt-4 border-t border-border">
+            {reportSuccess && (
+              <div
+                className="mb-3 rounded-md border px-4 py-3 text-sm text-center"
+                style={{
+                  backgroundColor: 'rgb(var(--status-approved-bg))',
+                  borderColor: 'rgb(var(--status-approved-text))',
+                  color: 'rgb(var(--status-approved-text))',
+                }}
+              >
+                {reportSuccess}
+              </div>
+            )}
+
+            {!showReportForm && !reportSuccess && (
+              <button
+                type="button"
+                onClick={() => { setShowReportForm(true); setReportError(''); }}
+                className="w-full text-sm text-text-muted hover:text-danger transition-colors text-center py-2"
+              >
+                Signaler un problème
+              </button>
+            )}
+
+            {showReportForm && (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-text">Signaler un problème</p>
+
+                <select
+                  value={reportCategory}
+                  onChange={(e) => setReportCategory(e.target.value)}
+                  className="w-full border border-border rounded-md px-3 py-2 text-sm bg-surface text-text focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="" disabled>Choisir une catégorie...</option>
+                  <option value="broken">Cassé / Endommagé</option>
+                  <option value="missing">Manquant / Introuvable</option>
+                  <option value="incomplete">Incomplet — pièces manquantes</option>
+                  <option value="defective">Défectueux — fonctionne mais problème</option>
+                  <option value="other">Autre</option>
+                </select>
+
+                <div>
+                  <textarea
+                    value={reportMessage}
+                    onChange={(e) => setReportMessage(e.target.value.slice(0, 100))}
+                    placeholder="Détails supplémentaires (optionnel)..."
+                    rows={2}
+                    maxLength={100}
+                    className="w-full border border-border rounded-md px-3 py-2 text-sm bg-surface text-text resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  <p className="text-xs text-text-dim text-right mt-0.5">{reportMessage.length}/100</p>
+                </div>
+
+                {reportError && (
+                  <div className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
+                    {reportError}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleReport}
+                    disabled={!reportCategory || reportLoading}
+                    className="flex-1 py-2 px-4 rounded-md text-sm font-medium bg-danger text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-danger/90 transition-colors"
+                  >
+                    {reportLoading ? 'Envoi...' : 'Envoyer'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowReportForm(false); setReportCategory(''); setReportMessage(''); setReportError(''); }}
+                    className="flex-1 py-2 px-4 rounded-md text-sm font-medium border border-border text-text-muted hover:text-text transition-colors"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </Card>
       </main>
 
