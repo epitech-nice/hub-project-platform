@@ -201,3 +201,23 @@ exports.simulatedEnrollValidationRules = () => {
       .withMessage('Le lien GitHub doit être une URL GitHub valide (projet ou repository)')
   ];
 };
+
+// Validateur pour la création d'un signalement
+exports.toolReportValidationRules = () => [
+  check('category')
+    .notEmpty().withMessage('La catégorie est requise')
+    .isIn(['broken', 'missing', 'incomplete', 'defective', 'other'])
+    .withMessage('Catégorie invalide'),
+  check('message')
+    .optional()
+    .isString().withMessage('Le message doit être une chaîne')
+    .isLength({ max: 100 }).withMessage('Le message ne peut pas dépasser 100 caractères'),
+];
+
+// Validateur pour la résolution d'un signalement
+exports.resolveReportValidationRules = () => [
+  check('resolveMessage')
+    .optional()
+    .isString().withMessage('Le commentaire doit être une chaîne')
+    .isLength({ max: 500 }).withMessage('Le commentaire ne peut pas dépasser 500 caractères'),
+];
