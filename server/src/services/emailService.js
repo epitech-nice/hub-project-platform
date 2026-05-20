@@ -311,3 +311,91 @@ Pour vous désabonner, contactez-nous à unsubscribe@${process.env.EMAIL_DOMAIN 
     throw error;
   }
 };
+
+exports.sendToolReportEmail = async (tool, report, student, adminEmails) => {
+  try {
+    if (!adminEmails || adminEmails.length === 0) {
+      console.log('sendToolReportEmail : aucun destinataire, envoi annulé');
+      return { success: false, reason: 'No recipients' };
+    }
+
+    const categoryLabels = {
+      broken:     'Cassé / Endommagé',
+      missing:    'Manquant / Introuvable',
+      incomplete: 'Incomplet — pièces manquantes',
+      defective:  'Défectueux — fonctionne mais problème',
+      other:      'Autre',
+    };
+
+    const subject = `Signalement inventaire : ${tool.name}`;
+    const categoryLabel = categoryLabels[report.category] || report.category;
+    const adminUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/admin/inventory`;
+
+    const messageRow = report.message
+      ? `<tr style="background:#f8f9fa;"><td style="padding:8px;font-weight:bold;width:40%;">Message</td><td style="padding:8px;">${report.message}</td></tr>`
+      : '';
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+        <body style="margin:0;padding:0;font-family:Arial,sans-serif;line-height:1.6;color:#333;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;border-collapse:collapse;">
+            <tr>
+              <td style="background-color:#FF9800;padding:20px;text-align:center;color:white;">
+                <h1 style="margin:0;font-size:24px;">Signalement de problème</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px;">
+                <p>Un étudiant a signalé un problème sur un outil de l'inventaire.</p>
+                <table style="width:100%;border-collapse:collapse;">
+                  <tr><td style="padding:8px;font-weight:bold;width:40%;">Outil</td><td style="padding:8px;">${tool.name}</td></tr>
+                  <tr style="background:#f8f9fa;"><td style="padding:8px;font-weight:bold;">Catégorie</td><td style="padding:8px;">${categoryLabel}</td></tr>
+                  <tr><td style="padding:8px;font-weight:bold;">Étudiant</td><td style="padding:8px;">${student.name} (${student.email})</td></tr>
+                  ${messageRow}
+                </table>
+                <p style="margin-top:25px;">
+                  <a href="${adminUrl}" style="display:inline-block;padding:10px 20px;background-color:#2196F3;color:white;text-decoration:none;border-radius:4px;font-weight:bold;">
+                    Voir l'inventaire
+                  </a>
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px;text-align:center;color:#888;font-size:12px;border-top:1px solid #eee;">
+                {EPITECH} Nice — 131 Boulevard René Cassin — 06200 Nice, France
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `;
+
+    const textContent = [
+      `Signalement de problème — ${tool.name}`,
+      `Catégorie : ${categoryLabel}`,
+      `Étudiant : ${student.name} (${student.email})`,
+      report.message ? `Message : ${report.message}` : '',
+      `Voir l'inventaire : ${adminUrl}`,
+    ].filter(Boolean).join('\n');
+
+    const { data, error } = await resend.emails.send({
+      from: process.env.EMAIL_FROM || 'Hub Projets <notifications@votredomaine.com>',
+      to: adminEmails,
+      subject,
+      html: htmlContent,
+      text: textContent,
+    });
+
+    if (error) {
+      console.error('Erreur Resend signalement:', error);
+      throw error;
+    }
+
+    return { success: true, messageId: data.id };
+  } catch (error) {
+    console.error('Erreur sendToolReportEmail:', error);
+    throw error;
+  }
+};
