@@ -10,7 +10,7 @@ export function getActiveSeason(date = new Date()) {
 
 export function getSeasonalPreference() {
   if (typeof window === 'undefined') return 'auto';
-  return localStorage.getItem('seasonal-preference') || 'auto';
+  return localStorage.getItem('seasonal-preference') || 'off';
 }
 
 export function setSeasonalPreference(value) {
