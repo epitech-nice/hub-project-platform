@@ -1,0 +1,12 @@
+# NB : on n'exclut PAS .env* côté client — ces fichiers ne contiennent que
+# NEXT_PUBLIC_API_URL (URL publique, pas un secret) et Next en a besoin au build.
+node_modules
+npm-debug.log*
+.git
+.gitignore
+.next
+out
+build
+coverage
+*.log
+.DS_Store

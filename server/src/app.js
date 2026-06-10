@@ -22,18 +22,30 @@ app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
 // Middlewares de sécurité
-app.use(helmet({
-  crossOriginResourcePolicy: false, // Permet de charger les images/PDF depuis une autre origine (le front)
-  crossOriginEmbedderPolicy: false,
-  frameguard: false, // Permet d'afficher les PDF dans des iFrames ou des balises <object>
-  contentSecurityPolicy: false, // Permet l'embedding des PDF dans des iframes cross-origin
-})); // Protège les en-têtes HTTP
+// Helmet est activé avec ses défauts (CSP, X-Frame-Options: DENY, CORP: same-origin…)
+// sur TOUTE l'API. L'assouplissement nécessaire à l'embedding des PDF est appliqué
+// uniquement sur /uploads ci-dessous, pas globalement.
+app.use(helmet());
 app.use(mongoSanitize()); // Prévient les injections NoSQL
 app.use(xss()); // Prévient les attaques XSS
 
 // Fichiers statiques — PDF des sujets Simulated (Doit être avant le rate limiter pour ne pas bloquer les images)
 const path = require("path");
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+// Exception ciblée : les ressources /uploads doivent rester chargeables/embarquables
+// par le front (iframe PDF de la partie Simulated). On autorise le cross-origin et on
+// limite le framing à l'origine du front (au lieu de l'interdiction globale de Helmet).
+app.use("/uploads", (req, res, next) => {
+  res.removeHeader("X-Frame-Options");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  if (process.env.FRONTEND_URL) {
+    res.setHeader("Content-Security-Policy", `frame-ancestors ${process.env.FRONTEND_URL}`);
+  } else {
+    // Pas d'origine front configurée : on retombe sur un comportement permissif
+    // équivalent à l'ancien (embedding autorisé) pour ne pas casser la preview.
+    res.removeHeader("Content-Security-Policy");
+  }
+  next();
+}, express.static(path.join(__dirname, "../uploads")));
 
 // Limitation de requêtes (Rate limiting)
 
