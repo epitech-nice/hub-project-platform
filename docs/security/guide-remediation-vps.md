@@ -177,7 +177,8 @@ Priorités (CVE connues) :
       un sujet PDF et vérifier que l'iframe s'affiche. Inspecter la réponse
       `/uploads/...` (DevTools > Network) : doit avoir
       `Cross-Origin-Resource-Policy: cross-origin` et **pas** de `X-Frame-Options`.
-- [ ] L'onglet « Historique » de l'inventaire fonctionne (route `loans/history`).
+- [ ] L'onglet « Historique des emprunts » est **visible et fonctionnel en tant
+      qu'admin**, et **absent en tant qu'étudiant** (finding 2.3).
 - [ ] Recherche d'outils fonctionne (correctif ReDoS).
 - [ ] `nc -zv -w3 <IP_VPS> 27017` depuis un poste externe → **refused/timed out**.
 - [ ] `docker exec hub-project-server sh -c 'find /app -maxdepth 2 -name ".env*"'`
@@ -204,8 +205,8 @@ git push origin master
 | Action | Statut |
 |---|---|
 | `.dockerignore`, garde-fou JWT, ReDoS, microsoftId, Helmet/uploads, HSTS | ✅ fait (code, branche) |
+| loans/history réservé aux admins + onglet masqué côté étudiant (2.3) | ✅ fait (code, branche) |
 | Fermer port 27017 + rotation mdp Mongo (3.1) | ⬜ VPS — étape 1 |
 | Rebuild + purge image + vérif secret (4.1) | ⬜ VPS — étape 2 |
 | Rotation Resend / MS secret / JWT (4.1) | ⬜ VPS/consoles — étape 3 |
 | Montée de versions dépendances (5.1) | ⬜ branche dédiée — étape 4 |
-| Décision : étudiants voient-ils tous les emprunts ? (2.3) | ⬜ choix produit |
