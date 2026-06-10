@@ -9,6 +9,7 @@ const { Client } = require('@microsoft/microsoft-graph-client');
 require('isomorphic-fetch');
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const { ipKeyGenerator } = require("express-rate-limit");
 const mongoSanitize = require("express-mongo-sanitize");
 const xss = require("xss-clean");
 const jwt = require("jsonwebtoken");
@@ -76,7 +77,8 @@ const userLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const payload = getTokenPayload(req);
-    return payload?.id || req.ip;
+    // ipKeyGenerator normalise les adresses IPv6 (/56) — requis par express-rate-limit v8
+    return payload?.id || ipKeyGenerator(req.ip);
   },
   skip: (req) => {
     if (!req.headers.authorization) return true;
@@ -94,7 +96,8 @@ const adminLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const payload = getTokenPayload(req);
-    return payload?.id || req.ip;
+    // ipKeyGenerator normalise les adresses IPv6 (/56) — requis par express-rate-limit v8
+    return payload?.id || ipKeyGenerator(req.ip);
   },
   skip: (req) => {
     const payload = getTokenPayload(req);

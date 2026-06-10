@@ -21,6 +21,10 @@ services:
     container_name: hub-project-server
     depends_on:
       - db
+    # Injection des secrets au runtime (Microsoft OAuth, Resend, JWT_SECRET…) sans
+    # les baker dans l'image (cf. server/.dockerignore qui exclut .env).
+    env_file:
+      - server/.env
     environment:
       NODE_ENV: development
       MONGODB_URI: mongodb://mongo:mongo@db:27017/hub_project_db?authSource=admin
