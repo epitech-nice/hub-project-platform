@@ -21,7 +21,7 @@ const { createReport, getReports, resolveReport } = require('../controllers/tool
 
 // IMPORTANT : routes spécifiques avant /:id pour éviter les collisions de nommage
 router.get('/tags', authenticateToken, getAllTags);
-router.get('/loans/history', authenticateToken, getLoanHistory);
+router.get('/loans/history', authenticateToken, isAdmin, getLoanHistory);
 router.get('/export/csv', authenticateToken, isAdmin, exportInventoryCSV);
 router.post('/bulk-import', authenticateToken, isAdmin, bulkImportValidationRules(), validate, bulkImport);
 router.post('/verify-inventory', authenticateToken, isAdmin, verifyInventoryValidationRules(), validate, verifyInventory);
