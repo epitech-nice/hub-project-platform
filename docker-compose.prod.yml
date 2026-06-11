@@ -2,12 +2,17 @@ services:
   db:
     image: mongo:latest
     container_name: hub-project-db
+    # Identifiants lus depuis un fichier .env (racine du repo, gitignore) — jamais
+    # codes en dur dans ce fichier versionne. NB : ces valeurs ne s'appliquent qu'a
+    # la PREMIERE initialisation du volume ; sur un volume existant, changer le mot
+    # de passe se fait via db.changeUserPassword (cf. guide-remediation-vps.md).
     environment:
-      MONGO_INITDB_ROOT_USERNAME: mongo
-      MONGO_INITDB_ROOT_PASSWORD: mongo
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
       MONGO_INITDB_DATABASE: hub_project_db
-    ports:
-      - "27017:27017"
+    # Pas de mapping de port : la base n'est joignable que par les autres conteneurs
+    # via le reseau interne app-network (db:27017). Pour un acces admin distant,
+    # passer par un tunnel SSH, jamais par un port publie.
     volumes:
       - mongodb_data:/data/db
     networks:
