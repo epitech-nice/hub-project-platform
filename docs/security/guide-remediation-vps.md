@@ -1,212 +1,158 @@
-# Guide de remédiation — actions VPS (audit sécurité 2026-06)
+# Guide de remédiation — audit sécurité 2026-06
 
-Ce guide couvre les actions **à réaliser manuellement sur le VPS OVH**, que les
-correctifs code de la branche `security/hardening-audit-2026-06` ne peuvent pas
-faire seuls. À exécuter en SSH sur le VPS, dans l'ordre.
+## Légende — OÙ exécuter chaque étape
 
-> ⚠️ **À LIRE EN PREMIER — prérequis bloquant.** Le correctif `config/auth.js`
-> de cette branche **refuse désormais de démarrer le serveur en production si
-> `JWT_SECRET` n'est pas défini**. Avant de déployer la branche, vérifie que
-> `server/.env.prod` contient bien une ligne `JWT_SECRET=...` avec une valeur
-> forte. Sinon le conteneur `hub-project-server` ne bootera pas.
->
-> ```bash
-> grep -q '^JWT_SECRET=' server/.env.prod && echo "OK JWT_SECRET present" || echo "MANQUANT — a ajouter avant deploiement"
-> ```
+- 💻 **LOCAL** = ta machine de dev (le dossier `~/Desktop/Dev/hub-project-platform`)
+- 🖥️ **VPS** = le serveur OVH, en SSH (`51.75.200.98`)
+- 🌐 **WEB** = une console web (Resend, Azure AD)
+
+> Suis les étapes **dans l'ordre A → F**. Ne saute pas l'ordre interne d'une étape.
 
 ---
 
-## Étape 0 — Récupérer la branche sur le VPS
+## ✅ Déjà fait (pour info)
 
-```bash
-cd <chemin-du-repo-sur-le-vps>
-git fetch origin
-git checkout security/hardening-audit-2026-06
-# (ne PAS encore merger sur master — on valide d'abord)
-```
+- 💻 Tous les correctifs code commités sur la branche `security/hardening-audit-2026-06` et poussés sur GitHub.
+- 💻 Tests backend 103/103, boot vérifié.
+- 🖥️ Branche récupérée, recette fonctionnelle OK (login, preview PDF, recherche, emprunt, onglet historique admin).
+- 🖥️ Port Mongo 27017 fermé en live (`nc` → refused).
 
----
-
-## Étape 1 — 🔴 Fermer MongoDB (finding 3.1, Critique)
-
-**Contexte :** le port 27017 est joignable depuis Internet et le mot de passe
-Mongo est faible. C'est l'action la plus urgente.
-
-### 1a. Fermer le port
-
-**Option recommandée — supprimer le mapping** dans `docker-compose.prod.yml`,
-service `db` :
-
-```yaml
-  db:
-    image: mongo:latest
-    # ...
-    # SUPPRIMER ces deux lignes :
-    # ports:
-    #   - "27017:27017"
-```
-
-Le backend accède à Mongo via le réseau interne `app-network` (`db:27017`), le
-port hôte n'est pas nécessaire.
-
-> Si tu as besoin d'un accès admin distant ponctuel, passe par un tunnel SSH :
-> `ssh -L 27017:localhost:27017 user@vps` puis connecte-toi sur `localhost:27017`.
-> Ne rouvre jamais le port public.
-
-À défaut de suppression, binder en local : `- "127.0.0.1:27017:27017"`.
-
-> ⚠️ Ne compte pas sur `ufw` : Docker contourne ses règles. Le mapping compose
-> (ou le firewall réseau OVH) est le seul levier fiable.
-
-### 1b. Changer le mot de passe Mongo
-
-Génère un secret fort :
-
-```bash
-openssl rand -hex 32
-```
-
-Mets à jour l'utilisateur dans Mongo (remplace `<ancien>`/`<nouveau>`/`<user>`) :
-
-```bash
-docker exec -it hub-project-db mongosh -u <user> -p '<ancien_mdp>' --authenticationDatabase admin
-```
-```javascript
-use admin
-db.changeUserPassword("<user>", "<nouveau_mdp_fort>")
-exit
-```
-
-Puis reporte le nouveau mot de passe dans `server/.env.prod` (variable
-`MONGODB_URI=mongodb://<user>:<nouveau_mdp_fort>@db:27017/...?authSource=admin`).
-
-### 1c. Vérifier qu'une intrusion n'a pas déjà eu lieu
-
-Pendant l'exposition, un bot a pu écrire. Cherche des bases suspectes :
-
-```bash
-docker exec -it hub-project-db mongosh -u <user> -p '<nouveau_mdp>' --authenticationDatabase admin --quiet --eval 'db.adminCommand({listDatabases:1}).databases.forEach(d => print(d.name))'
-```
-
-Repère toute base de type `READ__ME_TO_RECOVER`, `PLEASE_READ`, `PWNED`, ou des
-collections manquantes/vides anormales. Si présent → restaure depuis backup
-après avoir fermé le port.
+Il reste à **rendre cette fermeture permanente** (via la version commitée du compose), **changer le mot de passe Mongo**, **purger le secret baké dans l'image**, **faire tourner les secrets**, puis **merger**.
 
 ---
 
-## Étape 2 — 🟠 Recréer les conteneurs et vérifier que les secrets ne sont plus bakés (finding 4.1)
+## Étape A — 🖥️ VPS : sécuriser MongoDB (URGENT)
 
-Le `.dockerignore` serveur ajouté par cette branche empêche le `COPY . .` de
-recopier `.env.prod` dans l'image. Il faut **rebuild sans cache** pour purger la
-couche fautive.
+> Le port est déjà fermé en live, mais ta modif est **locale non commitée** : un futur
+> `git pull` la perdrait. Ici on récupère la version commitée (port retiré proprement)
+> ET on remplace le mot de passe trivial `mongo/mongo`.
+
+**A.1 — Générer le nouveau mot de passe et le garder sous la main**
+```bash
+openssl rand -hex 24      # => copie le résultat, on l'appellera <NOUVEAU_MDP>
+```
+
+**A.2 — Créer le fichier `.env` racine** (lu par docker compose pour les `${...}`, gitignoré)
+```bash
+cat > .env <<EOF
+MONGO_ROOT_USER=mongo
+MONGO_ROOT_PASSWORD=<NOUVEAU_MDP>
+EOF
+```
+
+**A.3 — Mettre à jour `server/.env.prod`** : remplacer le mot de passe dans `MONGODB_URI`
+```
+MONGODB_URI=mongodb://mongo:<NOUVEAU_MDP>@db:27017/hub_project_db?authSource=admin
+```
+
+**A.4 — Récupérer la version commitée du compose** (abandonne ta modif locale, récupère la mienne)
+```bash
+git checkout -- docker-compose.prod.yml
+git pull
+```
+
+**A.5 — Changer le mot de passe live de Mongo** (le volume utilise encore `mongo/mongo`)
+```bash
+docker exec -it hub-project-db mongosh -u mongo -p mongo --authenticationDatabase admin \
+  --eval "db.getSiblingDB('admin').changeUserPassword('mongo', '<NOUVEAU_MDP>')"
+```
+
+> ⚠️ Après A.5, le serveur perd la connexion Mongo (il a encore l'ancienne URI en mémoire).
+> C'est normal, l'étape B le reconnecte. Enchaîne directement.
+
+---
+
+## Étape B — 🖥️ VPS : rebuild pour purger le secret baké + appliquer la branche (finding 4.1)
+
+Un rebuild **sans cache** est nécessaire pour que le `.dockerignore` retire `.env.prod`
+de l'image, et pour appliquer tous les correctifs code.
 
 ```bash
-docker compose -f docker-compose.prod.yml build --no-cache server
+docker compose -f docker-compose.prod.yml build --no-cache
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-**Vérification — le secret ne doit plus être dans l'image :**
-
+**Vérifications :**
 ```bash
-docker exec hub-project-server sh -c 'find /app -maxdepth 2 -name ".env*"'
-# Attendu : AUCUNE sortie (avant le fix : /app/.env.prod)
+# le serveur a redémarré et reparle à Mongo avec le nouveau mot de passe :
+docker logs hub-project-server --tail 20        # "Serveur démarré sur le port 5000", pas d'erreur auth
+
+# le secret n'est plus dans l'image :
+docker exec hub-project-server sh -c 'find /app -maxdepth 2 -name ".env*"'   # => vide
+
+# le port Mongo est fermé (depuis ton PC, pas le VPS) :
+#   💻 LOCAL : nc -zv -w3 51.75.200.98 27017   => refused
 ```
 
-Les variables d'env continuent d'arriver via `env_file:` au runtime — le site
-fonctionne normalement.
-
-**Purger les anciennes images contenant le secret :**
-
-```bash
-docker image prune -f
-# verifie qu'aucune image intermediaire ne traine :
-docker images | grep hub-project
-```
+À ce stade : teste vite le site (login + une page qui charge des données + preview PDF).
 
 ---
 
-## Étape 3 — 🟠 Rotation des secrets exposés (consécutif à 4.1)
+## Étape C — 🌐 WEB : faire tourner les secrets exposés
 
-Les secrets ont vécu dans des couches d'image (et d'éventuels backups). Par
-précaution, régénère :
+Ces secrets ont vécu dans des couches d'image (et backups éventuels). On les régénère.
 
-- **`JWT_SECRET`** : `openssl rand -hex 64` → remplacer dans `.env.prod`.
-  ⚠️ Invalide les sessions en cours (les utilisateurs devront se reconnecter).
-- **`RESEND_API_KEY`** : régénérer depuis le dashboard Resend, remplacer dans
-  `.env.prod`. (Risque : envoi d'emails au nom du domaine = phishing.)
-- **`MICROSOFT_CLIENT_SECRET`** : régénérer dans Azure AD > App registrations >
-  Certificates & secrets, remplacer dans `.env.prod`.
+- 🌐 **Resend** (dashboard) : révoquer l'ancienne `RESEND_API_KEY`, en générer une neuve.
+- 🌐 **Azure AD** (App registrations > Certificates & secrets) : régénérer le `MICROSOFT_CLIENT_SECRET`.
+- (Le `JWT_SECRET` a déjà été tourné si tu l'as régénéré ; sinon, c'est le moment.)
 
-Après modification de `.env.prod` :
-
+Puis 🖥️ **VPS** : reporter les nouvelles valeurs dans `server/.env.prod` et recharger le backend :
 ```bash
 docker compose -f docker-compose.prod.yml up -d server
 ```
 
+> Note : régénérer `JWT_SECRET` déconnecte les utilisateurs (ils se reconnectent). Sans impact data.
+
 ---
 
-## Étape 4 — 🟠 Mettre à jour les dépendances vulnérables (finding 5.1)
+## Étape D — 🖥️ VPS : vérifier qu'aucune intrusion n'a eu lieu
 
-À faire hors VPS (en local), puis redéployer. Audit :
-
+La base a été joignable avec `mongo/mongo` pendant un temps indéterminé. On contrôle.
 ```bash
-cd server && npm audit
-cd ../client && npm audit
+docker exec -it hub-project-db mongosh -u mongo -p '<NOUVEAU_MDP>' --authenticationDatabase admin \
+  --quiet --eval 'db.adminCommand({listDatabases:1}).databases.forEach(d => print(d.name))'
 ```
-
-Priorités (CVE connues) :
-- **client : `next@12.2.3`** → migrer vers la dernière 14.x (corrige SSRF image,
-  empoisonnement de cache, contournement middleware). Migration la plus lourde,
-  à tester soigneusement.
-- **server : `multer@1.4.5-lts.1`** → `2.x` (DoS).
-- **server/client : `axios@0.27/0.30`** → `1.x` (SSRF/fuite d'en-têtes).
-- **`xss-clean`** : déprécié — peut être retiré (Helmet + échappement de sortie
-  suffisent). Optionnel.
-
-À traiter dans une branche dédiée, ce n'est pas un quick-win sans risque.
+Bases attendues : `admin`, `config`, `local`, `hub_project_db`. Toute base type
+`READ__ME_TO_RECOVER`, `PWNED`, `readme`… = intrusion → restaurer depuis un backup propre.
 
 ---
 
-## Étape 5 — Vérifications post-déploiement (recette)
+## Étape E — 💻 LOCAL : merger la branche sur master
 
-À cocher **avant de merger la branche** :
-
-- [ ] Le site charge, login Microsoft OK.
-- [ ] **La preview PDF de la partie Simulated s'affiche bien** (iframe). C'est le
-      point sensible du correctif Helmet : ouvrir une page projet Simulated avec
-      un sujet PDF et vérifier que l'iframe s'affiche. Inspecter la réponse
-      `/uploads/...` (DevTools > Network) : doit avoir
-      `Cross-Origin-Resource-Policy: cross-origin` et **pas** de `X-Frame-Options`.
-- [ ] L'onglet « Historique des emprunts » est **visible et fonctionnel en tant
-      qu'admin**, et **absent en tant qu'étudiant** (finding 2.3).
-- [ ] Recherche d'outils fonctionne (correctif ReDoS).
-- [ ] `nc -zv -w3 <IP_VPS> 27017` depuis un poste externe → **refused/timed out**.
-- [ ] `docker exec hub-project-server sh -c 'find /app -maxdepth 2 -name ".env*"'`
-      → aucune sortie.
-- [ ] Le serveur a bien démarré (logs : `Serveur démarré sur le port 5000`).
-
----
-
-## Étape 6 — Merge
-
-Une fois la recette validée par toi :
-
+À faire **une fois A→D validés et le site stable en prod**.
 ```bash
 git checkout master
 git merge --no-ff security/hardening-audit-2026-06
 git push origin master
-# puis redéploiement habituel sur le VPS depuis master
+```
+Puis, si tu veux aligner le VPS sur master :
+```bash
+#  🖥️ VPS
+git checkout master
+git pull
+# pas besoin de re-déployer si le VPS tournait déjà la branche (même code)
 ```
 
 ---
 
-## Récapitulatif : qui fait quoi
+## Étape F — 💻 LOCAL : montée de versions des dépendances (finding 5.1) — PLUS TARD
 
-| Action | Statut |
-|---|---|
-| `.dockerignore`, garde-fou JWT, ReDoS, microsoftId, Helmet/uploads, HSTS | ✅ fait (code, branche) |
-| loans/history réservé aux admins + onglet masqué côté étudiant (2.3) | ✅ fait (code, branche) |
-| Fermer port 27017 + rotation mdp Mongo (3.1) | ⬜ VPS — étape 1 |
-| Rebuild + purge image + vérif secret (4.1) | ⬜ VPS — étape 2 |
-| Rotation Resend / MS secret / JWT (4.1) | ⬜ VPS/consoles — étape 3 |
-| Montée de versions dépendances (5.1) | ⬜ branche dédiée — étape 4 |
+Pas un quick-win, à traiter dans une branche dédiée avec tests :
+```bash
+cd server && npm audit
+cd ../client && npm audit
+```
+Priorités : `next` 12 → 14, `multer` 1.x → 2.x, `axios` 0.x → 1.x. Optionnel : retirer `xss-clean`.
+
+---
+
+## Récapitulatif express
+
+| Ordre | Où | Action |
+|------|-----|--------|
+| A | 🖥️ VPS | Sécuriser Mongo : `.env` racine + `.env.prod` + pull compose + changer mdp |
+| B | 🖥️ VPS | `build --no-cache` + `up -d` (purge secret baké, applique la branche) |
+| C | 🌐 + 🖥️ | Rotation Resend / Microsoft secret + reload server |
+| D | 🖥️ VPS | Vérifier intrusion (listDatabases) |
+| E | 💻 LOCAL | Merger la branche sur master |
+| F | 💻 LOCAL | (plus tard) Montée de versions dépendances |
