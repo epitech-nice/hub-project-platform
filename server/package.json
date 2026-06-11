@@ -9,7 +9,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "prod": "NODE_ENV=production node --env-file=.env.prod src/index.js"
+    "prod": "NODE_ENV=production node src/index.js"
   },
   "dependencies": {
     "@azure/msal-node": "^3.3.0",
