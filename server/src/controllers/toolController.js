@@ -15,9 +15,11 @@ const buildToolQuery = (params) => {
   const query = {};
 
   if (search) {
+    // Échapper les métacaractères regex pour éviter une injection de motif / ReDoS
+    const safe = String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     query.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { description: { $regex: search, $options: 'i' } },
+      { name: { $regex: safe, $options: 'i' } },
+      { description: { $regex: safe, $options: 'i' } },
     ];
   }
 
@@ -335,7 +337,7 @@ exports.getLoanHistory = asyncHandler(async (req, res, next) => {
     .sort({ createdAt: -1 })
     .limit(parseInt(limit, 10))
     .populate('tool', 'name rfid')
-    .populate('user', 'name email microsoftId')
+    .populate('user', 'name email')
     .lean();
 
   res.status(200).json({ success: true, count: loans.length, data: loans });

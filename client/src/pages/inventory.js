@@ -70,7 +70,7 @@ const LOAN_COLUMNS = [
 ];
 
 export default function InventoryPage() {
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
   const { get, loading: apiLoading } = useApi();
 
@@ -147,7 +147,8 @@ export default function InventoryPage() {
           <div role="tablist" className="flex border-b border-border gap-1">
             {[
               { id: 'inventory', label: 'Matériel' },
-              { id: 'history', label: 'Historique des emprunts' },
+              // Historique des emprunts : réservé aux admins (route loans/history protégée par isAdmin)
+              ...(isAdmin ? [{ id: 'history', label: 'Historique des emprunts' }] : []),
             ].map((tab) => (
               <button
                 key={tab.id}

@@ -16,6 +16,8 @@ const nextConfig = {
             { key: 'X-Frame-Options', value: 'DENY' },
             // Empêche le MIME sniffing
             { key: 'X-Content-Type-Options', value: 'nosniff' },
+            // Force HTTPS pendant 1 an. Sans `preload` pour rester réversible.
+            { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
           ],
         },
       ];
