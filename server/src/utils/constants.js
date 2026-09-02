@@ -57,6 +57,29 @@ const REPORT_STATUS = {
   RESOLVED: 'resolved',
 };
 
+// Statuts pour les imprimantes 3D
+const PRINTER_STATUSES = {
+  IDLE: 'idle',
+  PRINTING: 'printing',
+  AWAITING_CLEARANCE: 'awaiting_clearance',
+  OFFLINE: 'offline',
+  ERROR: 'error',
+  DISABLED: 'disabled',
+};
+
+// Source d'une entrée de statusHistory imprimante
+const PRINTER_STATUS_SOURCES = {
+  AGENT_REPORT: 'agent_report',
+  ADMIN_ACTION: 'admin_action',
+  HEARTBEAT_TIMEOUT: 'heartbeat_timeout',
+};
+
+// Méthode de validation de la libération du plateau
+const CLEARANCE_METHODS = {
+  QR: 'qr',
+  ADMIN_OVERRIDE: 'admin_override',
+};
+
 module.exports = {
   PROJECT_STATUSES,
   WORKSHOP_STATUSES,
@@ -64,5 +87,8 @@ module.exports = {
   TOOL_STATUS,
   LOAN_STATUS,
   REPORT_CATEGORIES,
-  REPORT_STATUS
+  REPORT_STATUS,
+  PRINTER_STATUSES,
+  PRINTER_STATUS_SOURCES,
+  CLEARANCE_METHODS
 };
