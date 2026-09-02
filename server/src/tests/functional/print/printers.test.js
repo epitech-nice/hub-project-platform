@@ -2,6 +2,7 @@ const request = require('supertest');
 const app = require('../../../app');
 const Printer = require('../../../models/Printer');
 const { createUser, createAdmin, authHeader } = require('../../helpers/auth');
+const { PRINTER_STATUSES } = require('../../../utils/constants');
 
 describe('GET /api/print/printers', () => {
   it('returns 401 with no auth', async () => {
@@ -66,5 +67,52 @@ describe('POST /api/print/printers/:id/regenerate-key', () => {
     expect(typeof res.body.data.apiKey).toBe('string');
     const reloaded = await Printer.findById(printerId);
     expect(reloaded.apiKeyHash).not.toBe(oldHash);
+  });
+});
+
+describe('PATCH /api/print/printers/:id/disabled', () => {
+  it('requires a note when disabling', async () => {
+    const admin = await createAdmin();
+    const printer = await Printer.create({ name: 'P', model: 'kobra3', apiKeyHash: 'x'.repeat(64) });
+    const res = await request(app)
+      .patch(`/api/print/printers/${printer._id}/disabled`)
+      .set(authHeader(admin))
+      .send({ disabled: true });
+    expect(res.status).toBe(400);
+  });
+
+  it('disables with a note, logs statusHistory, and re-enables back to idle', async () => {
+    const admin = await createAdmin();
+    const printer = await Printer.create({ name: 'P', model: 'kobra3', apiKeyHash: 'x'.repeat(64) });
+
+    const disableRes = await request(app)
+      .patch(`/api/print/printers/${printer._id}/disabled`)
+      .set(authHeader(admin))
+      .send({ disabled: true, note: 'Buse bouchée, en réparation' });
+    expect(disableRes.status).toBe(200);
+    expect(disableRes.body.data.status).toBe(PRINTER_STATUSES.DISABLED);
+
+    const reloaded = await Printer.findById(printer._id);
+    expect(reloaded.statusHistory).toHaveLength(1);
+    expect(reloaded.statusHistory[0].source).toBe('admin_action');
+    expect(reloaded.statusHistory[0].detail).toBe('Buse bouchée, en réparation');
+
+    const enableRes = await request(app)
+      .patch(`/api/print/printers/${printer._id}/disabled`)
+      .set(authHeader(admin))
+      .send({ disabled: false, note: 'Réparée' });
+    expect(enableRes.body.data.status).toBe(PRINTER_STATUSES.IDLE);
+  });
+});
+
+describe('GET /api/print/printers/:id/qr', () => {
+  it('returns a PNG image for an admin', async () => {
+    const admin = await createAdmin();
+    const printer = await Printer.create({ name: 'P', model: 'kobra3', apiKeyHash: 'x'.repeat(64) });
+    const res = await request(app)
+      .get(`/api/print/printers/${printer._id}/qr`)
+      .set(authHeader(admin));
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/png');
   });
 });
