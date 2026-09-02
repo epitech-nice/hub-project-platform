@@ -80,6 +80,25 @@ const CLEARANCE_METHODS = {
   ADMIN_OVERRIDE: 'admin_override',
 };
 
+// Statuts d'un job d'impression
+const PRINT_JOB_STATUSES = {
+  REJECTED: 'rejected',
+  QUEUED: 'queued',
+  SENT: 'sent',
+  PRINTING: 'printing',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+};
+
+// Raison de refus d'une soumission
+const PRINT_REJECTION_REASONS = {
+  NOT_AUTHORIZED: 'not_authorized',
+  PRINTER_BUSY: 'printer_busy',
+  PRINTER_OFFLINE: 'printer_offline',
+  PRINTER_ERROR: 'printer_error',
+  PRINTER_DISABLED: 'printer_disabled',
+};
+
 module.exports = {
   PROJECT_STATUSES,
   WORKSHOP_STATUSES,
@@ -90,5 +109,7 @@ module.exports = {
   REPORT_STATUS,
   PRINTER_STATUSES,
   PRINTER_STATUS_SOURCES,
-  CLEARANCE_METHODS
+  CLEARANCE_METHODS,
+  PRINT_JOB_STATUSES,
+  PRINT_REJECTION_REASONS
 };
