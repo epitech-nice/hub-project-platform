@@ -217,6 +217,7 @@ app.use("/api/simulated/enrollments", require("./routes/simulatedEnrollments"));
 app.use("/api/simulated", require("./routes/simulatedEnrollments"));
 
 app.use("/api/print/printers", require("./routes/printPrinters"));
+app.use("/api/print/whitelist", require("./routes/printWhitelist"));
 
 app.use("/api/tools", require("./routes/tools"));
 
