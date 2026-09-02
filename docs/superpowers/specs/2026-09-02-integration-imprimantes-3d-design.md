@@ -38,13 +38,24 @@ Le flux réseau est **toujours initié par l'imprimante vers le Hub**, jamais l'
 | `name` | String | ex: "Kobra 3 - Atelier A" |
 | `model` | String | `kobra3` \| `kobra3max` |
 | `apiKeyHash` | String | clé API de l'agent, hashée |
-| `status` | Enum | `idle` \| `printing` \| `awaiting_clearance` \| `offline` \| `error` |
+| `status` | Enum | `idle` \| `printing` \| `awaiting_clearance` \| `offline` \| `error` \| `disabled` |
 | `currentJob` | ObjectId (ref `PrintJob`) | nullable |
 | `lastSeenAt` | Date | mis à jour à chaque poll de l'agent |
-| `isActive` | Boolean | désactivation admin (maintenance) |
+| `lastKnownStatus` | Enum | dernier statut connu avant une éventuelle perte de contact (`idle`/`printing`/...), conservé même une fois passé `offline` |
 | `clearanceHistory` | Array | `{ status: 'confirmed', method: 'qr' \| 'admin_override', byUserId, byEmail, byName, date }` |
+| `statusHistory` | Array | `{ status, reason, source, detail, byUserId, byName, date }` — voir section dédiée ci-dessous |
 
-Si `lastSeenAt` dépasse un seuil (~3x l'intervalle de polling, soit 1-2 min), le statut est considéré `offline` — ce qui bloque aussi les soumissions.
+### Journalisation des états imprimante (pourquoi `offline`/`error`/`disabled`)
+
+Avec une architecture 100% pull (l'imprimante contacte le Hub, jamais l'inverse), le Hub ne peut pas interroger une machine injoignable pour savoir pourquoi elle l'est devenue. Trois catégories de causes, bien distinguées dans `statusHistory` :
+
+1. **`error`** (`source: 'agent_report'`) — l'agent est encore joignable et relaie une erreur explicite remontée par Klipper/Moonraker (ex: thermal runaway, capteur filament). `detail` contient le message d'erreur exact. Entièrement connu.
+2. **`disabled`** (`source: 'admin_action'`) — un admin désactive l'imprimante depuis le dashboard (maintenance, réparation...). Toujours connu : `byUserId`, `byName`, et une note obligatoire expliquant pourquoi. Remplace l'ancien champ `isActive` : c'est maintenant un statut à part entière plutôt qu'un booléen séparé, pour que la raison soit toujours tracée.
+3. **`offline`** (`source: 'heartbeat_timeout'`) — silence complet du polling au-delà du seuil (~3x l'intervalle, soit 1-2 min). **La cause réelle (coupure réseau, coupure électrique, plantage, câble débranché) n'est pas distinguable depuis le Hub** — c'est une limite technique inhérente à l'architecture pull, pas un manque de logging. Ce qui est loggé honnêtement : l'horodatage de la dernière prise de contact (`lastSeenAt`) et le dernier statut connu avant la coupure (`lastKnownStatus` — utile pour savoir si la machine était en train d'imprimer ou simplement inactive au moment du silence).
+
+Un job de vérification léger (cron, ex: toutes les minutes) détecte le franchissement du seuil de silence pour chaque imprimante active et écrit l'entrée `statusHistory` correspondante une seule fois (pas à chaque lecture), afin que l'horodatage de détection soit fiable pour l'audit.
+
+Dans tous les cas, `offline`, `error` et `disabled` bloquent les nouvelles soumissions.
 
 ### `PrintAuthorization`
 | Champ | Type | Description |
@@ -62,7 +73,7 @@ Politique : refus par défaut. Un email absent de la collection = refusé.
 | `printer` | ObjectId (ref `Printer`) | |
 | `fileName`, `filePath` | String | fichier stocké côté serveur (`/uploads/print-jobs/`) |
 | `status` | Enum | `rejected` \| `queued` \| `sent` \| `printing` \| `completed` \| `failed` |
-| `rejectionReason` | Enum | `not_authorized` \| `printer_busy` \| `printer_offline` (si `rejected`) |
+| `rejectionReason` | Enum | `not_authorized` \| `printer_busy` \| `printer_offline` \| `printer_error` \| `printer_disabled` (si `rejected`) |
 | `errorMessage` | String | nullable, si `failed` |
 | `submittedAt`, `startedAt`, `completedAt` | Date | |
 | `history` | Array | `{ status, date, detail }` — chaque transition |
@@ -71,8 +82,7 @@ Politique : refus par défaut. Un email absent de la collection = refusé.
 
 1. **Soumission** (étudiant, `POST /api/print/jobs`) — vérifications en cascade :
    - email whitelisté (`PrintAuthorization.authorized === true`) ;
-   - imprimante active et non `offline` (une imprimante désactivée pour maintenance, `isActive: false`, est traitée comme `printer_offline` côté raison de refus) ;
-   - imprimante `status === 'idle'`.
+   - imprimante `status === 'idle'` — sinon raison de refus précise selon le statut courant : `printer_busy` (`printing`/`awaiting_clearance`), `printer_offline` (silence réseau), `printer_error` (erreur remontée), `printer_disabled` (désactivée par un admin).
 
    Si une vérification échoue : rejet immédiat (`rejected` + raison), toujours loggé. Sinon : fichier sauvegardé, `PrintJob` créé en `queued`, imprimante verrouillée atomiquement (`findOneAndUpdate` conditionnel sur `idle`) pour éviter qu'une deuxième soumission simultanée passe entre deux vérifications.
 
@@ -95,7 +105,7 @@ Décision : QR code physique **statique** (imprimé une fois, collé sur chaque 
 - Cette action n'est pas exposée comme un bouton générique dans le dashboard — seule la route liée au QR y donne accès, pour préserver l'incitation à se déplacer physiquement.
 - **Override admin** : en secours (étiquette QR abîmée/perdue), un admin peut valider manuellement depuis le dashboard. Loggé séparément (`method: 'admin_override'`) pour ne pas mélanger les deux niveaux de garantie.
 
-Limite connue et acceptée : l'URL n'étant pas un token à usage unique, quelqu'un qui la mémorise pourrait valider sans être physiquement présent. Le arbitrage retenu pour cette version : le message de certification (avec mention explicite des conséquences en cas de mensonge) et la traçabilité nominative par email suffisent comme dissuasion, le risque étant jugé faible au regard de la complexité d'une vraie preuve de présence.
+Limite connue et acceptée : l'URL n'étant pas un token à usage unique, quelqu'un qui la mémorise pourrait valider sans être physiquement présent. L'arbitrage retenu pour cette version : le message de certification (avec mention explicite des conséquences en cas de mensonge) et la traçabilité nominative par email suffisent comme dissuasion, le risque étant jugé faible au regard de la complexité d'une vraie preuve de présence.
 
 ## Backlog (améliorations futures)
 
@@ -106,7 +116,8 @@ Limite connue et acceptée : l'URL n'étant pas un token à usage unique, quelqu
 ## Gestion des erreurs et cas limites
 
 - **Race condition sur soumission simultanée** : verrou atomique Mongo (`findOneAndUpdate` conditionnel) sur le passage `idle → verrouillé` avant création du job.
-- **Agent qui perd la connexion en plein print** : détection de staleness — si aucun heartbeat depuis un seuil (~1-2 min) alors qu'un job est `printing`, le job est automatiquement basculé `failed` et l'imprimante en `awaiting_clearance`, pour ne jamais bloquer une imprimante indéfiniment sur un silence.
+- **Agent qui perd la connexion en plein print** : détection de staleness — si aucun heartbeat depuis un seuil (~1-2 min) alors qu'un job est `printing`, le job est automatiquement basculé `failed`, l'imprimante passe `offline` (`statusHistory` : `source: 'heartbeat_timeout'`, `lastKnownStatus: 'printing'`) plutôt que directement `awaiting_clearance` — la libération du plateau ne redevient possible qu'une fois l'imprimante de nouveau joignable (le job échoué passe alors en `awaiting_clearance`), pour ne jamais bloquer une imprimante indéfiniment sur un silence tout en évitant de proposer une clearance sur une machine qu'on ne voit plus.
+- **Reconnexion après un `offline`** : dès que l'agent reprend contact (premier poll réussi), si le job en cours au moment de la coupure avait été basculé `failed` par staleness, l'imprimante passe alors à `awaiting_clearance` (on découvre l'imprimante à nouveau joignable, mais on ne peut toujours pas garantir que le plateau est vide) ; sinon elle repasse simplement à son `lastKnownStatus` (`idle`).
 - **Clé API imprimante compromise** : régénérable par un admin (invalide l'ancienne immédiatement).
 - **Fichier invalide** : validation d'extension (gcode) et de taille max à la soumission.
 - **Tentatives de soumission par un email non whitelisté** : toujours loggées avec email, date, imprimante visée — permet de repérer des tentatives suspectes répétées.
@@ -115,9 +126,11 @@ Limite connue et acceptée : l'URL n'étant pas un token à usage unique, quelqu
 
 Suivre le pattern Jest déjà en place côté backend (voir suite existante de ~80 tests) :
 - application de la whitelist (autorisé / refusé / historique de révocation) ;
-- transitions d'état de l'imprimante (`idle → printing → awaiting_clearance → idle`) et rejets associés (`printer_busy`, `printer_offline`) ;
+- transitions d'état de l'imprimante (`idle → printing → awaiting_clearance → idle`) et rejets associés (`printer_busy`, `printer_offline`, `printer_error`, `printer_disabled`) ;
 - atomicité du dispatch (pas de double prise en charge d'un job par deux polls simultanés) ;
-- bascule automatique en `failed` sur staleness ;
+- bascule automatique en `offline`/`failed` sur staleness, avec `statusHistory` correctement rempli (`source: 'heartbeat_timeout'`, `lastKnownStatus`) ;
+- reconnexion après `offline` : transition vers `awaiting_clearance` ou `lastKnownStatus` selon le cas ;
+- passage `disabled` par un admin : refus des soumissions, note obligatoire, log avec identité ;
 - clearance : refus si l'imprimante n'est pas en `awaiting_clearance`, log correct de l'identité et de la méthode (`qr` vs `admin_override`).
 
 ## Dépendances / prérequis avant implémentation
