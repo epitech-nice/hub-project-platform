@@ -1,5 +1,10 @@
+const path = require('path');
 const PrintJob = require('../../models/PrintJob');
 const asyncHandler = require('../../middleware/asyncHandler');
+const ErrorResponse = require('../../utils/errorResponse');
+const { PRINTER_STATUSES, PRINTER_STATUS_SOURCES } = require('../../utils/constants');
+
+const VALID_STATUS_UPDATES = ['printing', 'completed', 'failed'];
 
 // GET /api/print/agent/next-job
 // req.printer est posé par authenticatePrinter
@@ -30,4 +35,55 @@ exports.getNextJob = asyncHandler(async (req, res) => {
       downloadUrl: `/api/print/agent/jobs/${job._id}/file`,
     },
   });
+});
+
+// GET /api/print/agent/jobs/:id/file
+exports.downloadJobFile = asyncHandler(async (req, res, next) => {
+  const job = await PrintJob.findById(req.params.id);
+  if (!job) return next(new ErrorResponse('Job non trouvé', 404));
+  if (job.printer.toString() !== req.printer._id.toString()) {
+    return next(new ErrorResponse('Ce job ne correspond pas à cette imprimante', 403));
+  }
+
+  // Les .gcode sont du texte brut ; sans ceci, `send` tomberait sur application/octet-stream
+  // (extension inconnue de `mime`) et l'agent recevrait un buffer plutôt qu'un flux texte.
+  res.type('text/plain');
+  res.download(path.resolve(job.filePath), job.fileName);
+});
+
+// POST /api/print/agent/jobs/:id/status
+// Body: { status: 'printing' | 'completed' | 'failed', errorMessage? }
+exports.updateJobStatus = asyncHandler(async (req, res, next) => {
+  const { status, errorMessage } = req.body;
+  if (!VALID_STATUS_UPDATES.includes(status)) {
+    return next(new ErrorResponse('Statut invalide', 400));
+  }
+
+  const job = await PrintJob.findById(req.params.id);
+  if (!job) return next(new ErrorResponse('Job non trouvé', 404));
+  if (job.printer.toString() !== req.printer._id.toString()) {
+    return next(new ErrorResponse('Ce job ne correspond pas à cette imprimante', 403));
+  }
+
+  job.status = status;
+  job.history.push({ status, date: new Date(), detail: errorMessage || `Rapporté par l'agent: ${status}` });
+
+  if (status === 'printing') {
+    job.startedAt = new Date();
+  } else {
+    job.completedAt = new Date();
+    if (status === 'failed') job.errorMessage = errorMessage || null;
+
+    req.printer.status = PRINTER_STATUSES.AWAITING_CLEARANCE;
+    req.printer.statusHistory.push({
+      status: PRINTER_STATUSES.AWAITING_CLEARANCE,
+      source: PRINTER_STATUS_SOURCES.AGENT_REPORT,
+      detail: status === 'failed' ? (errorMessage || "Échec de l'impression") : 'Impression terminée',
+      date: new Date(),
+    });
+    await req.printer.save();
+  }
+
+  await job.save();
+  res.status(200).json({ success: true, data: job });
 });

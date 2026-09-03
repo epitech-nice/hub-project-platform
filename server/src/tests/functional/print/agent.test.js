@@ -61,3 +61,93 @@ describe('GET /api/print/agent/next-job', () => {
     expect(second.body.data).toBeNull();
   });
 });
+
+describe('GET /api/print/agent/jobs/:id/file', () => {
+  it('streams the file for the owning printer', async () => {
+    const { printer, rawKey } = await createPrinter();
+    const job = await submitAcceptedJob(printer);
+    await request(app).get('/api/print/agent/next-job').set(printerAuthHeader(printer._id, rawKey));
+
+    const res = await request(app)
+      .get(`/api/print/agent/jobs/${job._id}/file`)
+      .set(printerAuthHeader(printer._id, rawKey));
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('G1 X10');
+  });
+
+  it('returns 403 if the job belongs to a different printer', async () => {
+    const { printer: printerA } = await createPrinter({ name: 'A' });
+    const { printer: printerB, rawKey: keyB } = await createPrinter({ name: 'B' });
+    const job = await submitAcceptedJob(printerA);
+
+    const res = await request(app)
+      .get(`/api/print/agent/jobs/${job._id}/file`)
+      .set(printerAuthHeader(printerB._id, keyB));
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('POST /api/print/agent/jobs/:id/status', () => {
+  it('printing: keeps printer in printing status', async () => {
+    const { printer, rawKey } = await createPrinter();
+    const job = await submitAcceptedJob(printer);
+    await request(app).get('/api/print/agent/next-job').set(printerAuthHeader(printer._id, rawKey));
+
+    const res = await request(app)
+      .post(`/api/print/agent/jobs/${job._id}/status`)
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ status: 'printing' });
+
+    expect(res.status).toBe(200);
+    const reloadedJob = await PrintJob.findById(job._id);
+    expect(reloadedJob.status).toBe('printing');
+    expect(reloadedJob.startedAt).not.toBeNull();
+  });
+
+  it('completed: moves the printer to awaiting_clearance', async () => {
+    const { printer, rawKey } = await createPrinter();
+    const job = await submitAcceptedJob(printer);
+    await request(app).get('/api/print/agent/next-job').set(printerAuthHeader(printer._id, rawKey));
+
+    const res = await request(app)
+      .post(`/api/print/agent/jobs/${job._id}/status`)
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ status: 'completed' });
+
+    expect(res.status).toBe(200);
+    const reloadedPrinter = await Printer.findById(printer._id);
+    expect(reloadedPrinter.status).toBe(PRINTER_STATUSES.AWAITING_CLEARANCE);
+    const reloadedJob = await PrintJob.findById(job._id);
+    expect(reloadedJob.status).toBe('completed');
+    expect(reloadedJob.completedAt).not.toBeNull();
+  });
+
+  it('failed: moves the printer to awaiting_clearance and records errorMessage', async () => {
+    const { printer, rawKey } = await createPrinter();
+    const job = await submitAcceptedJob(printer);
+    await request(app).get('/api/print/agent/next-job').set(printerAuthHeader(printer._id, rawKey));
+
+    const res = await request(app)
+      .post(`/api/print/agent/jobs/${job._id}/status`)
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ status: 'failed', errorMessage: 'Bourrage filament' });
+
+    expect(res.status).toBe(200);
+    const reloadedPrinter = await Printer.findById(printer._id);
+    expect(reloadedPrinter.status).toBe(PRINTER_STATUSES.AWAITING_CLEARANCE);
+    const reloadedJob = await PrintJob.findById(job._id);
+    expect(reloadedJob.status).toBe('failed');
+    expect(reloadedJob.errorMessage).toBe('Bourrage filament');
+  });
+
+  it('rejects an invalid status value', async () => {
+    const { printer, rawKey } = await createPrinter();
+    const job = await submitAcceptedJob(printer);
+
+    const res = await request(app)
+      .post(`/api/print/agent/jobs/${job._id}/status`)
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ status: 'nonsense' });
+    expect(res.status).toBe(400);
+  });
+});
