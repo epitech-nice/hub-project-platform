@@ -98,3 +98,20 @@ exports.getMyJobs = asyncHandler(async (req, res) => {
   const jobs = await PrintJob.find({ 'student.email': req.user.email.toLowerCase() }).sort({ submittedAt: -1 });
   res.status(200).json({ success: true, count: jobs.length, data: jobs });
 });
+
+// GET /api/print/jobs?status=&printerId=
+exports.getAllJobs = asyncHandler(async (req, res) => {
+  const filter = {};
+  if (req.query.status) filter.status = req.query.status;
+  if (req.query.printerId) filter.printer = req.query.printerId;
+
+  const jobs = await PrintJob.find(filter).sort({ submittedAt: -1 });
+  res.status(200).json({ success: true, count: jobs.length, data: jobs });
+});
+
+// GET /api/print/jobs/:id
+exports.getJobById = asyncHandler(async (req, res, next) => {
+  const job = await PrintJob.findById(req.params.id);
+  if (!job) return next(new ErrorResponse('Job non trouvé', 404));
+  res.status(200).json({ success: true, data: job });
+});

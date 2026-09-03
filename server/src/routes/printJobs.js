@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, isAdmin } = require('../middleware/auth');
 const printJobUpload = require('../middleware/printJobUpload');
 const jobController = require('../controllers/print/jobController');
 const ErrorResponse = require('../utils/errorResponse');
@@ -16,5 +16,7 @@ const handleUpload = (req, res, next) => {
 
 router.post('/', authenticateToken, handleUpload, jobController.submitJob);
 router.get('/me', authenticateToken, jobController.getMyJobs);
+router.get('/', authenticateToken, isAdmin, jobController.getAllJobs);
+router.get('/:id', authenticateToken, isAdmin, jobController.getJobById);
 
 module.exports = router;
