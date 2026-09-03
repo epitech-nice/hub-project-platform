@@ -23,7 +23,7 @@ const STATUS_TO_REJECTION_REASON = {
 };
 
 // Crée un PrintJob rejeté (avant tout verrouillage de l'imprimante) et nettoie le fichier uploadé.
-const rejectSubmission = async (req, res, printer, reason) => {
+const rejectSubmission = async (req, next, printer, reason) => {
   fs.unlink(req.file.path, () => {});
   await PrintJob.create({
     student: { email: req.user.email.toLowerCase(), name: req.user.name },
@@ -35,7 +35,7 @@ const rejectSubmission = async (req, res, printer, reason) => {
     history: [{ status: PRINT_JOB_STATUSES.REJECTED, date: new Date(), detail: REJECTION_MESSAGES[reason] }],
   });
   const statusCode = reason === PRINT_REJECTION_REASONS.NOT_AUTHORIZED ? 403 : 409;
-  res.status(statusCode).json({ success: false, error: REJECTION_MESSAGES[reason] });
+  return next(new ErrorResponse(REJECTION_MESSAGES[reason], statusCode));
 };
 
 // POST /api/print/jobs
@@ -52,12 +52,12 @@ exports.submitJob = asyncHandler(async (req, res, next) => {
 
   const authorization = await PrintAuthorization.findOne({ email: req.user.email.toLowerCase() });
   if (!authorization || !authorization.authorized) {
-    return rejectSubmission(req, res, printer, PRINT_REJECTION_REASONS.NOT_AUTHORIZED);
+    return rejectSubmission(req, next, printer, PRINT_REJECTION_REASONS.NOT_AUTHORIZED);
   }
 
   if (printer.status !== PRINTER_STATUSES.IDLE) {
     const reason = STATUS_TO_REJECTION_REASON[printer.status] || PRINT_REJECTION_REASONS.PRINTER_OFFLINE;
-    return rejectSubmission(req, res, printer, reason);
+    return rejectSubmission(req, next, printer, reason);
   }
 
   const job = await PrintJob.create({
@@ -87,7 +87,7 @@ exports.submitJob = asyncHandler(async (req, res, next) => {
       detail: REJECTION_MESSAGES[PRINT_REJECTION_REASONS.PRINTER_BUSY],
     });
     await job.save();
-    return res.status(409).json({ success: false, error: REJECTION_MESSAGES[PRINT_REJECTION_REASONS.PRINTER_BUSY] });
+    return next(new ErrorResponse(REJECTION_MESSAGES[PRINT_REJECTION_REASONS.PRINTER_BUSY], 409));
   }
 
   res.status(201).json({ success: true, data: job });
