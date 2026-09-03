@@ -469,11 +469,10 @@ export default function AdminPrintPage() {
               À imprimer et coller sur l&apos;imprimante — scanné pour confirmer la libération du plateau.
             </p>
             {qrModal?.printerId && (
-              <Link
-                href={`/admin/print/printers/${qrModal.printerId}/qr`}
-                className="inline-block mt-4 text-sm font-medium text-primary hover:underline"
-              >
-                Ouvrir la page à imprimer
+              <Link href={`/admin/print/printers/${qrModal.printerId}/qr`}>
+                <a className="inline-block mt-4 text-sm font-medium text-primary hover:underline">
+                  Ouvrir la page à imprimer
+                </a>
               </Link>
             )}
           </div>
