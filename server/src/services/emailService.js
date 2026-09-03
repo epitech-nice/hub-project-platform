@@ -399,3 +399,73 @@ exports.sendToolReportEmail = async (tool, report, student, adminEmails) => {
     throw error;
   }
 };
+
+exports.sendPrintAccessRequestEmail = async (request, adminEmails) => {
+  try {
+    if (!adminEmails || adminEmails.length === 0) {
+      console.log('sendPrintAccessRequestEmail : aucun destinataire, envoi annulé');
+      return { success: false, reason: 'No recipients' };
+    }
+
+    const subject = `Demande d'accès impression 3D : ${request.student.name}`;
+    const adminUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/admin/print`;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+        <body style="margin:0;padding:0;font-family:Arial,sans-serif;line-height:1.6;color:#333;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;border-collapse:collapse;">
+            <tr>
+              <td style="background-color:#2196F3;padding:20px;text-align:center;color:white;">
+                <h1 style="margin:0;font-size:24px;">Demande d'accès impression 3D</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px;">
+                <p>Un étudiant demande à être autorisé à utiliser les imprimantes 3D.</p>
+                <table style="width:100%;border-collapse:collapse;">
+                  <tr><td style="padding:8px;font-weight:bold;width:40%;">Étudiant</td><td style="padding:8px;">${request.student.name} (${request.student.email})</td></tr>
+                </table>
+                <p style="margin-top:25px;">
+                  <a href="${adminUrl}" style="display:inline-block;padding:10px 20px;background-color:#2196F3;color:white;text-decoration:none;border-radius:4px;font-weight:bold;">
+                    Voir les demandes
+                  </a>
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px;text-align:center;color:#888;font-size:12px;border-top:1px solid #eee;">
+                {EPITECH} Nice — 131 Boulevard René Cassin — 06200 Nice, France
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `;
+
+    const textContent = [
+      `Demande d'accès impression 3D`,
+      `Étudiant : ${request.student.name} (${request.student.email})`,
+      `Voir les demandes : ${adminUrl}`,
+    ].join('\n');
+
+    const { data, error } = await resend.emails.send({
+      from: process.env.EMAIL_FROM || 'Hub Projets <notifications@votredomaine.com>',
+      to: adminEmails,
+      subject,
+      html: htmlContent,
+      text: textContent,
+    });
+
+    if (error) {
+      console.error('Erreur Resend demande accès impression:', error);
+      throw error;
+    }
+
+    return { success: true, messageId: data.id };
+  } catch (error) {
+    console.error('Erreur sendPrintAccessRequestEmail:', error);
+    throw error;
+  }
+};

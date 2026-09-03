@@ -53,6 +53,8 @@ export default function PrintPage() {
   const [selectedPrinterId, setSelectedPrinterId] = useState('');
   const [file, setFile] = useState(null);
   const [fileInputKey, setFileInputKey] = useState(0);
+  const [accessStatus, setAccessStatus] = useState(null);
+  const [requestingAccess, setRequestingAccess] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/');
@@ -67,14 +69,29 @@ export default function PrintPage() {
 
   const refresh = async () => {
     try {
-      const [printersRes, jobsRes] = await Promise.all([
+      const [printersRes, jobsRes, accessRes] = await Promise.all([
         get('/api/print/printers'),
         get('/api/print/jobs/me'),
+        get('/api/print/whitelist/me'),
       ]);
       setPrinters(printersRes.data);
       setJobs(jobsRes.data);
+      setAccessStatus(accessRes.data);
     } catch (err) {
       toast.error(err.message);
+    }
+  };
+
+  const handleRequestAccess = async () => {
+    setRequestingAccess(true);
+    try {
+      await post('/api/print/access-requests', {});
+      toast.success('Demande envoyée');
+      await refresh();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setRequestingAccess(false);
     }
   };
 
@@ -131,40 +148,70 @@ export default function PrintPage() {
           sub="Soumettez un fichier .gcode à imprimer sur une imprimante disponible."
         />
 
-        <Card className="mb-8">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block mb-2 font-medium text-text">Imprimante</label>
-              <Select
-                value={selectedPrinterId}
-                onChange={(e) => setSelectedPrinterId(e.target.value)}
-              >
-                <option value="">— Choisir —</option>
-                {printers.map((p) => (
-                  <option key={p._id} value={p._id} disabled={p.status !== 'idle'}>
-                    {p.name} — {PRINTER_STATUS_LABELS[p.status] || p.status}
-                  </option>
-                ))}
-              </Select>
-            </div>
+        {accessStatus?.authorized === false && (
+          <Card className="mb-8 border-danger/40 bg-danger/10">
+            <p className="text-danger font-medium">
+              Vous n&apos;êtes pas autorisé à utiliser l&apos;impression 3D. Contactez un administrateur si vous
+              pensez qu&apos;il s&apos;agit d&apos;une erreur.
+            </p>
+          </Card>
+        )}
 
-            <div>
-              <label className="block mb-2 font-medium text-text">Fichier .gcode</label>
-              <FileInput key={fileInputKey} accept=".gcode" onChange={setFile} />
-            </div>
-
-            <Button type="submit" loading={apiLoading} disabled={!canSubmit}>
-              Soumettre l&apos;impression
-            </Button>
-
-            {selectedPrinter && !canSubmit && (
-              <p className="text-sm text-danger">
-                Cette imprimante n&apos;est pas disponible (
-                {PRINTER_STATUS_LABELS[selectedPrinter.status] || selectedPrinter.status}).
+        {accessStatus?.authorized === null && (
+          <Card className="mb-8">
+            {accessStatus.hasPendingRequest ? (
+              <p className="text-text-muted">
+                Demande envoyée, en attente de validation par un administrateur.
               </p>
+            ) : (
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-text-muted">
+                  Vous n&apos;êtes pas encore autorisé à utiliser l&apos;impression 3D.
+                </p>
+                <Button onClick={handleRequestAccess} loading={requestingAccess}>
+                  Demander l&apos;accès
+                </Button>
+              </div>
             )}
-          </form>
-        </Card>
+          </Card>
+        )}
+
+        {accessStatus?.authorized === true && (
+          <Card className="mb-8">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block mb-2 font-medium text-text">Imprimante</label>
+                <Select
+                  value={selectedPrinterId}
+                  onChange={(e) => setSelectedPrinterId(e.target.value)}
+                >
+                  <option value="">— Choisir —</option>
+                  {printers.map((p) => (
+                    <option key={p._id} value={p._id} disabled={p.status !== 'idle'}>
+                      {p.name} — {PRINTER_STATUS_LABELS[p.status] || p.status}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div>
+                <label className="block mb-2 font-medium text-text">Fichier .gcode</label>
+                <FileInput key={fileInputKey} accept=".gcode" onChange={setFile} />
+              </div>
+
+              <Button type="submit" loading={apiLoading} disabled={!canSubmit}>
+                Soumettre l&apos;impression
+              </Button>
+
+              {selectedPrinter && !canSubmit && (
+                <p className="text-sm text-danger">
+                  Cette imprimante n&apos;est pas disponible (
+                  {PRINTER_STATUS_LABELS[selectedPrinter.status] || selectedPrinter.status}).
+                </p>
+              )}
+            </form>
+          </Card>
+        )}
 
         <h2 className="text-xl font-semibold text-text mb-4">Mes impressions</h2>
 

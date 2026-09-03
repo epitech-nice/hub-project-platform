@@ -99,6 +99,12 @@ const PRINT_REJECTION_REASONS = {
   PRINTER_DISABLED: 'printer_disabled',
 };
 
+// Statuts d'une demande d'accès à l'impression 3D
+const PRINT_ACCESS_REQUEST_STATUSES = {
+  PENDING: 'pending',
+  RESOLVED: 'resolved',
+};
+
 module.exports = {
   PROJECT_STATUSES,
   WORKSHOP_STATUSES,
@@ -111,5 +117,6 @@ module.exports = {
   PRINTER_STATUS_SOURCES,
   CLEARANCE_METHODS,
   PRINT_JOB_STATUSES,
-  PRINT_REJECTION_REASONS
+  PRINT_REJECTION_REASONS,
+  PRINT_ACCESS_REQUEST_STATUSES
 };

@@ -72,6 +72,7 @@ export default function AdminPrintPage() {
   const [printers, setPrinters] = useState([]);
   const [whitelist, setWhitelist] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [accessRequests, setAccessRequests] = useState([]);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   // ── Printers ──
@@ -106,14 +107,16 @@ export default function AdminPrintPage() {
 
   const refresh = async () => {
     try {
-      const [printersRes, whitelistRes, jobsRes] = await Promise.all([
+      const [printersRes, whitelistRes, jobsRes, accessRequestsRes] = await Promise.all([
         get('/api/print/printers'),
         get('/api/print/whitelist'),
         get('/api/print/jobs'),
+        get('/api/print/access-requests'),
       ]);
       setPrinters(printersRes.data);
       setWhitelist(whitelistRes.data);
       setJobs(jobsRes.data);
+      setAccessRequests(accessRequestsRes.data);
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -360,6 +363,41 @@ export default function AdminPrintPage() {
           )}
         </section>
 
+        {/* ── Demandes d'accès en attente ── */}
+        <section className="mb-10">
+          <h2 className="text-xl font-semibold text-text mb-4">Demandes d&apos;accès en attente</h2>
+
+          {showSkeleton ? (
+            <Skeleton variant="rect" height={80} />
+          ) : accessRequests.length === 0 ? (
+            <EmptyState title="Aucune demande en attente" size="sm" />
+          ) : (
+            <Card padding="none">
+              <div className="divide-y divide-border">
+                {accessRequests.map((req) => (
+                  <div key={req._id} className="flex items-center justify-between gap-4 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-text truncate">
+                        {req.student.name} ({req.student.email})
+                      </p>
+                      <p className="text-xs text-text-muted">
+                        {new Date(req.requestedAt).toLocaleString('fr-FR')}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setNewEmail(req.student.email)}
+                    >
+                      Traiter
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </section>
+
         {/* ── Whitelist ── */}
         <section className="mb-10">
           <h2 className="text-xl font-semibold text-text mb-4">Liste blanche</h2>
@@ -367,7 +405,7 @@ export default function AdminPrintPage() {
           <Card className="mb-4">
             <form onSubmit={handleWhitelistSubmit} className="flex flex-col sm:flex-row gap-3 sm:items-end">
               <div className="flex-1">
-                <FormField label="Email" required>
+                <FormField label="Email" required hint=" ">
                   <Input
                     type="email"
                     value={newEmail}
