@@ -2,9 +2,11 @@
 require('dotenv').config();
 const app = require('./app');
 const connectDB = require('./config/database');
+const { startPrinterScheduler } = require('./utils/printerScheduler');
 
 // Connexion à la base de données
 connectDB();
+startPrinterScheduler();
 
 const PORT = process.env.PORT || 5000;
 
