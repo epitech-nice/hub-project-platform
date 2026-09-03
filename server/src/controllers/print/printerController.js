@@ -3,7 +3,7 @@ const Printer = require('../../models/Printer');
 const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
 const { generateApiKey } = require('../../utils/apiKey');
-const { PRINTER_STATUSES, PRINTER_STATUS_SOURCES } = require('../../utils/constants');
+const { PRINTER_STATUSES, PRINTER_STATUS_SOURCES, CLEARANCE_METHODS } = require('../../utils/constants');
 
 // GET /api/print/printers
 exports.listPrinters = asyncHandler(async (req, res) => {
@@ -73,3 +73,30 @@ exports.getQrCode = asyncHandler(async (req, res, next) => {
   res.set('Content-Type', 'image/png');
   res.status(200).send(buffer);
 });
+
+const confirmClearanceInternal = async (req, res, next, method) => {
+  const printer = await Printer.findById(req.params.id);
+  if (!printer) return next(new ErrorResponse('Imprimante non trouvée', 404));
+  if (printer.status !== PRINTER_STATUSES.AWAITING_CLEARANCE) {
+    return next(new ErrorResponse("Cette imprimante n'attend pas de libération de plateau", 400));
+  }
+
+  printer.status = PRINTER_STATUSES.IDLE;
+  printer.currentJob = null;
+  printer.clearanceHistory.push({
+    method,
+    byUserId: req.user._id,
+    byEmail: req.user.email,
+    byName: req.user.name,
+    date: new Date(),
+  });
+  await printer.save();
+
+  res.status(200).json({ success: true, data: { status: printer.status } });
+};
+
+// POST /api/print/printers/:id/confirm-clearance
+exports.confirmClearance = asyncHandler((req, res, next) => confirmClearanceInternal(req, res, next, CLEARANCE_METHODS.QR));
+
+// POST /api/print/printers/:id/confirm-clearance/override
+exports.confirmClearanceOverride = asyncHandler((req, res, next) => confirmClearanceInternal(req, res, next, CLEARANCE_METHODS.ADMIN_OVERRIDE));
