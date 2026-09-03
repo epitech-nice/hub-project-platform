@@ -49,6 +49,7 @@ exports.setDisabled = asyncHandler(async (req, res, next) => {
   if (!printer) return next(new ErrorResponse('Imprimante non trouvée', 404));
 
   printer.status = disabled ? PRINTER_STATUSES.DISABLED : PRINTER_STATUSES.IDLE;
+  printer.currentJob = null;
   printer.statusHistory.push({
     status: printer.status,
     source: PRINTER_STATUS_SOURCES.ADMIN_ACTION,
@@ -66,8 +67,11 @@ exports.setDisabled = asyncHandler(async (req, res, next) => {
 exports.getQrCode = asyncHandler(async (req, res, next) => {
   const printer = await Printer.findById(req.params.id);
   if (!printer) return next(new ErrorResponse('Imprimante non trouvée', 404));
+  if (!process.env.FRONTEND_URL) {
+    return next(new ErrorResponse("FRONTEND_URL n'est pas configuré côté serveur, impossible de générer une URL fiable pour le QR code", 500));
+  }
 
-  const url = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/print/printers/${printer._id}/confirm-clearance`;
+  const url = `${process.env.FRONTEND_URL}/print/printers/${printer._id}/confirm-clearance`;
   const buffer = await QRCode.toBuffer(url, { type: 'png', width: 400 });
 
   res.set('Content-Type', 'image/png');

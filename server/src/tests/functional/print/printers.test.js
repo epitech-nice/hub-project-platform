@@ -1,4 +1,5 @@
 const request = require('supertest');
+const mongoose = require('mongoose');
 const app = require('../../../app');
 const Printer = require('../../../models/Printer');
 const { createUser, createAdmin, authHeader } = require('../../helpers/auth');
@@ -103,9 +104,50 @@ describe('PATCH /api/print/printers/:id/disabled', () => {
       .send({ disabled: false, note: 'Réparée' });
     expect(enableRes.body.data.status).toBe(PRINTER_STATUSES.IDLE);
   });
+
+  it('clears currentJob when re-enabling a printer that had one set', async () => {
+    const admin = await createAdmin();
+    const printer = await Printer.create({
+      name: 'P',
+      model: 'kobra3',
+      apiKeyHash: 'x'.repeat(64),
+      status: PRINTER_STATUSES.AWAITING_CLEARANCE,
+      currentJob: new mongoose.Types.ObjectId(),
+    });
+
+    const disableRes = await request(app)
+      .patch(`/api/print/printers/${printer._id}/disabled`)
+      .set(authHeader(admin))
+      .send({ disabled: true, note: 'Maintenance' });
+    expect(disableRes.status).toBe(200);
+
+    const enableRes = await request(app)
+      .patch(`/api/print/printers/${printer._id}/disabled`)
+      .set(authHeader(admin))
+      .send({ disabled: false, note: 'Réparée' });
+    expect(enableRes.status).toBe(200);
+    expect(enableRes.body.data.status).toBe(PRINTER_STATUSES.IDLE);
+
+    const reloaded = await Printer.findById(printer._id);
+    expect(reloaded.currentJob).toBeNull();
+  });
 });
 
 describe('GET /api/print/printers/:id/qr', () => {
+  const originalFrontendUrl = process.env.FRONTEND_URL;
+
+  beforeEach(() => {
+    process.env.FRONTEND_URL = 'http://localhost:3000';
+  });
+
+  afterEach(() => {
+    if (originalFrontendUrl === undefined) {
+      delete process.env.FRONTEND_URL;
+    } else {
+      process.env.FRONTEND_URL = originalFrontendUrl;
+    }
+  });
+
   it('returns a PNG image for an admin', async () => {
     const admin = await createAdmin();
     const printer = await Printer.create({ name: 'P', model: 'kobra3', apiKeyHash: 'x'.repeat(64) });
@@ -114,5 +156,15 @@ describe('GET /api/print/printers/:id/qr', () => {
       .set(authHeader(admin));
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toBe('image/png');
+  });
+
+  it('returns 500 when FRONTEND_URL is not configured', async () => {
+    delete process.env.FRONTEND_URL;
+    const admin = await createAdmin();
+    const printer = await Printer.create({ name: 'P', model: 'kobra3', apiKeyHash: 'x'.repeat(64) });
+    const res = await request(app)
+      .get(`/api/print/printers/${printer._id}/qr`)
+      .set(authHeader(admin));
+    expect(res.status).toBe(500);
   });
 });

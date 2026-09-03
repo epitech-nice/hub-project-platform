@@ -164,6 +164,13 @@ export default function AppHeader() {
         ...(isAdmin ? [{ label: "Gérer l'inventaire", href: '/admin/inventory' }] : []),
       ],
     },
+    {
+      label: 'Impression 3D',
+      items: [
+        { label: 'Soumettre une impression', href: '/print' },
+        ...(isAdmin ? [{ label: 'Admin impression 3D', href: '/admin/print' }] : []),
+      ],
+    },
   ];
 
   // Mobile panel flattens all sections with labels
@@ -199,6 +206,13 @@ export default function AppHeader() {
             { label: 'Inventaire', href: '/inventory' },
             ...(isAdmin ? [{ label: "Gérer l'inventaire", href: '/admin/inventory' }] : []),
             { label: 'Glossaire', href: '/glossaire' },
+          ],
+        },
+        {
+          label: 'Impression 3D',
+          items: [
+            { label: 'Soumettre une impression', href: '/print' },
+            ...(isAdmin ? [{ label: 'Admin impression 3D', href: '/admin/print' }] : []),
           ],
         },
       ]

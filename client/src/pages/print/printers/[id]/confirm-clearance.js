@@ -64,9 +64,17 @@ export default function ConfirmClearancePage() {
       <main className="flex-1 container mx-auto px-4 py-8 max-w-md">
         <Card className="mt-10 text-center">
           {!isAuthenticated ? (
-            <p className="text-text-muted">
-              Connectez-vous pour confirmer la libération de cette imprimante.
-            </p>
+            <>
+              <p className="text-text-muted mb-4">
+                Connectez-vous pour confirmer la libération de cette imprimante.
+              </p>
+              <a
+                href={`${process.env.NEXT_PUBLIC_API_URL}/api/auth/microsoft?redirectTo=${encodeURIComponent(router.asPath)}`}
+                className="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg"
+              >
+                Se connecter
+              </a>
+            </>
           ) : (
             <>
               <h1 className="text-2xl font-bold text-text mb-4">{printerName || 'Imprimante'}</h1>

@@ -150,4 +150,40 @@ describe('POST /api/print/agent/jobs/:id/status', () => {
       .send({ status: 'nonsense' });
     expect(res.status).toBe(400);
   });
+
+  it('rejects a status update for a job that is no longer the printer current job', async () => {
+    const { printer, rawKey } = await createPrinter();
+    const job = await submitAcceptedJob(printer);
+    await request(app).get('/api/print/agent/next-job').set(printerAuthHeader(printer._id, rawKey));
+
+    // Simule le pointeur currentJob qui a bougé entre-temps (ex: disable/re-enable, Fix 2)
+    await Printer.findByIdAndUpdate(printer._id, { currentJob: null });
+
+    const res = await request(app)
+      .post(`/api/print/agent/jobs/${job._id}/status`)
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ status: 'printing' });
+    expect(res.status).toBe(409);
+
+    const reloadedJob = await PrintJob.findById(job._id);
+    expect(reloadedJob.status).toBe('sent');
+  });
+
+  it('rejects a second status update on an already-completed job (idempotency)', async () => {
+    const { printer, rawKey } = await createPrinter();
+    const job = await submitAcceptedJob(printer);
+    await request(app).get('/api/print/agent/next-job').set(printerAuthHeader(printer._id, rawKey));
+
+    const first = await request(app)
+      .post(`/api/print/agent/jobs/${job._id}/status`)
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ status: 'completed' });
+    expect(first.status).toBe(200);
+
+    const second = await request(app)
+      .post(`/api/print/agent/jobs/${job._id}/status`)
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ status: 'completed' });
+    expect(second.status).toBe(409);
+  });
 });

@@ -64,6 +64,12 @@ exports.updateJobStatus = asyncHandler(async (req, res, next) => {
   if (job.printer.toString() !== req.printer._id.toString()) {
     return next(new ErrorResponse('Ce job ne correspond pas à cette imprimante', 403));
   }
+  if (!req.printer.currentJob || job._id.toString() !== req.printer.currentJob.toString()) {
+    return next(new ErrorResponse("Ce job n'est plus le job courant de cette imprimante", 409));
+  }
+  if (['completed', 'failed'].includes(job.status)) {
+    return next(new ErrorResponse('Ce job est déjà dans un état terminal', 409));
+  }
 
   job.status = status;
   job.history.push({ status, date: new Date(), detail: errorMessage || `Rapporté par l'agent: ${status}` });

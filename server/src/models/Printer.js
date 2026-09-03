@@ -11,7 +11,7 @@ const PrinterSchema = new mongoose.Schema({
     default: PRINTER_STATUSES.IDLE,
   },
   currentJob: { type: mongoose.Schema.Types.ObjectId, ref: 'PrintJob', default: null },
-  lastSeenAt: { type: Date, default: null },
+  lastSeenAt: { type: Date, default: Date.now },
   lastKnownStatus: {
     type: String,
     enum: Object.values(PRINTER_STATUSES),
