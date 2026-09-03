@@ -1,6 +1,7 @@
 // pages/admin/print/index.js
 import { useEffect, useState } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import axios from 'axios';
 import { toast } from 'react-toastify';
@@ -77,7 +78,7 @@ export default function AdminPrintPage() {
   const [newPrinterName, setNewPrinterName] = useState('');
   const [newPrinterModel, setNewPrinterModel] = useState('kobra3');
   const [createdKey, setCreatedKey] = useState(null); // { apiKey, printerName } — shown once, never persisted or refetched
-  const [qrModal, setQrModal] = useState(null); // { printerName, imageUrl }
+  const [qrModal, setQrModal] = useState(null); // { printerId, printerName, imageUrl }
 
   // ── Whitelist ──
   const [newEmail, setNewEmail] = useState('');
@@ -184,7 +185,7 @@ export default function AdminPrintPage() {
         { headers: { Authorization: `Bearer ${token}` }, responseType: 'blob' }
       );
       const imageUrl = URL.createObjectURL(res.data);
-      setQrModal({ printerName: printer.name, imageUrl });
+      setQrModal({ printerId: printer._id, printerName: printer.name, imageUrl });
     } catch (err) {
       toast.error('Impossible de charger le QR code');
     }
@@ -467,6 +468,14 @@ export default function AdminPrintPage() {
             <p className="text-xs text-text-muted mt-3">
               À imprimer et coller sur l&apos;imprimante — scanné pour confirmer la libération du plateau.
             </p>
+            {qrModal?.printerId && (
+              <Link
+                href={`/admin/print/printers/${qrModal.printerId}/qr`}
+                className="inline-block mt-4 text-sm font-medium text-primary hover:underline"
+              >
+                Ouvrir la page à imprimer
+              </Link>
+            )}
           </div>
         )}
       </Modal>
