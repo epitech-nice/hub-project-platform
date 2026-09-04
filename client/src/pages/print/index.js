@@ -228,7 +228,7 @@ export default function PrintPage() {
                   </Badge>
                 </div>
                 {job.status === 'failed' && job.errorMessage && (
-                  <p className="text-sm text-danger">{job.errorMessage}</p>
+                  <p className="text-sm text-danger break-words">{job.errorMessage}</p>
                 )}
               </Card>
             ))}
