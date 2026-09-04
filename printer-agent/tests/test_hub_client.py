@@ -49,6 +49,41 @@ def test_get_next_job_raises_on_network_error():
             client.get_next_job()
 
 
+def test_get_next_job_raises_with_raw_text_on_non_json_error_body():
+    # Certaines erreurs (ex: 502 renvoyé par un reverse proxy) ne sont pas au format JSON du hub
+    # mais une page d'erreur HTML — _request doit alors retomber sur response.text plutôt que
+    # de laisser le ValueError de response.json() remonter.
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.get(
+            f"{BASE_URL}/next-job",
+            status_code=502,
+            text="<html><body>Bad Gateway</body></html>",
+        )
+        with pytest.raises(HubClientError) as exc_info:
+            client.get_next_job()
+    assert exc_info.value.status_code == 502
+    assert "Bad Gateway" in str(exc_info.value)
+
+
+def test_heartbeat_sends_auth_headers():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.get(f"{BASE_URL}/heartbeat", status_code=204)
+        client.heartbeat()
+    assert m.last_request.method == "GET"
+    assert m.last_request.headers["x-printer-id"] == "printer-1"
+    assert m.last_request.headers["x-api-key"] == "secret-key"
+
+
+def test_heartbeat_raises_on_failure():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.get(f"{BASE_URL}/heartbeat", status_code=500, text="internal error")
+        with pytest.raises(HubClientError):
+            client.heartbeat()
+
+
 def test_download_job_file_writes_content(tmp_path):
     client = make_client()
     dest = str(tmp_path / "job.gcode")
@@ -57,6 +92,18 @@ def test_download_job_file_writes_content(tmp_path):
         client.download_job_file("job-1", dest)
     with open(dest, "rb") as f:
         assert f.read() == b"G28\nG1 X10\n"
+
+
+def test_download_job_file_wraps_write_failure_in_hub_client_error(tmp_path):
+    # Couvre le Critical #2 : une écriture qui échoue en cours de stream (ici simulée en
+    # pointant dest_path dans un répertoire inexistant) ne doit jamais laisser fuiter un OSError
+    # brut — elle doit être convertie en HubClientError, et la réponse streamée doit être fermée.
+    client = make_client()
+    dest = str(tmp_path / "does-not-exist" / "job.gcode")
+    with requests_mock.Mocker() as m:
+        m.get(f"{BASE_URL}/jobs/job-1/file", content=b"G28\nG1 X10\n")
+        with pytest.raises(HubClientError):
+            client.download_job_file("job-1", dest)
 
 
 def test_update_job_status_sends_status_only():

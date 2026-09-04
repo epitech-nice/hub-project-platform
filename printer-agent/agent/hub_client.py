@@ -29,15 +29,23 @@ class HubClient:
 
         return response
 
+    def heartbeat(self):
+        self._request("GET", "/heartbeat")
+
     def get_next_job(self):
         response = self._request("GET", "/next-job")
         return response.json().get("data")
 
     def download_job_file(self, job_id, dest_path):
         response = self._request("GET", f"/jobs/{job_id}/file", stream=True)
-        with open(dest_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+        try:
+            with open(dest_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        except (requests.RequestException, OSError) as exc:
+            raise HubClientError(f"Échec de l'écriture du fichier téléchargé: {exc}") from exc
+        finally:
+            response.close()
 
     def update_job_status(self, job_id, status, error_message=None):
         payload = {"status": status}

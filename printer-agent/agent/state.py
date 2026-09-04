@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 
-DEFAULT_STATE = {"job_id": None, "consecutive_moonraker_failures": 0}
+DEFAULT_STATE = {"job_id": None, "consecutive_moonraker_failures": 0, "job_started_at": None}
 REQUIRED_KEYS = set(DEFAULT_STATE.keys())
 
 

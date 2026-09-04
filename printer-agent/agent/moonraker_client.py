@@ -28,6 +28,16 @@ class MoonrakerClient:
                 f"Moonraker a refusé l'upload (HTTP {response.status_code}): {response.text}"
             )
 
+        try:
+            print_started = response.json()["result"]["print_started"]
+        except (KeyError, ValueError, TypeError) as exc:
+            raise MoonrakerClientError(f"Réponse Moonraker inattendue à l'upload: {exc}") from exc
+
+        if not print_started:
+            raise MoonrakerClientError(
+                "Moonraker a accepté le fichier mais n'a pas démarré l'impression (print_started=false)"
+            )
+
     def get_print_stats(self):
         url = f"{self.base_url}/printer/objects/query"
         try:
@@ -42,5 +52,8 @@ class MoonrakerClient:
             print_stats = response.json()["result"]["status"]["print_stats"]
         except (KeyError, ValueError, TypeError) as exc:
             raise MoonrakerClientError(f"Réponse Moonraker inattendue: {exc}") from exc
+
+        if not isinstance(print_stats, dict):
+            raise MoonrakerClientError(f"print_stats inattendu dans la réponse Moonraker: {print_stats!r}")
 
         return {"state": print_stats.get("state"), "message": print_stats.get("message", "")}
