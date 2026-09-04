@@ -2,7 +2,7 @@ const Printer = require('../models/Printer');
 const PrintJob = require('../models/PrintJob');
 const { PRINTER_STATUSES, PRINTER_STATUS_SOURCES } = require('../utils/constants');
 
-const OFFLINE_THRESHOLD_MS = 90 * 1000; // ~3x l'intervalle de polling agent attendu (15-30s)
+const OFFLINE_THRESHOLD_MS = 240 * 1000; // ~4x la cadence cron de l'agent (60s), incluant le heartbeat pendant le suivi d'impression
 const DEFAULT_CHECK_INTERVAL_MS = 30 * 1000;
 
 const NEVER_STALE_STATUSES = [PRINTER_STATUSES.OFFLINE, PRINTER_STATUSES.DISABLED];

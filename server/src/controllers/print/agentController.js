@@ -6,6 +6,11 @@ const { PRINTER_STATUSES, PRINTER_STATUS_SOURCES } = require('../../utils/consta
 
 const VALID_STATUS_UPDATES = ['printing', 'completed', 'failed'];
 
+// GET /api/print/agent/heartbeat
+exports.heartbeat = asyncHandler(async (req, res) => {
+  res.status(204).end();
+});
+
 // GET /api/print/agent/next-job
 // req.printer est posé par authenticatePrinter
 exports.getNextJob = asyncHandler(async (req, res) => {
