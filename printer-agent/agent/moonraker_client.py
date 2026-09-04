@@ -1,0 +1,46 @@
+import requests
+
+
+class MoonrakerClientError(Exception):
+    pass
+
+
+class MoonrakerClient:
+    def __init__(self, base_url, timeout=10):
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+
+    def upload_and_start_print(self, file_path, filename):
+        url = f"{self.base_url}/server/files/upload"
+        try:
+            with open(file_path, "rb") as f:
+                files = {"file": (filename, f, "text/plain")}
+                # root=gcodes : dossier standard Moonraker pour les fichiers imprimables.
+                # print=true : démarre l'impression immédiatement après l'upload, en un seul
+                # appel plutôt que upload + POST /printer/print/start séparé.
+                data = {"root": "gcodes", "print": "true"}
+                response = requests.post(url, files=files, data=data, timeout=self.timeout)
+        except (requests.RequestException, OSError) as exc:
+            raise MoonrakerClientError(f"Échec de l'upload vers Moonraker: {exc}") from exc
+
+        if response.status_code >= 400:
+            raise MoonrakerClientError(
+                f"Moonraker a refusé l'upload (HTTP {response.status_code}): {response.text}"
+            )
+
+    def get_print_stats(self):
+        url = f"{self.base_url}/printer/objects/query"
+        try:
+            response = requests.get(url, params={"print_stats": ""}, timeout=self.timeout)
+        except requests.RequestException as exc:
+            raise MoonrakerClientError(f"Moonraker injoignable: {exc}") from exc
+
+        if response.status_code >= 400:
+            raise MoonrakerClientError(f"Erreur Moonraker (HTTP {response.status_code}): {response.text}")
+
+        try:
+            print_stats = response.json()["result"]["status"]["print_stats"]
+        except (KeyError, ValueError, TypeError) as exc:
+            raise MoonrakerClientError(f"Réponse Moonraker inattendue: {exc}") from exc
+
+        return {"state": print_stats.get("state"), "message": print_stats.get("message", "")}
