@@ -61,3 +61,29 @@ def test_main_creates_log_file(mock_run_tick, tmp_path):
     main(["--config", config_path])
 
     assert (tmp_path / "agent.log").exists()
+
+
+@patch("agent.main.save_state")
+@patch("agent.main.run_tick")
+def test_main_skips_save_state_when_state_unchanged(mock_run_tick, mock_save_state, tmp_path):
+    config_path = write_config(tmp_path)
+    default_state = {"job_id": None, "consecutive_moonraker_failures": 0}
+    mock_run_tick.return_value = default_state
+
+    main(["--config", config_path])
+
+    mock_save_state.assert_not_called()
+
+
+@patch("agent.main.save_state")
+@patch("agent.main.run_tick")
+def test_main_calls_save_state_when_state_changed(mock_run_tick, mock_save_state, tmp_path):
+    config_path = write_config(tmp_path)
+    new_state = {"job_id": "job-99", "consecutive_moonraker_failures": 0}
+    mock_run_tick.return_value = new_state
+
+    main(["--config", config_path])
+
+    mock_save_state.assert_called_once()
+    args, kwargs = mock_save_state.call_args
+    assert args[1] == new_state
