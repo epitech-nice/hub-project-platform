@@ -28,6 +28,8 @@ def save_state(path, state):
     try:
         with os.fdopen(fd, "w") as f:
             json.dump(state, f)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_path, path)
     except Exception:
         if os.path.exists(tmp_path):
