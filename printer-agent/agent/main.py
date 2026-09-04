@@ -1,7 +1,15 @@
+import argparse
+import fcntl
+import logging
+import logging.handlers
 import os
+import sys
 
-from .hub_client import HubClientError
-from .moonraker_client import MoonrakerClientError
+import yaml
+
+from .hub_client import HubClient, HubClientError
+from .moonraker_client import MoonrakerClient, MoonrakerClientError
+from .state import load_state, save_state
 
 MOONRAKER_FAILURE_THRESHOLD = 5
 
@@ -102,3 +110,56 @@ def _report_terminal(hub, job_id, status, error_message, state, logger):
         logger.info("Job %s signalé '%s' au hub.", job_id, status)
 
     return {"job_id": None, "consecutive_moonraker_failures": 0}
+
+
+def load_config(path):
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
+
+
+def setup_logging(log_path):
+    logger = logging.getLogger("printer_agent")
+    logger.setLevel(logging.INFO)
+    logger.handlers.clear()
+    handler = logging.handlers.RotatingFileHandler(log_path, maxBytes=500_000, backupCount=1)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger.addHandler(handler)
+    return logger
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Agent d'impression 3D — un tick.")
+    default_config = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.yaml")
+    parser.add_argument("--config", default=default_config)
+    args = parser.parse_args(argv)
+
+    base_dir = os.path.dirname(os.path.abspath(args.config))
+    config = load_config(args.config)
+    logger = setup_logging(os.path.join(base_dir, "agent.log"))
+
+    lock_path = os.path.join(base_dir, "agent.lock")
+    lock_file = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        logger.info("Tick précédent encore en cours, on saute celui-ci.")
+        lock_file.close()
+        return
+
+    try:
+        hub = HubClient(config["hub"]["base_url"], config["printer"]["id"], config["printer"]["api_key"])
+        moonraker = MoonrakerClient(config["moonraker"]["base_url"])
+        state_path = os.path.join(base_dir, "state.json")
+        state = load_state(state_path)
+
+        new_state = run_tick(hub, moonraker, state, base_dir, logger)
+
+        if new_state != state:
+            save_state(state_path, new_state)
+    finally:
+        fcntl.flock(lock_file, fcntl.LOCK_UN)
+        lock_file.close()
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
