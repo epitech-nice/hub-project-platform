@@ -201,8 +201,7 @@ export default function AdminPrintPage() {
 
   // ── Whitelist ──
 
-  const handleWhitelistSubmit = async (e) => {
-    e.preventDefault();
+  const submitAuthorization = async (authorized) => {
     if (!newEmail.trim() || !newEmailNote.trim()) {
       toast.error('Email et note sont requis');
       return;
@@ -210,16 +209,25 @@ export default function AdminPrintPage() {
     try {
       await post('/api/print/whitelist', {
         email: newEmail.trim(),
-        authorized: true,
+        authorized,
         note: newEmailNote.trim(),
       });
       setNewEmail('');
       setNewEmailNote('');
       await refresh();
-      toast.success('Email autorisé');
+      toast.success(authorized ? 'Email autorisé' : 'Email bloqué');
     } catch (err) {
       toast.error(err.message);
     }
+  };
+
+  const handleWhitelistSubmit = (e) => {
+    e.preventDefault();
+    submitAuthorization(true);
+  };
+
+  const handleBlacklistClick = () => {
+    submitAuthorization(false);
   };
 
   const handleRevoke = async (entry) => {
@@ -423,9 +431,14 @@ export default function AdminPrintPage() {
                   />
                 </FormField>
               </div>
-              <Button type="submit" loading={apiLoading}>
-                Autoriser
-              </Button>
+              <div className="flex gap-2">
+                <Button type="submit" loading={apiLoading}>
+                  Autoriser
+                </Button>
+                <Button type="button" variant="danger" loading={apiLoading} onClick={handleBlacklistClick}>
+                  Bloquer
+                </Button>
+              </div>
             </form>
           </Card>
 
