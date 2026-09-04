@@ -1,0 +1,23 @@
+# Copier ce fichier en config.yaml (non commité) et renseigner les valeurs
+# réelles avant de déployer sur une imprimante.
+#
+# Déploiement :
+# - config.yaml contient une clé API en clair : une fois copié, restreindre les permissions
+#   avec `chmod 600 config.yaml`.
+# - Lancer l'agent avec `python -m agent.main` depuis le dossier `printer-agent/` (et non
+#   `python agent/main.py`, qui échoue avec "attempted relative import with no known parent
+#   package" à cause des imports relatifs du package `agent`).
+# - Le runtime Rinkhals cible (disponibilité de python3, cron, pip sur le firmware réel) n'a
+#   pas encore été vérifié sur du matériel physique — à confirmer avant tout déploiement en
+#   production.
+# - Fichiers gcode uploadés sur Moonraker (dossier gcodes) : ce fichier de config n'active
+#   aucun nettoyage automatique après une impression terminée. C'est une lacune opérationnelle
+#   connue (politique de rétention à définir, suppression via DELETE
+#   /server/files/gcodes/<name> ou non) — décision volontairement hors scope de cette passe.
+hub:
+  base_url: https://<hub-domain>/api/print/agent
+printer:
+  id: "<mongo id de ce Printer, généré côté hub>"
+  api_key: "<clé api générée pour cette imprimante>"
+moonraker:
+  base_url: http://localhost:7125

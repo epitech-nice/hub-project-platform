@@ -220,11 +220,16 @@ export default function PrintPage() {
         ) : (
           <div className="space-y-2">
             {jobs.map((job) => (
-              <Card key={job._id} padding="compact" className="flex items-center justify-between gap-4">
-                <span className="text-text truncate">{job.fileName}</span>
-                <Badge variant={STATUS_BADGE_VARIANTS[job.status] || 'neutral'}>
-                  {STATUS_LABELS[job.status] || job.status}
-                </Badge>
+              <Card key={job._id} padding="compact" className="flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-text truncate">{job.fileName}</span>
+                  <Badge variant={STATUS_BADGE_VARIANTS[job.status] || 'neutral'}>
+                    {STATUS_LABELS[job.status] || job.status}
+                  </Badge>
+                </div>
+                {job.status === 'failed' && job.errorMessage && (
+                  <p className="text-sm text-danger break-words">{job.errorMessage}</p>
+                )}
               </Card>
             ))}
           </div>

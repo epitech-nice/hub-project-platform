@@ -46,3 +46,11 @@ Thumbs.db
 
 # Superpowers brainstorming sessions
 .superpowers/
+
+# Agent imprimante
+printer-agent/config.yaml
+printer-agent/state.json
+printer-agent/agent.lock
+printer-agent/*.log*
+printer-agent/downloads/
+printer-agent/.venv/
