@@ -108,6 +108,20 @@ sshpass -p rockchip ssh -o StrictHostKeyChecking=no root@$IP '
 > non déductible du repo seul). Une mauvaise URL renvoie une page 404 HTML Next.js au lieu d'une
 > erreur JSON `{"success":false,...}` — c'est le symptôme qui doit faire remonter cette note.
 
+## Changer/régénérer la clé API d'une imprimante déjà déployée
+
+1. `/admin/print` → "Régénérer la clé" sur l'imprimante concernée → copier la nouvelle clé
+   (affichée une seule fois, invalide immédiatement l'ancienne)
+2. Sur l'imprimante :
+   ```sh
+   ssh root@<ip-imprimante>
+   vi /useremain/home/rinkhals/apps/printer-agent/config.json   # remplacer printer.api_key
+   cd /useremain/home/rinkhals/apps/printer-agent
+   ./app.sh start   # tue l'instance en cours et relance avec la config à jour
+   ./app.sh status
+   ```
+   Pas besoin de reboot, ni de refaire `chmod`/`touch .enabled`.
+
 ## 4. Vérifier
 
 - `tail -f agent.log` sur l'imprimante : au moins 2 ticks propres (~60s d'écart), aucun warning
