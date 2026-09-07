@@ -100,13 +100,20 @@ hub-project-platform/
 │   │   │   └── upload.js            # Multer — PDF sujets Simulated
 │   │   ├── services/
 │   │   │   ├── emailService.js
-│   │   │   └── externalApiService.js
+│   │   │   ├── externalService.js
+│   │   │   └── projectService.js
 │   │   ├── utils/
+│   │   │   ├── apiKey.js
+│   │   │   ├── backgroundJobs.js
+│   │   │   ├── constants.js
+│   │   │   ├── errorResponse.js
 │   │   │   └── printerScheduler.js  # Détection imprimante offline / auto-fail des jobs en cours
 │   │   └── config/
 │   │       └── passport.js
 │   ├── uploads/
 │   │   └── simulated-subjects/      # PDF uploadés (volume Docker en prod)
+│   ├── storage/
+│   │   └── print-jobs/              # Fichiers .gcode uploadés (pas de volume Docker dédié en prod)
 │   ├── Dockerfile
 │   ├── Dockerfile.prod
 │   └── package.json

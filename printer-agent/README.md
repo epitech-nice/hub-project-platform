@@ -4,6 +4,8 @@ Agent pull-only qui tourne sur chaque imprimante (Anycubic Kobra 3 / Kobra 3 Max
 [Rinkhals](https://github.com/rinkhals-community/Rinkhals)) et fait le lien avec le Hub :
 récupère les jobs d'impression, les transmet à Moonraker en local, remonte le statut.
 
+Contrat API complet des endpoints consommés par cet agent : voir [`docs/api-print.md`](../docs/api-print.md).
+
 ## Déploiement
 
 - Copier `config.example.json` en `config.json` (non commité) et renseigner les valeurs réelles.

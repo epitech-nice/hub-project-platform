@@ -184,7 +184,7 @@ Base : `/api/print/jobs`
 | `rejectionReason` | Code HTTP | Message |
 |---|---|---|
 | `not_authorized` | 403 | Vous n'êtes pas autorisé à soumettre une impression |
-| `printer_busy` | 409 | Cette imprimante est occupée |
+| `printer_busy` | 409 | Cette imprimante est occupée (imprimante `printing` ou `awaiting_clearance`) |
 | `printer_offline` | 409 | Cette imprimante est injoignable |
 | `printer_error` | 409 | Cette imprimante signale une erreur |
 | `printer_disabled` | 409 | Cette imprimante est désactivée |

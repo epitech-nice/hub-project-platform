@@ -93,7 +93,7 @@ Récupérer tous les projets.
 **Query params** :
 - `status=pending` (optionnel)
 - `page=1` (optionnel, défaut: 1)
-- `limit=10` (optionnel, défaut: 10)
+- `limit=20` (optionnel, défaut: 20)
 - `search=` (optionnel) — recherche insensible à la casse sur le nom du projet, le nom/email du créateur et l'email des membres. Si présent, ignore la pagination et renvoie tous les résultats.
 - `schoolYear=YYYY-YYYY` (optionnel) — filtre sur `createdAt` entre le 1er septembre de l'année de début et le 31 août de l'année suivante (ex : `schoolYear=2025-2026` → `[2025-09-01, 2026-09-01[`)
 
@@ -149,17 +149,18 @@ Demander des modifications. Passe le statut à `pending_changes`.
 ---
 
 #### `POST /api/projects/notify-pending-changes`
-Relance email en masse : renvoie l'email de notification à tous les projets actuellement en statut `pending_changes`.
+Relance email en masse : met en file d'attente l'envoi de l'email de notification (job `sendStatusEmail` via `backgroundJobs`) pour tous les projets actuellement en statut `pending_changes`. L'envoi n'est pas synchrone : la réponse confirme la mise en file, pas la livraison.
 
 **Réponse** :
 ```json
 { "success": true, "total": 4 }
 ```
+(`total` = nombre d'emails mis en file d'attente, pas nécessairement déjà délivrés)
 
 ---
 
 #### `POST /api/projects/:id/resend-notification`
-Relance email unitaire pour un projet en statut `pending_changes`.
+Relance email unitaire pour un projet en statut `pending_changes` : met en file d'attente le même job `sendStatusEmail` que ci-dessus (envoi asynchrone, non synchrone).
 
 **Erreurs** :
 - `404` si le projet n'existe pas
@@ -177,7 +178,7 @@ Marquer un projet comme terminé (`status → completed`).
 
 ---
 
-#### `GET /api/projects/export/csv`
+#### `GET /api/projects/export/completed-csv`
 Exporter les projets terminés en CSV.
 
 **Query params** :
