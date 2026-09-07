@@ -89,6 +89,8 @@ Build Next.js optimisé, servi sur le port 3000.
 
 Tous les services partagent le réseau interne `app-network` (bridge). Le frontend appelle le backend via `NEXT_PUBLIC_API_URL=http://localhost:5000` (depuis le navigateur, donc via les ports exposés).
 
+> **Note** : En production, le frontend et l'API vivent sur deux sous-domaines distincts — voir [installation.md](./installation.md) pour plus de détails sur la configuration en prod.
+
 ---
 
 ## Commandes utiles

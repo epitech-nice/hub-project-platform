@@ -55,6 +55,12 @@ JWT_SECRET=une-chaine-aleatoire-longue-et-securisee
 NEXT_PUBLIC_API_URL=http://localhost:5000
 ```
 
+> **Prod** : le frontend (`hub.nice-tek.eu`) et l'API backend (`api-hub.nice-tek.eu`) sont
+> servis sur deux sous-domaines distincts, contrairement au dev local où ils partagent la
+> même origine. La valeur réelle de `NEXT_PUBLIC_API_URL` en prod vit dans `client/.env`
+> sur le VPS (non versionné) — à vérifier là-bas avant de déboguer un appel API qui échoue
+> en prod, plutôt que de supposer la même origine que le frontend.
+
 ### 3. Démarrer l'application
 
 **Développement :**
