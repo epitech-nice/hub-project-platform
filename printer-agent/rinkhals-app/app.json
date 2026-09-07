@@ -1,0 +1,13 @@
+{
+    "$version": "1",
+
+    "name": "Hub Print Agent",
+    "description": "Relie cette imprimante à la file d'impression du Hub Epitech Nice (agent pull-only)",
+    "version": "1.0.0",
+    "depends": [],
+
+    "requirements": {
+        "cpu": 5,
+        "memory": 20
+    }
+}

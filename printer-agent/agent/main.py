@@ -1,18 +1,19 @@
 import argparse
 import fcntl
+import json
 import logging
 import logging.handlers
 import os
 import shutil
 import sys
+import time
 from datetime import datetime, timezone
-
-import yaml
 
 from .hub_client import HubClient, HubClientError
 from .moonraker_client import MoonrakerClient, MoonrakerClientError
 from .state import load_state, save_state
 
+TICK_INTERVAL_SECONDS = 60
 MOONRAKER_FAILURE_THRESHOLD = 5
 MAX_JOB_AGE_SECONDS = 24 * 60 * 60  # filet de sécurité absolu, indépendant de ce que rapporte Moonraker
 MIN_FREE_DISK_BYTES = 100 * 1024 * 1024  # 100 Mo de marge avant de tenter un téléchargement
@@ -201,7 +202,7 @@ def _report_terminal(hub, job_id, status, error_message, state, logger):
 
 def load_config(path):
     with open(path, "r") as f:
-        return yaml.safe_load(f)
+        return json.load(f)
 
 
 def setup_logging(log_path):
@@ -215,10 +216,25 @@ def setup_logging(log_path):
     return logger
 
 
+def _execute_tick(hub, moonraker, state_path, downloads_dir, logger):
+    state = load_state(state_path)
+    new_state = run_tick(hub, moonraker, state, downloads_dir, logger)
+    if new_state != state:
+        save_state(state_path, new_state)
+
+
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Agent d'impression 3D — un tick.")
-    default_config = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.yaml")
+    parser = argparse.ArgumentParser(description="Agent d'impression 3D.")
+    default_config = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json")
     parser.add_argument("--config", default=default_config)
+    parser.add_argument(
+        "--loop",
+        action="store_true",
+        help=(
+            "Tourne en continu (tick toutes les %ds) au lieu de faire un seul tick puis quitter. "
+            "À utiliser sur un environnement sans cron (ex: Rinkhals)." % TICK_INTERVAL_SECONDS
+        ),
+    )
     args = parser.parse_args(argv)
 
     base_dir = os.path.dirname(os.path.abspath(args.config))
@@ -235,7 +251,7 @@ def main(argv=None):
     try:
         fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
-        logger.info("Tick précédent encore en cours, on saute celui-ci.")
+        logger.info("Une instance de l'agent tourne déjà, on s'arrête.")
         lock_file.close()
         return
 
@@ -243,15 +259,30 @@ def main(argv=None):
         hub = HubClient(config["hub"]["base_url"], config["printer"]["id"], config["printer"]["api_key"])
         moonraker = MoonrakerClient(config["moonraker"]["base_url"])
         state_path = os.path.join(base_dir, "state.json")
-        state = load_state(state_path)
 
         downloads_dir = os.path.join(base_dir, "downloads")
         os.makedirs(downloads_dir, exist_ok=True)
+        # Purge des fichiers laissés par un kill en plein téléchargement (ex: app.sh
+        # stop/restart envoie un SIGKILL) : le finally de _try_dispatch ne s'exécute pas
+        # dans ce cas, et ces fichiers orphelins s'accumulent sinon indéfiniment. Le flock
+        # ci-dessus garantit qu'aucune autre instance de l'agent ne possède ces fichiers.
+        for stale_file in os.listdir(downloads_dir):
+            stale_path = os.path.join(downloads_dir, stale_file)
+            if os.path.isfile(stale_path):
+                os.remove(stale_path)
 
-        new_state = run_tick(hub, moonraker, state, downloads_dir, logger)
-
-        if new_state != state:
-            save_state(state_path, new_state)
+        if args.loop:
+            logger.info("Démarrage de l'agent en mode boucle (tick toutes les %ds).", TICK_INTERVAL_SECONDS)
+            while True:
+                try:
+                    _execute_tick(hub, moonraker, state_path, downloads_dir, logger)
+                except Exception:
+                    # Une erreur pendant un tick ne doit jamais arrêter le process : en mode
+                    # boucle, il n'y a personne (pas de cron) pour le relancer si on sort ici.
+                    logger.error("Erreur inattendue pendant un tick, la boucle continue.", exc_info=True)
+                time.sleep(TICK_INTERVAL_SECONDS)
+        else:
+            _execute_tick(hub, moonraker, state_path, downloads_dir, logger)
     except Exception:
         logger.error("Erreur inattendue pendant le tick.", exc_info=True)
     finally:
