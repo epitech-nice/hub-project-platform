@@ -1,10 +1,13 @@
 import fcntl
+import json
 import os
 from unittest.mock import patch
 
-import yaml
-
 from agent.main import load_config, main
+
+
+class _StopLoop(Exception):
+    """Sentinelle pour sortir de `while True` dans les tests du mode --loop."""
 
 CONFIG = {
     "hub": {"base_url": "https://hub.example.org/api/print/agent"},
@@ -16,13 +19,13 @@ DEFAULT_STATE = {"job_id": None, "consecutive_moonraker_failures": 0, "job_start
 
 
 def write_config(tmp_path):
-    config_path = tmp_path / "config.yaml"
+    config_path = tmp_path / "config.json"
     with open(config_path, "w") as f:
-        yaml.safe_dump(CONFIG, f)
+        json.dump(CONFIG, f)
     return str(config_path)
 
 
-def test_load_config_parses_yaml(tmp_path):
+def test_load_config_parses_json(tmp_path):
     config_path = write_config(tmp_path)
     assert load_config(config_path) == CONFIG
 
@@ -100,6 +103,45 @@ def test_main_creates_downloads_subdirectory(mock_run_tick, tmp_path):
     assert os.path.isdir(tmp_path / "downloads") is True
 
 
+@patch("agent.main.time.sleep")
+@patch("agent.main.run_tick")
+def test_main_without_loop_flag_never_sleeps(mock_run_tick, mock_sleep, tmp_path):
+    config_path = write_config(tmp_path)
+    mock_run_tick.return_value = dict(DEFAULT_STATE)
+
+    main(["--config", config_path])
+
+    mock_run_tick.assert_called_once()
+    mock_sleep.assert_not_called()
+
+
+@patch("agent.main.time.sleep")
+@patch("agent.main.run_tick")
+def test_main_loop_ticks_repeatedly_with_sleep_between(mock_run_tick, mock_sleep, tmp_path):
+    config_path = write_config(tmp_path)
+    mock_run_tick.return_value = dict(DEFAULT_STATE)
+    mock_sleep.side_effect = [None, None, _StopLoop()]
+
+    main(["--config", config_path, "--loop"])
+
+    assert mock_run_tick.call_count == 3
+    mock_sleep.assert_called_with(60)
+
+
+@patch("agent.main.time.sleep")
+@patch("agent.main.run_tick")
+def test_main_loop_continues_after_tick_error(mock_run_tick, mock_sleep, tmp_path):
+    config_path = write_config(tmp_path)
+    mock_run_tick.side_effect = [RuntimeError("boom"), dict(DEFAULT_STATE)]
+    mock_sleep.side_effect = [None, _StopLoop()]
+
+    main(["--config", config_path, "--loop"])
+
+    assert mock_run_tick.call_count == 2
+    log_content = (tmp_path / "agent.log").read_text()
+    assert "boucle continue" in log_content
+
+
 @patch("agent.main.run_tick")
 def test_main_logs_and_returns_cleanly_on_bad_config(mock_run_tick, tmp_path):
     # Couvre le Critical #2 : setup_logging tourne avant load_config, donc même une config
@@ -107,7 +149,7 @@ def test_main_logs_and_returns_cleanly_on_bad_config(mock_run_tick, tmp_path):
     # logger n'existe. On pointe --config vers un fichier inexistant dans un répertoire qui,
     # lui, existe bien (tmp_path), pour que base_dir — et donc l'emplacement du log — reste
     # résolvable.
-    bad_config_path = str(tmp_path / "nonexistent.yaml")
+    bad_config_path = str(tmp_path / "nonexistent.json")
 
     main(["--config", bad_config_path])
 

@@ -1,0 +1,12 @@
+{
+  "hub": {
+    "base_url": "https://<hub-domain>/api/print/agent"
+  },
+  "printer": {
+    "id": "<mongo id de ce Printer, généré côté hub>",
+    "api_key": "<clé api générée pour cette imprimante>"
+  },
+  "moonraker": {
+    "base_url": "http://localhost:7125"
+  }
+}
