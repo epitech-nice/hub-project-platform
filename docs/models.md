@@ -221,3 +221,142 @@ Base de données : **MongoDB** via **Mongoose**.
 **Phases ouvertes** (logique `getCurrentCycle`) :
 - **Phase 1** : `startDate ≤ now ≤ firstSubmissionDeadline`
 - **Phase 2** : `firstDefenseDate ≤ now ≤ secondSubmissionDeadline`
+
+---
+
+## Printer *(imprimante 3D)*
+
+```js
+{
+  name: String,               // Requis
+  model: String,               // Requis — 'kobra3' | 'kobra3max'
+  apiKeyHash: String,          // Requis — hash de la clé API utilisée par l'agent Python
+
+  status: String,              // Enum PRINTER_STATUSES (défaut 'idle') :
+                                // 'idle' | 'printing' | 'awaiting_clearance' | 'offline' | 'error' | 'disabled'
+  lastKnownStatus: String,     // Enum PRINTER_STATUSES (défaut 'idle') — dernier statut connu avant passage offline
+  currentJob: ObjectId,        // → PrintJob, null si aucun job en cours
+  lastSeenAt: Date,            // Dernier heartbeat reçu de l'agent (défaut : maintenant)
+
+  clearanceHistory: [{         // Historique des libérations de plateau
+    method: String,            // Enum CLEARANCE_METHODS : 'qr' | 'admin_override'
+    byUserId: ObjectId,        // → User
+    byEmail: String,
+    byName: String,
+    date: Date
+  }],
+
+  statusHistory: [{            // Historique des changements de statut
+    status: String,            // Enum PRINTER_STATUSES
+    source: String,            // Enum PRINTER_STATUS_SOURCES : 'agent_report' | 'admin_action' | 'heartbeat_timeout'
+    detail: String,
+    byUserId: ObjectId,        // → User (présent pour source 'admin_action')
+    byName: String,
+    date: Date
+  }],
+
+  createdAt: Date
+}
+```
+
+**Note** : `status` passe à `offline` via `heartbeat_timeout` lorsque l'agent ne renvoie plus de heartbeat dans le délai attendu ; `disabled` est un statut manuel (`admin_action`) qui empêche l'envoi de nouveaux jobs.
+
+---
+
+## PrintAuthorization *(whitelist d'accès à l'impression 3D)*
+
+```js
+{
+  email: String,               // Requis, unique, lowercase, trim
+  authorized: Boolean,         // Défaut : false
+
+  history: [{                  // Historique des décisions d'autorisation/blacklist
+    authorized: Boolean,
+    byUserId: ObjectId,        // → User
+    byName: String,
+    date: Date,
+    note: String
+  }]
+}
+```
+
+**Note** : chaque appel à `POST /api/print/whitelist` (autoriser ou blacklister) ajoute une entrée à `history` et résout automatiquement toute `PrintAccessRequest` en attente pour cet email (voir ci-dessous).
+
+---
+
+## PrintJob
+
+```js
+{
+  student: { email: String, name: String },   // Requis
+
+  printer: ObjectId,           // Requis — → Printer
+  fileName: String,            // Requis — nom du fichier envoyé
+  filePath: String,            // Requis — chemin de stockage local
+
+  status: String,               // Enum PRINT_JOB_STATUSES (défaut 'queued') :
+                                 // 'rejected' | 'queued' | 'sent' | 'printing' | 'completed' | 'failed'
+  rejectionReason: String,      // Enum PRINT_REJECTION_REASONS | null (défaut null) :
+                                 // 'not_authorized' | 'printer_busy' | 'printer_offline' | 'printer_error' | 'printer_disabled'
+  errorMessage: String,         // Défaut null
+
+  submittedAt: Date,            // Défaut : maintenant
+  startedAt: Date,              // Défaut null
+  completedAt: Date,            // Défaut null
+
+  history: [{                   // Historique des transitions de statut
+    status: String,             // Enum PRINT_JOB_STATUSES
+    date: Date,
+    detail: String
+  }]
+}
+```
+
+**Indexes** : `{ 'student.email': 1, submittedAt: -1 }`, `{ printer: 1, status: 1 }`
+
+---
+
+## PrintAccessRequest *(demande d'accès à l'impression 3D)*
+
+```js
+{
+  student: { userId: ObjectId, name: String, email: String },   // Requis (userId → User)
+
+  status: String,               // Enum PRINT_ACCESS_REQUEST_STATUSES (défaut 'pending') :
+                                 // 'pending' | 'resolved'
+  requestedAt: Date,            // Défaut : maintenant
+  resolvedAt: Date              // Défaut null
+}
+```
+
+**Indexes** : `{ 'student.email': 1, status: 1 }`
+
+**Note** : créée quand un étudiant non whitelisté tente d'accéder à l'impression 3D (un email est envoyé aux admins). Elle est résolue automatiquement — sans action dédiée — dès qu'un admin statue sur l'email du demandeur via `PrintAuthorization` (autorisation ou blacklist), qu'il s'agisse ou non de la demande d'origine.
+
+---
+
+## ToolReport *(signalement de problème sur un outil d'inventaire)*
+
+```js
+{
+  tool: ObjectId,               // Requis — → Tool
+
+  student: { userId: ObjectId, name: String, email: String },   // Requis (userId → User)
+
+  category: String,             // Requis — Enum REPORT_CATEGORIES :
+                                 // 'broken' | 'missing' | 'incomplete' | 'defective' | 'other'
+  message: String,               // Optionnel, trim, maxlength 100
+
+  status: String,                // Enum REPORT_STATUS (défaut 'open') : 'open' | 'resolved'
+  resolvedBy: { userId: ObjectId, name: String },   // userId → User
+  resolvedAt: Date,
+  resolveMessage: String,        // Optionnel, trim, maxlength 500
+
+  createdAt: Date,               // via timestamps
+  updatedAt: Date                // via timestamps
+}
+```
+
+**Indexes** : `{ tool: 1, status: 1 }`
+
+**Note** : voir aussi `docs/inventory.md` pour le flux fonctionnel des signalements (badge sur la colonne "Outil", modal de résolution admin).
