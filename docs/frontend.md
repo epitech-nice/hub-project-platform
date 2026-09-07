@@ -170,7 +170,7 @@ Page minimaliste affichant en grand le QR code de libération d'une imprimante (
 - **Hub** (dropdown) : Inventaire, Impression 3D, plus les liens admin correspondants.
 - Lien direct **Glossaire**.
 
-Panneau `MobileNavPanel.js` (burger) sur mobile, avec les mêmes sections à plat.
+Panneau `MobileNavPanel.js` (burger) sur mobile : sections à plat (Projets, Workshops, Simulated, Hub, Impression 3D), mais avec un regroupement différent du desktop — Glossaire rejoint le groupe Hub (absent du dropdown Hub desktop, où il n'apparaît pas du tout puisque Glossaire est un lien autonome à côté des dropdowns), et Impression 3D en devient sa propre section de premier niveau au lieu d'être une sous-section de Hub.
 
 ### `Footer.js`
 Pied de page avec copyright.
