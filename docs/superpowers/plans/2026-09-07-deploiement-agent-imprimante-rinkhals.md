@@ -226,7 +226,7 @@ scp -r printer-agent/agent \
        printer-agent/rinkhals-app/app.json \
        /tmp/config.json \
        root@$IP:/useremain/home/rinkhals/apps/printer-agent/
-ssh root@$IP "mv /useremain/home/rinkhals/apps/printer-agent/config.json /useremain/home/rinkhals/apps/printer-agent/config.json && chmod 600 /useremain/home/rinkhals/apps/printer-agent/config.json"
+ssh root@$IP "chmod 600 /useremain/home/rinkhals/apps/printer-agent/config.json"
 ```
 
 (mot de passe SSH par défaut Rinkhals : `rockchip`, root)

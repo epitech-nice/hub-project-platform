@@ -1,6 +1,6 @@
 #!/bin/sh
 
-. /useremain/rinkhals/.current/tools.sh
+. /useremain/rinkhals/.current/tools.sh || exit 1
 
 export AGENT_ROOT=$(dirname $(realpath $0))
 export AGENT_CONFIG="$AGENT_ROOT/config.json"
@@ -19,9 +19,9 @@ status() {
 start() {
     kill_by_name "agent.main"
 
-    cd $AGENT_ROOT
+    cd $AGENT_ROOT || exit 1
     log "Starting Hub print agent from $AGENT_ROOT"
-    python3 -m agent.main --config $AGENT_CONFIG --loop >> $AGENT_STDOUT_LOG 2>&1 &
+    python3 -m agent.main --config $AGENT_CONFIG --loop > $AGENT_STDOUT_LOG 2>&1 &
 }
 
 stop() {

@@ -1,5 +1,7 @@
 # Agent d'impression 3D — script embarqué par imprimante
 
+> **Superseded 2026-09-07** — the deployment details below (config.yaml, a crontab entry) turned out to be incompatible with the real Rinkhals runtime. See `docs/superpowers/plans/2026-09-07-deploiement-agent-imprimante-rinkhals.md` and `printer-agent/README.md` for what was actually deployed.
+
 Complète [`2026-09-02-integration-imprimantes-3d-design.md`](./2026-09-02-integration-imprimantes-3d-design.md), qui spécifie le backend/frontend Hub (déjà mergés sur `master`) et pose déjà l'architecture réseau de l'agent. Cette spec détaille uniquement l'agent lui-même : son fonctionnement interne, sa configuration, sa gestion d'erreurs et son déploiement.
 
 ## Contexte et objectif

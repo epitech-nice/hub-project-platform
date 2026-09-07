@@ -262,6 +262,14 @@ def main(argv=None):
 
         downloads_dir = os.path.join(base_dir, "downloads")
         os.makedirs(downloads_dir, exist_ok=True)
+        # Purge des fichiers laissés par un kill en plein téléchargement (ex: app.sh
+        # stop/restart envoie un SIGKILL) : le finally de _try_dispatch ne s'exécute pas
+        # dans ce cas, et ces fichiers orphelins s'accumulent sinon indéfiniment. Le flock
+        # ci-dessus garantit qu'aucune autre instance de l'agent ne possède ces fichiers.
+        for stale_file in os.listdir(downloads_dir):
+            stale_path = os.path.join(downloads_dir, stale_file)
+            if os.path.isfile(stale_path):
+                os.remove(stale_path)
 
         if args.loop:
             logger.info("Démarrage de l'agent en mode boucle (tick toutes les %ds).", TICK_INTERVAL_SECONDS)

@@ -7,7 +7,12 @@ from agent.main import load_config, main
 
 
 class _StopLoop(Exception):
-    """Sentinelle pour sortir de `while True` dans les tests du mode --loop."""
+    """Sentinelle pour sortir de `while True` dans les tests du mode --loop.
+
+    Doit être levée depuis le mock de `time.sleep`, jamais depuis `run_tick` : une exception
+    levée par `run_tick` est interceptée et avalée par le `try/except` de la boucle dans
+    `agent/main.py`, donc le test tournerait indéfiniment au lieu d'échouer.
+    """
 
 CONFIG = {
     "hub": {"base_url": "https://hub.example.org/api/print/agent"},
@@ -101,6 +106,26 @@ def test_main_creates_downloads_subdirectory(mock_run_tick, tmp_path):
     main(["--config", config_path])
 
     assert os.path.isdir(tmp_path / "downloads") is True
+
+
+@patch("agent.main.run_tick")
+def test_main_purges_stale_files_left_in_downloads_directory(mock_run_tick, tmp_path):
+    # Un kill (ex: app.sh stop/restart, SIGKILL) en plein téléchargement empêche le
+    # `finally` de _try_dispatch de nettoyer dest_path : le fichier partiel reste dans
+    # downloads/ indéfiniment. Comme le flock plus haut dans main() garantit qu'aucune
+    # autre instance de l'agent ne possède ces fichiers, main() doit purger le contenu
+    # de downloads/ au démarrage.
+    config_path = write_config(tmp_path)
+    mock_run_tick.return_value = dict(DEFAULT_STATE)
+    downloads_dir = tmp_path / "downloads"
+    downloads_dir.mkdir()
+    stale_file = downloads_dir / "orphaned_job.gcode"
+    stale_file.write_text("partial gcode content")
+
+    main(["--config", config_path])
+
+    assert stale_file.exists() is False
+    assert os.path.isdir(downloads_dir) is True
 
 
 @patch("agent.main.time.sleep")

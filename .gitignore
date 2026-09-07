@@ -49,6 +49,7 @@ Thumbs.db
 
 # Agent imprimante
 printer-agent/config.yaml
+printer-agent/config.json
 printer-agent/state.json
 printer-agent/agent.lock
 printer-agent/*.log*
