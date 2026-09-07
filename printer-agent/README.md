@@ -35,3 +35,26 @@ récupère les jobs d'impression, les transmet à Moonraker en local, remonte le
   décision volontairement hors scope de cette passe. Note du 2026-09-07 : sur la première
   imprimante flashée, ce dossier avait accumulé 866 fichiers / 4.8 Go sans jamais avoir été
   nettoyé, au point de bloquer l'installation de Rinkhals lui-même faute d'espace disque libre.
+
+## Installation sur l'imprimante (Rinkhals)
+
+`printer-agent` est packagé comme une "app" custom du système d'apps Rinkhals (voir
+`rinkhals-app/`). Sur l'imprimante, une app custom vit dans
+`/useremain/home/rinkhals/apps/<nom>/` et doit contenir `app.sh` + `app.json`, plus un fichier
+vide `.enabled` à sa racine pour démarrer automatiquement au boot.
+
+Procédure (voir aussi le plan
+`docs/superpowers/plans/2026-09-07-deploiement-agent-imprimante-rinkhals.md` pour le détail
+complet, réutilisable pour chaque nouvelle imprimante) :
+
+1. Créer l'entrée `Printer` côté Hub (`/admin/print`) pour récupérer `id` et `api_key`.
+2. Remplir un `config.json` réel à partir de `config.example.json` avec ces valeurs.
+3. Copier `agent/`, `app.sh`, `app.json`, `config.json` dans
+   `/useremain/home/rinkhals/apps/printer-agent/` sur l'imprimante (SSH, port 22, user `root`,
+   mot de passe par défaut Rinkhals `rockchip` — à changer en prod).
+4. `chmod 600 config.json` et `chmod +x app.sh`.
+5. `touch /useremain/home/rinkhals/apps/printer-agent/.enabled`.
+6. Démarrer immédiatement sans reboot : `./app.sh start` depuis ce dossier (ou redémarrer
+   l'imprimante, qui démarrera l'app automatiquement au boot suivant).
+7. Vérifier : `./app.sh status` doit répondre `Status: started` avec un PID, et
+   `tail -f agent.log` doit montrer des ticks réguliers.
