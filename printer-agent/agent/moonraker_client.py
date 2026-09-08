@@ -6,9 +6,13 @@ class MoonrakerClientError(Exception):
 
 
 class MoonrakerClient:
-    def __init__(self, base_url, timeout=10):
+    def __init__(self, base_url, timeout=10, upload_timeout=300):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        # Écrire + parser un gros gcode sur le CPU mono-cœur ARMv7 de ces imprimantes peut
+        # largement dépasser le timeout des appels de statut légers (get_print_stats) — un
+        # gcode de 6h a fait timeout à l'upload en prod avec un timeout partagé de 10s.
+        self.upload_timeout = upload_timeout
 
     def upload_and_start_print(self, file_path, filename):
         url = f"{self.base_url}/server/files/upload"
@@ -19,7 +23,7 @@ class MoonrakerClient:
                 # print=true : démarre l'impression immédiatement après l'upload, en un seul
                 # appel plutôt que upload + POST /printer/print/start séparé.
                 data = {"root": "gcodes", "print": "true"}
-                response = requests.post(url, files=files, data=data, timeout=self.timeout)
+                response = requests.post(url, files=files, data=data, timeout=self.upload_timeout)
         except (requests.RequestException, OSError) as exc:
             raise MoonrakerClientError(f"Échec de l'upload vers Moonraker: {exc}") from exc
 

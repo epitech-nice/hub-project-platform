@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 import requests
 import requests_mock
@@ -9,6 +11,25 @@ BASE_URL = "http://localhost:7125"
 
 def make_client():
     return MoonrakerClient(BASE_URL)
+
+
+def test_upload_and_start_print_uses_a_longer_timeout_than_status_checks(tmp_path):
+    # Bug réel en prod (2026-09-08) : un gcode de 6h a fait timeout à l'upload
+    # (`read timeout=10`) alors que Moonraker aurait probablement fini par répondre — le
+    # timeout de 10s partagé avec get_print_stats() est bien trop court pour écrire+parser un
+    # gros fichier sur le CPU mono-cœur ARMv7 de ces imprimantes. L'upload doit avoir son
+    # propre timeout, nettement plus généreux que celui des appels de statut légers.
+    client = make_client()
+    gcode_path = tmp_path / "print.gcode"
+    gcode_path.write_text("G28\n")
+
+    with patch("agent.moonraker_client.requests.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"result": {"print_started": True}}
+        client.upload_and_start_print(str(gcode_path), "print.gcode")
+
+    _, kwargs = mock_post.call_args
+    assert kwargs["timeout"] > client.timeout
 
 
 def test_upload_and_start_print_success(tmp_path):
