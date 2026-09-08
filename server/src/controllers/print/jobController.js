@@ -115,3 +115,40 @@ exports.getJobById = asyncHandler(async (req, res, next) => {
   if (!job) return next(new ErrorResponse('Job non trouvé', 404));
   res.status(200).json({ success: true, data: job });
 });
+
+// POST /api/print/jobs/:id/cancel
+exports.cancelJob = asyncHandler(async (req, res, next) => {
+  const job = await PrintJob.findById(req.params.id);
+  if (!job) return next(new ErrorResponse('Job non trouvé', 404));
+
+  const isOwner = job.student.email === req.user.email.toLowerCase();
+  if (req.user.role !== 'admin' && !isOwner) {
+    return next(new ErrorResponse('Vous ne pouvez annuler que vos propres impressions', 403));
+  }
+
+  const cancelledBy = { email: req.user.email.toLowerCase(), role: req.user.role };
+
+  if (job.status === PRINT_JOB_STATUSES.QUEUED) {
+    job.status = PRINT_JOB_STATUSES.CANCELLED;
+    job.cancelledBy = cancelledBy;
+    job.history.push({ status: PRINT_JOB_STATUSES.CANCELLED, date: new Date(), detail: 'Annulée avant impression' });
+    await job.save();
+
+    await Printer.findByIdAndUpdate(job.printer, { status: PRINTER_STATUSES.IDLE, currentJob: null });
+
+    return res.status(200).json({ success: true, data: job });
+  }
+
+  if ([PRINT_JOB_STATUSES.SENT, PRINT_JOB_STATUSES.PRINTING].includes(job.status)) {
+    if (job.cancelRequestedAt) {
+      return res.status(202).json({ success: true, data: job });
+    }
+    job.cancelRequestedAt = new Date();
+    job.cancelledBy = cancelledBy;
+    job.history.push({ status: job.status, date: new Date(), detail: 'Annulation demandée' });
+    await job.save();
+    return res.status(202).json({ success: true, data: job });
+  }
+
+  return next(new ErrorResponse('Ce job ne peut plus être annulé', 400));
+});

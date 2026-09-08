@@ -16,6 +16,7 @@ const handleUpload = (req, res, next) => {
 
 router.post('/', authenticateToken, handleUpload, jobController.submitJob);
 router.get('/me', authenticateToken, jobController.getMyJobs);
+router.post('/:id/cancel', authenticateToken, jobController.cancelJob);
 router.get('/', authenticateToken, isAdmin, jobController.getAllJobs);
 router.get('/:id', authenticateToken, isAdmin, jobController.getJobById);
 
