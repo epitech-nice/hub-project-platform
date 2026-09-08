@@ -397,6 +397,7 @@ def test_monitor_cancel_requested_but_moonraker_cancel_call_fails_retries_next_t
 
     result = run_tick(hub, moonraker, in_progress_state(), str(tmp_path), logger)
 
+    moonraker.cancel_print.assert_called_once()
     hub.update_job_status.assert_not_called()
     assert result["job_id"] == "job-1"
 
