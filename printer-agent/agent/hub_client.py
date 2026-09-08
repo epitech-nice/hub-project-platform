@@ -30,7 +30,8 @@ class HubClient:
         return response
 
     def heartbeat(self):
-        self._request("GET", "/heartbeat")
+        response = self._request("GET", "/heartbeat")
+        return response.json().get("cancelRequested", False)
 
     def get_next_job(self):
         response = self._request("GET", "/next-job")

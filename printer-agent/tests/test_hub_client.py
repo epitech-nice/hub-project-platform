@@ -69,11 +69,19 @@ def test_get_next_job_raises_with_raw_text_on_non_json_error_body():
 def test_heartbeat_sends_auth_headers():
     client = make_client()
     with requests_mock.Mocker() as m:
-        m.get(f"{BASE_URL}/heartbeat", status_code=204)
-        client.heartbeat()
+        m.get(f"{BASE_URL}/heartbeat", json={"success": True, "cancelRequested": False})
+        result = client.heartbeat()
+    assert result is False
     assert m.last_request.method == "GET"
     assert m.last_request.headers["x-printer-id"] == "printer-1"
     assert m.last_request.headers["x-api-key"] == "secret-key"
+
+
+def test_heartbeat_returns_true_when_cancellation_requested():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.get(f"{BASE_URL}/heartbeat", json={"success": True, "cancelRequested": True})
+        assert client.heartbeat() is True
 
 
 def test_heartbeat_raises_on_failure():
