@@ -23,14 +23,15 @@ PERMANENT_HUB_ERROR_CODES = (400, 403, 404)
 
 
 def run_tick(hub, moonraker, state, download_dir, logger):
+    cancel_requested = False
     try:
-        hub.heartbeat()
+        cancel_requested = hub.heartbeat()
     except HubClientError as exc:
         logger.warning("Échec du heartbeat vers le hub: %s", exc)
 
     if state.get("job_id") is None:
         return _try_dispatch(hub, moonraker, state, download_dir, logger)
-    return _try_monitor(hub, moonraker, state, logger)
+    return _try_monitor(hub, moonraker, state, logger, cancel_requested)
 
 
 def _has_enough_disk_space(download_dir):
@@ -112,7 +113,7 @@ def _job_age_seconds(state):
     return (datetime.now(timezone.utc) - started).total_seconds()
 
 
-def _try_monitor(hub, moonraker, state, logger):
+def _try_monitor(hub, moonraker, state, logger, cancel_requested=False):
     job_id = state["job_id"]
 
     if _job_age_seconds(state) > MAX_JOB_AGE_SECONDS:
@@ -144,6 +145,8 @@ def _try_monitor(hub, moonraker, state, logger):
         return _report_terminal(hub, job_id, "failed", detail, state, logger)
 
     if print_state in ACTIVE_STATES:
+        if cancel_requested:
+            return _try_cancel_active_print(hub, moonraker, job_id, state, logger)
         return {**state, "consecutive_moonraker_failures": 0}
 
     # État inattendu (ex: 'standby' après un redémarrage Klipper en plein print, ou 'state'
@@ -153,6 +156,19 @@ def _try_monitor(hub, moonraker, state, logger):
     return _handle_monitor_stall(
         hub, job_id, state, logger, f"État Moonraker inattendu ('{print_state}')", None
     )
+
+
+def _try_cancel_active_print(hub, moonraker, job_id, state, logger):
+    try:
+        moonraker.cancel_print()
+    except MoonrakerClientError as exc:
+        logger.warning(
+            "Échec de l'appel d'annulation à Moonraker pour le job %s, nouvelle tentative au prochain tick: %s",
+            job_id,
+            exc,
+        )
+        return {**state, "consecutive_moonraker_failures": 0}
+    return _report_terminal(hub, job_id, "cancelled", None, state, logger)
 
 
 def _handle_monitor_stall(hub, job_id, state, logger, reason, exc):
