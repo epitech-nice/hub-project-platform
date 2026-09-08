@@ -186,4 +186,39 @@ describe('POST /api/print/agent/jobs/:id/status', () => {
       .send({ status: 'completed' });
     expect(second.status).toBe(409);
   });
+
+  it('cancelled: moves the printer to awaiting_clearance', async () => {
+    const { printer, rawKey } = await createPrinter();
+    const job = await submitAcceptedJob(printer);
+    await request(app).get('/api/print/agent/next-job').set(printerAuthHeader(printer._id, rawKey));
+
+    const res = await request(app)
+      .post(`/api/print/agent/jobs/${job._id}/status`)
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ status: 'cancelled' });
+
+    expect(res.status).toBe(200);
+    const reloadedPrinter = await Printer.findById(printer._id);
+    expect(reloadedPrinter.status).toBe(PRINTER_STATUSES.AWAITING_CLEARANCE);
+    const reloadedJob = await PrintJob.findById(job._id);
+    expect(reloadedJob.status).toBe('cancelled');
+  });
+
+  it('rejects a second status update on an already-cancelled job (idempotency)', async () => {
+    const { printer, rawKey } = await createPrinter();
+    const job = await submitAcceptedJob(printer);
+    await request(app).get('/api/print/agent/next-job').set(printerAuthHeader(printer._id, rawKey));
+
+    const first = await request(app)
+      .post(`/api/print/agent/jobs/${job._id}/status`)
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ status: 'cancelled' });
+    expect(first.status).toBe(200);
+
+    const second = await request(app)
+      .post(`/api/print/agent/jobs/${job._id}/status`)
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ status: 'cancelled' });
+    expect(second.status).toBe(409);
+  });
 });

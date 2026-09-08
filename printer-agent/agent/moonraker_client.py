@@ -61,3 +61,15 @@ class MoonrakerClient:
             raise MoonrakerClientError(f"print_stats inattendu dans la réponse Moonraker: {print_stats!r}")
 
         return {"state": print_stats.get("state"), "message": print_stats.get("message", "")}
+
+    def cancel_print(self):
+        url = f"{self.base_url}/printer/print/cancel"
+        try:
+            response = requests.post(url, timeout=self.timeout)
+        except requests.RequestException as exc:
+            raise MoonrakerClientError(f"Moonraker injoignable lors de l'annulation: {exc}") from exc
+
+        if response.status_code >= 400:
+            raise MoonrakerClientError(
+                f"Erreur Moonraker à l'annulation (HTTP {response.status_code}): {response.text}"
+            )

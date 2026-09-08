@@ -88,6 +88,7 @@ const PRINT_JOB_STATUSES = {
   PRINTING: 'printing',
   COMPLETED: 'completed',
   FAILED: 'failed',
+  CANCELLED: 'cancelled',
 };
 
 // Raison de refus d'une soumission

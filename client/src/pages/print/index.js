@@ -13,6 +13,7 @@ import Select from '../../components/ui/Select';
 import FileInput from '../../components/ui/FileInput';
 import EmptyState from '../../components/ui/EmptyState';
 import Skeleton from '../../components/ui/Skeleton';
+import Modal from '../../components/ui/Modal';
 import { useAuth } from '../../context/AuthContext';
 import { useApi } from '../../hooks/useApi';
 
@@ -23,6 +24,7 @@ const STATUS_LABELS = {
   completed: 'Terminé',
   failed: 'Échec',
   rejected: 'Refusé',
+  cancelled: 'Annulé',
 };
 
 const STATUS_BADGE_VARIANTS = {
@@ -32,7 +34,10 @@ const STATUS_BADGE_VARIANTS = {
   completed: 'approved',
   failed: 'rejected',
   rejected: 'rejected',
+  cancelled: 'neutral',
 };
+
+const CANCELLABLE_STATUSES = ['queued', 'sent', 'printing'];
 
 const PRINTER_STATUS_LABELS = {
   idle: 'Disponible',
@@ -55,6 +60,8 @@ export default function PrintPage() {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [accessStatus, setAccessStatus] = useState(null);
   const [requestingAccess, setRequestingAccess] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/');
@@ -117,6 +124,24 @@ export default function PrintPage() {
       await refresh();
     } catch (err) {
       toast.error(err.message);
+    }
+  };
+
+  const handleCancelJob = async () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    try {
+      // Un job 'queued' est annulé synchroniquement (200, déjà 'cancelled') ; un job
+      // 'sent'/'printing' ne fait que demander l'annulation (202, toujours en cours).
+      const wasQueued = cancelTarget.status === 'queued';
+      await post(`/api/print/jobs/${cancelTarget._id}/cancel`, {});
+      toast.success(wasQueued ? 'Impression annulée' : 'Annulation demandée');
+      setCancelTarget(null);
+      await refresh();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -223,9 +248,19 @@ export default function PrintPage() {
               <Card key={job._id} padding="compact" className="flex flex-col gap-1">
                 <div className="flex items-center justify-between gap-4">
                   <span className="text-text truncate">{job.fileName}</span>
-                  <Badge variant={STATUS_BADGE_VARIANTS[job.status] || 'neutral'}>
-                    {STATUS_LABELS[job.status] || job.status}
-                  </Badge>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant={STATUS_BADGE_VARIANTS[job.status] || 'neutral'}>
+                      {STATUS_LABELS[job.status] || job.status}
+                    </Badge>
+                    {CANCELLABLE_STATUSES.includes(job.status) &&
+                      (job.cancelRequestedAt ? (
+                        <span className="text-xs text-text-muted">Annulation en cours...</span>
+                      ) : (
+                        <Button variant="danger" size="sm" onClick={() => setCancelTarget(job)}>
+                          Annuler
+                        </Button>
+                      ))}
+                  </div>
                 </div>
                 {job.status === 'failed' && job.errorMessage && (
                   <p className="text-sm text-danger break-words">{job.errorMessage}</p>
@@ -234,6 +269,29 @@ export default function PrintPage() {
             ))}
           </div>
         )}
+
+        <Modal
+          open={!!cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          title="Annuler cette impression ?"
+          footer={
+            <div className="flex justify-end gap-3">
+              <Button variant="subtle" onClick={() => setCancelTarget(null)} disabled={cancelling}>
+                Retour
+              </Button>
+              <Button variant="danger" onClick={handleCancelJob} loading={cancelling} disabled={cancelling}>
+                Annuler l&apos;impression
+              </Button>
+            </div>
+          }
+        >
+          <p className="text-sm text-text">
+            Cette action est irréversible.{' '}
+            {cancelTarget && ['sent', 'printing'].includes(cancelTarget.status)
+              ? "L'impression est peut-être déjà en cours : elle s'arrêtera au prochain contact avec l'imprimante (jusqu'à 60 secondes), et le plateau devra être vérifié physiquement avant la prochaine impression."
+              : "Le job n'a pas encore démarré, l'imprimante sera immédiatement libérée."}
+          </p>
+        </Modal>
       </main>
 
       <Footer />

@@ -2,13 +2,27 @@ const path = require('path');
 const PrintJob = require('../../models/PrintJob');
 const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
-const { PRINTER_STATUSES, PRINTER_STATUS_SOURCES } = require('../../utils/constants');
+const { PRINTER_STATUSES, PRINTER_STATUS_SOURCES, PRINT_JOB_STATUSES } = require('../../utils/constants');
 
-const VALID_STATUS_UPDATES = ['printing', 'completed', 'failed'];
+const VALID_STATUS_UPDATES = ['printing', 'completed', 'failed', 'cancelled'];
+
+const TERMINAL_JOB_STATUSES = [
+  PRINT_JOB_STATUSES.COMPLETED,
+  PRINT_JOB_STATUSES.FAILED,
+  PRINT_JOB_STATUSES.CANCELLED,
+  PRINT_JOB_STATUSES.REJECTED,
+];
 
 // GET /api/print/agent/heartbeat
 exports.heartbeat = asyncHandler(async (req, res) => {
-  res.status(204).end();
+  let cancelRequested = false;
+
+  if (req.printer.currentJob) {
+    const job = await PrintJob.findById(req.printer.currentJob);
+    cancelRequested = !!(job && job.cancelRequestedAt && !TERMINAL_JOB_STATUSES.includes(job.status));
+  }
+
+  res.status(200).json({ success: true, cancelRequested });
 });
 
 // GET /api/print/agent/next-job
@@ -72,7 +86,7 @@ exports.updateJobStatus = asyncHandler(async (req, res, next) => {
   if (!req.printer.currentJob || job._id.toString() !== req.printer.currentJob.toString()) {
     return next(new ErrorResponse("Ce job n'est plus le job courant de cette imprimante", 409));
   }
-  if (['completed', 'failed'].includes(job.status)) {
+  if (['completed', 'failed', 'cancelled'].includes(job.status)) {
     return next(new ErrorResponse('Ce job est déjà dans un état terminal', 409));
   }
 

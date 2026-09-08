@@ -166,6 +166,7 @@ Base : `/api/print/jobs`
 | `/me` | GET | Authentifié | Mes jobs |
 | `/` | GET | Admin | Tous les jobs (filtrable) |
 | `/:id` | GET | Admin | Détails d'un job |
+| `/:id/cancel` | POST | Authentifié (propriétaire ou admin) | Annuler un job `queued`/`sent`/`printing` |
 
 ### `POST /` — Soumettre un job
 
@@ -204,6 +205,22 @@ Jobs de l'étudiant connecté, triés par `submittedAt` décroissant.
 ### `GET /:id` *(admin)*
 
 Détails complets d'un job (404 si non trouvé).
+
+### `POST /:id/cancel`
+
+**Auth** : le requérant doit être admin **ou** propriétaire du job (`job.student.email`), sinon 403.
+
+**Comportement selon `job.status`** :
+
+| `job.status` au moment de l'appel | Effet | Code HTTP |
+|---|---|---|
+| `queued` | Annulation **synchrone** : `status → cancelled`, `cancelledBy` posé, entrée `history`. L'imprimante repasse directement `idle` (`currentJob: null`, entrée `statusHistory`) — mais seulement si elle pointe encore réellement sur ce job (un admin a pu la désactiver entre-temps, auquel cas son statut n'est pas touché) | 200 |
+| `sent` / `printing` | Annulation **asynchrone** : pose `cancelRequestedAt` + `cancelledBy`, entrée `history` ("Annulation demandée"), `status` inchangé. Si `cancelRequestedAt` est déjà posé (double appel), no-op, renvoie à nouveau 202 | 202 |
+| déjà terminal (`completed`, `failed`, `cancelled`, `rejected`) | Rien à annuler | 400 |
+
+**Verrouillage atomique (branche `queued`)** : l'annulation utilise un `findOneAndUpdate` conditionné sur `status: 'queued'`, symétrique au verrou de `submitJob`. Si l'agent a déjà récupéré le job via `GET /agent/next-job` entre la lecture initiale et cette écriture (job passé `sent`), le verrou échoue et l'endpoint renvoie 409 plutôt que d'annuler un job que l'agent croit devoir imprimer.
+
+**Effet côté agent (cas asynchrone)** : le prochain `GET /agent/heartbeat` de l'imprimante concernée renvoie `cancelRequested: true`, ce qui déclenche l'annulation physique via Moonraker (voir plus bas).
 
 ---
 
@@ -252,17 +269,24 @@ Télécharge le fichier (`res.download`, `Content-Type: text/plain`). 404 si le 
 { "status": "printing", "errorMessage": null }
 ```
 
-`status` : `"printing"` | `"completed"` | `"failed"` (`errorMessage` optionnel, utilisé si `"failed"`).
+`status` : `"printing"` | `"completed"` | `"failed"` | `"cancelled"` (`errorMessage` optionnel, utilisé si `"failed"`).
 
-**Conditions** : le job doit appartenir à l'imprimante authentifiée (403 sinon), doit être le `currentJob` courant de l'imprimante (409 sinon — "n'est plus le job courant"), et ne doit pas déjà être dans un état terminal `completed`/`failed` (409 sinon).
+**Conditions** : le job doit appartenir à l'imprimante authentifiée (403 sinon), doit être le `currentJob` courant de l'imprimante (409 sinon — "n'est plus le job courant"), et ne doit pas déjà être dans un état terminal `completed`/`failed`/`cancelled` (409 sinon).
 
 **Effets** :
 - `printing` → `job.startedAt` renseigné
-- `completed` / `failed` → `job.completedAt` renseigné (+ `errorMessage` si `failed`), et l'imprimante passe en `awaiting_clearance` (entrée `statusHistory`, `source: "agent_report"`)
+- `completed` / `failed` / `cancelled` → `job.completedAt` renseigné (+ `errorMessage` si `failed`), et l'imprimante passe en `awaiting_clearance` (entrée `statusHistory`, `source: "agent_report"`) — un job `cancelled` rapporté par l'agent est traité exactement comme `completed`/`failed` pour ce passage (le plateau doit être vérifié physiquement, l'impression ayant réellement démarré)
 
 ### `GET /heartbeat`
 
-Renvoie `204 No Content`. `authenticatePrinter` met à jour `lastSeenAt` sur chaque appel authentifié (donc sur toute route `/agent/*`, pas seulement `/heartbeat`). Si l'imprimante était `offline`, la reconnexion la fait automatiquement repasser à son `lastKnownStatus` (ou `awaiting_clearance` si le job en cours a échoué pendant la coupure).
+**Réponse (200)** :
+```json
+{ "success": true, "cancelRequested": false }
+```
+
+`cancelRequested` vaut `true` si le job actuellement assigné à cette imprimante (`Printer.currentJob`) a un `cancelRequestedAt` posé et n'est pas encore dans un statut terminal (`completed`/`failed`/`cancelled`/`rejected`) — c'est le signal que l'agent doit annuler l'impression physique au prochain tick.
+
+`authenticatePrinter` met à jour `lastSeenAt` sur chaque appel authentifié (donc sur toute route `/agent/*`, pas seulement `/heartbeat`). Si l'imprimante était `offline`, la reconnexion la fait automatiquement repasser à son `lastKnownStatus` (ou `awaiting_clearance` si le job en cours a échoué pendant la coupure).
 
 ---
 
@@ -280,11 +304,13 @@ Chaque changement de statut ajoute une entrée dans `statusHistory[]` (`status`,
 
 ## Clearance (QR code)
 
-Une imprimante qui termine un job (`completed` ou `failed`) passe en `awaiting_clearance` : le plateau doit être physiquement libéré avant de pouvoir accepter un nouveau job (`submitJob` refuse toute soumission tant que le statut n'est pas `idle`).
+Une imprimante qui termine un job (`completed`, `failed` ou `cancelled` — une annulation rapportée par l'agent, l'impression ayant réellement démarré) passe en `awaiting_clearance` : le plateau doit être physiquement libéré avant de pouvoir accepter un nouveau job (`submitJob` refuse toute soumission tant que le statut n'est pas `idle`).
 
-Double validation avant de pouvoir relancer une impression :
+Une annulation d'un job encore `queued` (jamais imprimé) ne passe **pas** par `awaiting_clearance` : l'imprimante repasse directement `idle` (voir `POST /jobs/:id/cancel` plus haut).
 
-1. **Fin de job côté agent** : `POST /agent/jobs/:id/status` avec `status: "completed"` ou `"failed"` fait passer l'imprimante en `awaiting_clearance`.
+Double validation avant de pouvoir relancer une impression après un job réellement imprimé :
+
+1. **Fin de job côté agent** : `POST /agent/jobs/:id/status` avec `status: "completed"`, `"failed"` ou `"cancelled"` fait passer l'imprimante en `awaiting_clearance`.
 2. **Confirmation physique** : un QR code (`GET /printers/:id/qr`, affiché à côté de l'imprimante) pointe vers `{FRONTEND_URL}/print/printers/:id/confirm-clearance`. Le scanner authentifié appelle `POST /printers/:id/confirm-clearance`, qui vérifie que l'imprimante est bien `awaiting_clearance` (400 sinon), la repasse `idle`, vide `currentJob`, et logue l'entrée dans `clearanceHistory` (`method: "qr"`).
 
 Un admin peut court-circuiter l'étape 2 via `POST /printers/:id/confirm-clearance/override` (mêmes effets, `method: "admin_override"` dans `clearanceHistory`) — utile si le QR est physiquement inaccessible ou l'imprimante déplacée.

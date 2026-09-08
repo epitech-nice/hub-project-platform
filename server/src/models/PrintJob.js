@@ -20,6 +20,11 @@ const PrintJobSchema = new mongoose.Schema({
     default: null,
   },
   errorMessage: { type: String, default: null },
+  cancelRequestedAt: { type: Date, default: null },
+  cancelledBy: {
+    email: { type: String, default: null },
+    role: { type: String, default: null },
+  },
   submittedAt: { type: Date, default: Date.now },
   startedAt: { type: Date, default: null },
   completedAt: { type: Date, default: null },

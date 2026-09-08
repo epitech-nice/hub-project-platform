@@ -20,7 +20,9 @@ def logger():
 
 
 def make_hub():
-    return MagicMock()
+    hub = MagicMock()
+    hub.heartbeat.return_value = False
+    return hub
 
 
 def make_moonraker():
@@ -340,6 +342,95 @@ def test_monitor_job_older_than_max_age_reports_failed_regardless_of_moonraker_s
     assert args[0] == "job-1"
     assert args[1] == "failed"
     moonraker.get_print_stats.assert_not_called()
+    assert result == {"job_id": None, "consecutive_moonraker_failures": 0, "job_started_at": None}
+
+
+# --- Annulation (cancelRequested via heartbeat) ---
+
+def test_monitor_cancel_requested_while_active_calls_moonraker_cancel_and_reports_cancelled(tmp_path, logger):
+    hub = make_hub()
+    hub.heartbeat.return_value = True
+    moonraker = make_moonraker()
+    moonraker.get_print_stats.return_value = {"state": "printing", "message": ""}
+
+    result = run_tick(hub, moonraker, in_progress_state(), str(tmp_path), logger)
+
+    moonraker.cancel_print.assert_called_once()
+    hub.update_job_status.assert_called_once_with("job-1", "cancelled", error_message=None)
+    assert result == {"job_id": None, "consecutive_moonraker_failures": 0, "job_started_at": None}
+
+
+def test_monitor_cancel_requested_but_print_already_completed_reports_completed_not_cancelled(tmp_path, logger):
+    # Un cancelRequested arrivé pile au moment où l'impression se termine naturellement ne doit
+    # jamais écraser un état terminal légitime.
+    hub = make_hub()
+    hub.heartbeat.return_value = True
+    moonraker = make_moonraker()
+    moonraker.get_print_stats.return_value = {"state": "complete", "message": ""}
+
+    result = run_tick(hub, moonraker, in_progress_state(), str(tmp_path), logger)
+
+    moonraker.cancel_print.assert_not_called()
+    hub.update_job_status.assert_called_once_with("job-1", "completed", error_message=None)
+    assert result == {"job_id": None, "consecutive_moonraker_failures": 0, "job_started_at": None}
+
+
+def test_monitor_cancel_requested_but_print_already_errored_reports_failed_not_cancelled(tmp_path, logger):
+    hub = make_hub()
+    hub.heartbeat.return_value = True
+    moonraker = make_moonraker()
+    moonraker.get_print_stats.return_value = {"state": "error", "message": "thermal runaway"}
+
+    result = run_tick(hub, moonraker, in_progress_state(), str(tmp_path), logger)
+
+    moonraker.cancel_print.assert_not_called()
+    hub.update_job_status.assert_called_once_with("job-1", "failed", error_message="thermal runaway")
+    assert result == {"job_id": None, "consecutive_moonraker_failures": 0, "job_started_at": None}
+
+
+def test_monitor_cancel_requested_but_moonraker_cancel_call_fails_retries_next_tick(tmp_path, logger):
+    hub = make_hub()
+    hub.heartbeat.return_value = True
+    moonraker = make_moonraker()
+    moonraker.get_print_stats.return_value = {"state": "printing", "message": ""}
+    moonraker.cancel_print.side_effect = MoonrakerClientError("timeout")
+
+    result = run_tick(hub, moonraker, in_progress_state(), str(tmp_path), logger)
+
+    moonraker.cancel_print.assert_called_once()
+    hub.update_job_status.assert_not_called()
+    assert result["job_id"] == "job-1"
+
+
+def test_monitor_not_cancel_requested_ignores_active_print(tmp_path, logger):
+    hub = make_hub()
+    hub.heartbeat.return_value = False
+    moonraker = make_moonraker()
+    moonraker.get_print_stats.return_value = {"state": "printing", "message": ""}
+
+    result = run_tick(hub, moonraker, in_progress_state(), str(tmp_path), logger)
+
+    moonraker.cancel_print.assert_not_called()
+    hub.update_job_status.assert_not_called()
+
+
+def test_monitor_cancel_requested_and_moonraker_already_reports_cancelled_reports_cancelled_not_failed(
+    tmp_path, logger
+):
+    # Couvre le bug de la revue finale : si _report_terminal("cancelled", ...) a échoué côté hub
+    # à un tick précédent (retry laissé en l'état), Moonraker peut déjà être passé nativement à
+    # 'cancelled' au tick suivant. C'est le chemin heureux de l'annulation qui rejoue — ça ne
+    # doit jamais être rapporté 'failed' juste parce que 'cancelled' fait partie de
+    # TERMINAL_ERROR_STATES.
+    hub = make_hub()
+    hub.heartbeat.return_value = True
+    moonraker = make_moonraker()
+    moonraker.get_print_stats.return_value = {"state": "cancelled", "message": ""}
+
+    result = run_tick(hub, moonraker, in_progress_state(), str(tmp_path), logger)
+
+    moonraker.cancel_print.assert_not_called()
+    hub.update_job_status.assert_called_once_with("job-1", "cancelled", error_message=None)
     assert result == {"job_id": None, "consecutive_moonraker_failures": 0, "job_started_at": None}
 
 
