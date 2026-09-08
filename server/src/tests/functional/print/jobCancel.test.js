@@ -58,6 +58,28 @@ describe('POST /api/print/jobs/:id/cancel', () => {
     const reloadedPrinter = await Printer.findById(printer._id);
     expect(reloadedPrinter.status).toBe(PRINTER_STATUSES.IDLE);
     expect(reloadedPrinter.currentJob).toBeNull();
+    const lastHistoryEntry = reloadedPrinter.statusHistory[reloadedPrinter.statusHistory.length - 1];
+    expect(lastHistoryEntry.status).toBe(PRINTER_STATUSES.IDLE);
+    expect(lastHistoryEntry.source).toBe('admin_action');
+  });
+
+  it('does not re-idle a printer an admin has disabled in the meantime', async () => {
+    // Simule exactement ce que fait setDisabled : status -> 'disabled', currentJob -> null,
+    // sans toucher au job (qui reste 'queued' avec un bouton "Annuler" toujours actif côté UI).
+    const student = await createUser({ email: 'ok@epitech.eu' });
+    await whitelistEmail(student.email);
+    const { printer } = await createPrinter();
+    const job = await submitAcceptedJob(printer, student);
+
+    await Printer.findByIdAndUpdate(printer._id, { status: PRINTER_STATUSES.DISABLED, currentJob: null });
+
+    const res = await request(app).post(`/api/print/jobs/${job._id}/cancel`).set(authHeader(student));
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('cancelled');
+
+    const reloadedPrinter = await Printer.findById(printer._id);
+    expect(reloadedPrinter.status).toBe(PRINTER_STATUSES.DISABLED);
+    expect(reloadedPrinter.currentJob).toBeNull();
   });
 
   it('lets an admin cancel any queued job', async () => {

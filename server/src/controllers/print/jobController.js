@@ -4,7 +4,12 @@ const PrintJob = require('../../models/PrintJob');
 const PrintAuthorization = require('../../models/PrintAuthorization');
 const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
-const { PRINTER_STATUSES, PRINT_JOB_STATUSES, PRINT_REJECTION_REASONS } = require('../../utils/constants');
+const {
+  PRINTER_STATUSES,
+  PRINTER_STATUS_SOURCES,
+  PRINT_JOB_STATUSES,
+  PRINT_REJECTION_REASONS,
+} = require('../../utils/constants');
 
 const REJECTION_MESSAGES = {
   [PRINT_REJECTION_REASONS.NOT_AUTHORIZED]: "Vous n'êtes pas autorisé à soumettre une impression",
@@ -129,14 +134,51 @@ exports.cancelJob = asyncHandler(async (req, res, next) => {
   const cancelledBy = { email: req.user.email.toLowerCase(), role: req.user.role };
 
   if (job.status === PRINT_JOB_STATUSES.QUEUED) {
-    job.status = PRINT_JOB_STATUSES.CANCELLED;
-    job.cancelledBy = cancelledBy;
-    job.history.push({ status: PRINT_JOB_STATUSES.CANCELLED, date: new Date(), detail: 'Annulée avant impression' });
-    await job.save();
+    // Verrou atomique symétrique à celui de submitJob : ne réussit que si le job est encore
+    // 'queued' au moment de l'écriture. Empêche une course avec getNextJob (qui fait passer le
+    // job en 'sent' de façon atomique) — si l'agent a déjà récupéré le job entre notre lecture
+    // et cette écriture, ce findOneAndUpdate ne trouve plus rien et on renvoie 409 plutôt que
+    // d'annuler un job que l'agent croit désormais devoir imprimer.
+    const cancelled = await PrintJob.findOneAndUpdate(
+      { _id: job._id, status: PRINT_JOB_STATUSES.QUEUED },
+      {
+        status: PRINT_JOB_STATUSES.CANCELLED,
+        cancelledBy,
+        $push: {
+          history: { status: PRINT_JOB_STATUSES.CANCELLED, date: new Date(), detail: 'Annulée avant impression' },
+        },
+      },
+      { new: true }
+    );
 
-    await Printer.findByIdAndUpdate(job.printer, { status: PRINTER_STATUSES.IDLE, currentJob: null });
+    if (!cancelled) {
+      return next(new ErrorResponse("Ce job vient de partir à l'imprimante, réessayez", 409));
+    }
 
-    return res.status(200).json({ success: true, data: job });
+    // Ne libère l'imprimante que si elle pointe encore réellement sur ce job — un admin a pu la
+    // désactiver entre-temps (setDisabled met currentJob à null sans toucher au job lui-même),
+    // auquel cas la repasser 'idle' ici annulerait silencieusement l'action de l'admin.
+    const printer = await Printer.findOne({ _id: job.printer, currentJob: job._id });
+    if (printer) {
+      printer.status = PRINTER_STATUSES.IDLE;
+      printer.currentJob = null;
+      printer.statusHistory.push({
+        status: PRINTER_STATUSES.IDLE,
+        // Aucune source de PRINTER_STATUS_SOURCES ne correspond exactement à "un étudiant ou un
+        // admin annule un job en attente" (agent_report/heartbeat_timeout sont hors sujet ici) ;
+        // admin_action est la plus proche sémantiquement (transition déclenchée par un humain,
+        // pas par l'agent ni un timeout) — réutilisée pour les deux cas plutôt que d'ajouter une
+        // valeur d'enum non prévue par le modèle de données existant.
+        source: PRINTER_STATUS_SOURCES.ADMIN_ACTION,
+        detail: 'Job annulé avant impression',
+        byUserId: req.user._id,
+        byName: req.user.name,
+        date: new Date(),
+      });
+      await printer.save();
+    }
+
+    return res.status(200).json({ success: true, data: cancelled });
   }
 
   if ([PRINT_JOB_STATUSES.SENT, PRINT_JOB_STATUSES.PRINTING].includes(job.status)) {
