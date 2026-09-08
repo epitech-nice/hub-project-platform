@@ -140,3 +140,27 @@ def test_get_print_stats_raises_on_null_print_stats():
         )
         with pytest.raises(MoonrakerClientError):
             client.get_print_stats()
+
+
+def test_cancel_print_success():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.post(f"{BASE_URL}/printer/print/cancel", json={"result": "ok"})
+        client.cancel_print()
+    assert m.last_request.method == "POST"
+
+
+def test_cancel_print_raises_on_http_error():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.post(f"{BASE_URL}/printer/print/cancel", status_code=500, text="internal error")
+        with pytest.raises(MoonrakerClientError):
+            client.cancel_print()
+
+
+def test_cancel_print_raises_on_network_error():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.post(f"{BASE_URL}/printer/print/cancel", exc=requests.exceptions.ConnectTimeout)
+        with pytest.raises(MoonrakerClientError):
+            client.cancel_print()
