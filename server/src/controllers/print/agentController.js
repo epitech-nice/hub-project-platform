@@ -4,7 +4,7 @@ const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
 const { PRINTER_STATUSES, PRINTER_STATUS_SOURCES, PRINT_JOB_STATUSES } = require('../../utils/constants');
 
-const VALID_STATUS_UPDATES = ['printing', 'completed', 'failed'];
+const VALID_STATUS_UPDATES = ['printing', 'completed', 'failed', 'cancelled'];
 
 const TERMINAL_JOB_STATUSES = [
   PRINT_JOB_STATUSES.COMPLETED,
@@ -86,7 +86,7 @@ exports.updateJobStatus = asyncHandler(async (req, res, next) => {
   if (!req.printer.currentJob || job._id.toString() !== req.printer.currentJob.toString()) {
     return next(new ErrorResponse("Ce job n'est plus le job courant de cette imprimante", 409));
   }
-  if (['completed', 'failed'].includes(job.status)) {
+  if (['completed', 'failed', 'cancelled'].includes(job.status)) {
     return next(new ErrorResponse('Ce job est déjà dans un état terminal', 409));
   }
 
