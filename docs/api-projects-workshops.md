@@ -93,7 +93,32 @@ Récupérer tous les projets.
 **Query params** :
 - `status=pending` (optionnel)
 - `page=1` (optionnel, défaut: 1)
-- `limit=10` (optionnel, défaut: 10)
+- `limit=20` (optionnel, défaut: 20)
+- `search=` (optionnel) — recherche insensible à la casse sur le nom du projet, le nom/email du créateur et l'email des membres. Si présent, ignore la pagination et renvoie tous les résultats.
+- `schoolYear=YYYY-YYYY` (optionnel) — filtre sur `createdAt` entre le 1er septembre de l'année de début et le 31 août de l'année suivante (ex : `schoolYear=2025-2026` → `[2025-09-01, 2026-09-01[`)
+
+---
+
+#### `GET /api/projects/stats`
+Statistiques des projets par statut (admin).
+
+**Query params** :
+- `schoolYear=YYYY-YYYY` (optionnel, même filtre que ci-dessus)
+
+**Réponse** :
+```json
+{
+  "success": true,
+  "data": {
+    "pending": 3,
+    "pending_changes": 1,
+    "approved": 12,
+    "rejected": 2,
+    "completed": 8,
+    "total": 26
+  }
+}
+```
 
 ---
 
@@ -123,12 +148,37 @@ Demander des modifications. Passe le statut à `pending_changes`.
 
 ---
 
+#### `POST /api/projects/notify-pending-changes`
+Relance email en masse : met en file d'attente l'envoi de l'email de notification (job `sendStatusEmail` via `backgroundJobs`) pour tous les projets actuellement en statut `pending_changes`. L'envoi n'est pas synchrone : la réponse confirme la mise en file, pas la livraison.
+
+**Réponse** :
+```json
+{ "success": true, "total": 4 }
+```
+(`total` = nombre d'emails mis en file d'attente, pas nécessairement déjà délivrés)
+
+---
+
+#### `POST /api/projects/:id/resend-notification`
+Relance email unitaire pour un projet en statut `pending_changes` : met en file d'attente le même job `sendStatusEmail` que ci-dessus (envoi asynchrone, non synchrone).
+
+**Erreurs** :
+- `404` si le projet n'existe pas
+- `400` si le projet n'est pas en statut `pending_changes`
+
+**Réponse** :
+```json
+{ "success": true }
+```
+
+---
+
 #### `PATCH /api/projects/:id/complete`
 Marquer un projet comme terminé (`status → completed`).
 
 ---
 
-#### `GET /api/projects/export/csv`
+#### `GET /api/projects/export/completed-csv`
 Exporter les projets terminés en CSV.
 
 **Query params** :
@@ -159,10 +209,15 @@ Les workshops suivent la même structure que les projets, sans crédits ni inté
 | `/api/workshops/:id` | PUT | Owner | Modifier workshop |
 | `/api/workshops/:id` | DELETE | Owner/Admin | Supprimer workshop |
 | `/api/workshops/:id/leave` | POST | Instructor | Quitter workshop |
-| `/api/workshops` | GET | Admin | Tous les workshops (avec pagination `page`, `limit`) |
+| `/api/workshops` | GET | Admin | Tous les workshops (avec pagination `page`, `limit`, filtre `status` et `schoolYear=YYYY-YYYY`) |
+| `/api/workshops/stats` | GET | Admin | Statistiques par statut (`pending`, `pending_changes`, `approved`, `rejected`, `completed`, `total`), avec filtre optionnel `schoolYear=YYYY-YYYY` |
 | `/api/workshops/:id/review` | PATCH | Admin | Approuver/rejeter |
 | `/api/workshops/:id/request-changes` | PATCH | Admin | Demander modifications |
 | `/api/workshops/:id/complete` | PATCH | Admin | Marquer terminé |
+
+`schoolYear` filtre sur `createdAt` entre le 1er septembre de l'année de début et le 31 août de l'année suivante (même logique que pour `/api/projects`).
+
+**Pas d'équivalent workshops** pour `notify-pending-changes` / `resend-notification` : ces deux routes de relance email n'existent que pour les projets (`server/src/routes/projects.js`).
 
 ---
 

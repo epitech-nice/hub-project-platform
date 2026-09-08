@@ -61,34 +61,73 @@ hub-project-platform/
 │   │   │   ├── users.js
 │   │   │   ├── simulatedProjects.js
 │   │   │   ├── simulatedCycles.js
-│   │   │   └── simulatedEnrollments.js
+│   │   │   ├── simulatedEnrollments.js
+│   │   │   ├── printPrinters.js     # CRUD imprimantes (admin)
+│   │   │   ├── printWhitelist.js    # Autorisations étudiant/imprimante
+│   │   │   ├── printAccessRequests.js
+│   │   │   ├── printJobs.js         # Soumission/suivi jobs d'impression
+│   │   │   └── printAgent.js        # Endpoints pull consommés par printer-agent
 │   │   ├── controllers/
 │   │   │   ├── projectController.js
 │   │   │   ├── workshopController.js
-│   │   │   └── simulated/
-│   │   │       ├── projectController.js
-│   │   │       ├── cycleController.js
-│   │   │       └── enrollmentController.js
+│   │   │   ├── toolReportController.js  # Signalement d'anomalie sur un outil (create/get/resolve)
+│   │   │   ├── simulated/
+│   │   │   │   ├── projectController.js
+│   │   │   │   ├── cycleController.js
+│   │   │   │   └── enrollmentController.js
+│   │   │   └── print/
+│   │   │       ├── printerController.js
+│   │   │       ├── whitelistController.js
+│   │   │       ├── accessRequestController.js
+│   │   │       ├── jobController.js
+│   │   │       └── agentController.js
 │   │   ├── models/
 │   │   │   ├── User.js
 │   │   │   ├── Project.js
 │   │   │   ├── Workshop.js
 │   │   │   ├── SimulatedProject.js
 │   │   │   ├── SimulatedEnrollment.js
-│   │   │   └── SimulatedCycle.js
+│   │   │   ├── SimulatedCycle.js
+│   │   │   ├── ToolReport.js        # Signalement d'anomalie outil (en prod depuis mai 2026)
+│   │   │   ├── Printer.js
+│   │   │   ├── PrintJob.js
+│   │   │   ├── PrintAuthorization.js
+│   │   │   └── PrintAccessRequest.js
 │   │   ├── middleware/
 │   │   │   ├── auth.js
+│   │   │   ├── printerAuth.js       # Auth imprimante (headers x-printer-id / x-api-key)
+│   │   │   ├── printJobUpload.js    # Multer — fichiers .gcode (200 Mo max)
 │   │   │   └── upload.js            # Multer — PDF sujets Simulated
 │   │   ├── services/
 │   │   │   ├── emailService.js
-│   │   │   └── externalApiService.js
+│   │   │   ├── externalService.js
+│   │   │   └── projectService.js
+│   │   ├── utils/
+│   │   │   ├── apiKey.js
+│   │   │   ├── backgroundJobs.js
+│   │   │   ├── constants.js
+│   │   │   ├── errorResponse.js
+│   │   │   └── printerScheduler.js  # Détection imprimante offline / auto-fail des jobs en cours
 │   │   └── config/
 │   │       └── passport.js
 │   ├── uploads/
 │   │   └── simulated-subjects/      # PDF uploadés (volume Docker en prod)
+│   ├── storage/
+│   │   └── print-jobs/              # Fichiers .gcode uploadés (pas de volume Docker dédié en prod)
 │   ├── Dockerfile
 │   ├── Dockerfile.prod
 │   └── package.json
+│
+├── printer-agent/                   # Agent Python déployé sur chaque imprimante (via Rinkhals)
+│   ├── agent/
+│   │   ├── main.py                  # Boucle de polling (`--loop`) + CLI
+│   │   ├── hub_client.py            # Client vers les endpoints /api/print/agent/*
+│   │   ├── moonraker_client.py      # Client Moonraker (statut imprimante, jobs)
+│   │   └── state.py
+│   ├── rinkhals-app/                # Packaging "app" custom Rinkhals (app.sh + app.json)
+│   ├── tests/
+│   ├── config.example.json
+│   └── README.md
 │
 ├── docs/                            # Documentation segmentée
 ├── docker-compose.yml               # Dev
@@ -108,7 +147,7 @@ hub-project-platform/
 | React | 18.2.0 | UI |
 | Tailwind CSS | 3.1.7 | Styles utilitaires |
 | Axios | 0.30.0 | Client HTTP |
-| jwt-decode | 3.1.2 | Décodage JWT |
+| jwt-decode | 4.0.0 | Décodage JWT |
 | next-themes | 0.4.6 | Mode sombre/clair |
 | react-toastify | 11.0.5 | Notifications toast |
 
@@ -132,3 +171,13 @@ hub-project-platform/
 | Frontend | 3002 (→ 3000 interne) | 3000 |
 | Backend | 5000 | 5000 |
 | MongoDB | 27017 | 27017 |
+
+---
+
+## Dépendances / Intégrations Externes
+
+| Dépendance | Rôle |
+|------------|------|
+| Passport.js + passport-microsoft (OAuth) | Authentification via compte Microsoft (Epitech) |
+| Resend | Envoi des emails transactionnels (changements de statut, relances) |
+| Rinkhals | Firmware custom pour les imprimantes 3D Anycubic Kobra ; expose l'accès SSH/Moonraker consommé par `printer-agent/` sur les 3 imprimantes du Hub. Voir [rinkhals-community/Rinkhals](https://github.com/rinkhals-community/Rinkhals) et `docs/printer-onboarding.md` pour le flashage/déploiement. |

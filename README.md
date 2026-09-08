@@ -24,13 +24,15 @@ Application full-stack permettant aux étudiants de soumettre et gérer leurs pr
 | [docs/architecture.md](docs/architecture.md) | Arborescence du projet, stack technique, ports |
 | [docs/installation.md](docs/installation.md) | Installation Docker/locale, variables d'environnement |
 | [docs/auth.md](docs/auth.md) | OAuth Microsoft, JWT, rôles, middlewares |
-| [docs/models.md](docs/models.md) | Modèles Mongoose (User, Project, Workshop, Simulated*) |
+| [docs/models.md](docs/models.md) | Modèles Mongoose (User, Project, Workshop, Simulated*, impression 3D, ToolReport) |
 | [docs/api-projects-workshops.md](docs/api-projects-workshops.md) | Routes API projets, workshops, users, health |
 | [docs/api-simulated.md](docs/api-simulated.md) | Routes API Simulated (catalogue, enrollments, cycles) |
+| [docs/api-print.md](docs/api-print.md) | Routes API impression 3D (imprimantes, liste blanche, jobs, agent, demandes d'accès) |
 | [docs/inventory.md](docs/inventory.md) | Système d'inventaire matériel, emprunt par QR Code |
 | [docs/frontend.md](docs/frontend.md) | Pages frontend et composants réutilisables |
 | [docs/workflows.md](docs/workflows.md) | Workflows étudiant et admin (projets, workshops, simulated, inventory) |
 | [docs/docker.md](docs/docker.md) | Configuration Docker dev/prod, volumes persistants |
+| [docs/printer-onboarding.md](docs/printer-onboarding.md) | Runbook flashage Rinkhals + déploiement de l'agent d'impression |
 
 ---
 
