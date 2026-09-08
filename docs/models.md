@@ -295,10 +295,20 @@ Base de données : **MongoDB** via **Mongoose**.
   filePath: String,            // Requis — chemin de stockage local
 
   status: String,               // Enum PRINT_JOB_STATUSES (défaut 'queued') :
-                                 // 'rejected' | 'queued' | 'sent' | 'printing' | 'completed' | 'failed'
+                                 // 'rejected' | 'queued' | 'sent' | 'printing' | 'completed' | 'failed' | 'cancelled'
   rejectionReason: String,      // Enum PRINT_REJECTION_REASONS | null (défaut null) :
                                  // 'not_authorized' | 'printer_busy' | 'printer_offline' | 'printer_error' | 'printer_disabled'
   errorMessage: String,         // Défaut null
+  cancelRequestedAt: Date,      // Défaut null — posé au moment de la demande d'annulation d'un job
+                                 // 'sent'/'printing' (annulation asynchrone). Reste posé une fois le
+                                 // job résolu en 'cancelled' : enregistrement permanent de la date de
+                                 // demande à des fins d'audit, pas un état transitoire — ce sont
+                                 // `job.status` et le contrôle terminal du heartbeat qui déterminent
+                                 // si une annulation est encore en cours, pas ce champ.
+  cancelledBy: {                 // { email, role }, défaut { email: null, role: null } — qui a
+    email: String,               // demandé l'annulation (étudiant propriétaire ou admin)
+    role: String
+  },
 
   submittedAt: Date,            // Défaut : maintenant
   startedAt: Date,              // Défaut null
