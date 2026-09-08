@@ -254,8 +254,11 @@ export default function AdminPrintPage() {
     if (!cancelTarget) return;
     setCancelling(true);
     try {
+      // Un job 'queued' est annulé synchroniquement (200, déjà 'cancelled') ; un job
+      // 'sent'/'printing' ne fait que demander l'annulation (202, toujours en cours).
+      const wasQueued = cancelTarget.status === 'queued';
       await post(`/api/print/jobs/${cancelTarget._id}/cancel`, {});
-      toast.success('Annulation demandée');
+      toast.success(wasQueued ? 'Impression annulée' : 'Annulation demandée');
       setCancelTarget(null);
       await refresh();
     } catch (err) {
