@@ -45,6 +45,7 @@ const JOB_STATUS_LABELS = {
   completed: 'Terminé',
   failed: 'Échec',
   rejected: 'Refusé',
+  cancelled: 'Annulé',
 };
 
 const JOB_STATUS_BADGE_VARIANTS = {
@@ -54,7 +55,10 @@ const JOB_STATUS_BADGE_VARIANTS = {
   completed: 'approved',
   failed: 'rejected',
   rejected: 'rejected',
+  cancelled: 'neutral',
 };
+
+const CANCELLABLE_JOB_STATUSES = ['queued', 'sent', 'printing'];
 
 const REJECTION_REASON_LABELS = {
   not_authorized: 'Email non autorisé',
@@ -74,6 +78,8 @@ export default function AdminPrintPage() {
   const [jobs, setJobs] = useState([]);
   const [accessRequests, setAccessRequests] = useState([]);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
 
   // ── Printers ──
   const [newPrinterName, setNewPrinterName] = useState('');
@@ -243,6 +249,21 @@ export default function AdminPrintPage() {
   };
 
   // ── Job log ──
+
+  const handleCancelJob = async () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    try {
+      await post(`/api/print/jobs/${cancelTarget._id}/cancel`, {});
+      toast.success('Annulation demandée');
+      setCancelTarget(null);
+      await refresh();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const printerNameById = Object.fromEntries(printers.map((p) => [p._id, p.name]));
 
@@ -503,6 +524,14 @@ export default function AdminPrintPage() {
                           ({REJECTION_REASON_LABELS[job.rejectionReason] || job.rejectionReason})
                         </span>
                       )}
+                      {CANCELLABLE_JOB_STATUSES.includes(job.status) &&
+                        (job.cancelRequestedAt ? (
+                          <span className="text-xs text-text-muted">Annulation en cours...</span>
+                        ) : (
+                          <Button variant="danger" size="sm" onClick={() => setCancelTarget(job)}>
+                            Annuler
+                          </Button>
+                        ))}
                     </div>
                   </div>
                 ))}
@@ -528,6 +557,29 @@ export default function AdminPrintPage() {
             )}
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={!!cancelTarget}
+        onClose={() => setCancelTarget(null)}
+        title="Annuler cette impression ?"
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button variant="subtle" onClick={() => setCancelTarget(null)} disabled={cancelling}>
+              Retour
+            </Button>
+            <Button variant="danger" onClick={handleCancelJob} loading={cancelling} disabled={cancelling}>
+              Annuler l&apos;impression
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-text">
+          Cette action est irréversible.{' '}
+          {cancelTarget && ['sent', 'printing'].includes(cancelTarget.status)
+            ? "L'impression est peut-être déjà en cours : elle s'arrêtera au prochain contact avec l'imprimante (jusqu'à 60 secondes), et le plateau devra être vérifié physiquement avant la prochaine impression."
+            : "Le job n'a pas encore démarré, l'imprimante sera immédiatement libérée."}
+        </p>
       </Modal>
 
       <Footer />
