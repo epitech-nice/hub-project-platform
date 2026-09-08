@@ -414,6 +414,26 @@ def test_monitor_not_cancel_requested_ignores_active_print(tmp_path, logger):
     hub.update_job_status.assert_not_called()
 
 
+def test_monitor_cancel_requested_and_moonraker_already_reports_cancelled_reports_cancelled_not_failed(
+    tmp_path, logger
+):
+    # Couvre le bug de la revue finale : si _report_terminal("cancelled", ...) a échoué côté hub
+    # à un tick précédent (retry laissé en l'état), Moonraker peut déjà être passé nativement à
+    # 'cancelled' au tick suivant. C'est le chemin heureux de l'annulation qui rejoue — ça ne
+    # doit jamais être rapporté 'failed' juste parce que 'cancelled' fait partie de
+    # TERMINAL_ERROR_STATES.
+    hub = make_hub()
+    hub.heartbeat.return_value = True
+    moonraker = make_moonraker()
+    moonraker.get_print_stats.return_value = {"state": "cancelled", "message": ""}
+
+    result = run_tick(hub, moonraker, in_progress_state(), str(tmp_path), logger)
+
+    moonraker.cancel_print.assert_not_called()
+    hub.update_job_status.assert_called_once_with("job-1", "cancelled", error_message=None)
+    assert result == {"job_id": None, "consecutive_moonraker_failures": 0, "job_started_at": None}
+
+
 def test_monitor_terminal_report_conflict_409_is_treated_as_already_recorded(tmp_path, logger):
     hub = make_hub()
     hub.update_job_status.side_effect = HubClientError("déjà terminal", status_code=409)

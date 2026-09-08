@@ -31,7 +31,12 @@ class HubClient:
 
     def heartbeat(self):
         response = self._request("GET", "/heartbeat")
-        return response.json().get("cancelRequested", False)
+        try:
+            return bool(response.json().get("cancelRequested", False))
+        except ValueError:
+            # Réponse 2xx mais corps non-JSON (ex: hub pas encore mis à jour renvoyant un
+            # 204 vide à un agent neuf) : ne jamais laisser ce cas casser tout le tick.
+            return False
 
     def get_next_job(self):
         response = self._request("GET", "/next-job")

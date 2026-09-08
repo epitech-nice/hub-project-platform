@@ -140,6 +140,14 @@ def _try_monitor(hub, moonraker, state, logger, cancel_requested=False):
     if print_state == "complete":
         return _report_terminal(hub, job_id, "completed", None, state, logger)
 
+    # Moonraker peut déjà rapporter 'cancelled' nativement au moment où on regarde (ex: retry
+    # d'un tick précédent où _report_terminal("cancelled", ...) a échoué côté hub — l'appel
+    # moonraker.cancel_print() a bien eu lieu, et au tick suivant print_stats.state s'est
+    # naturellement stabilisé sur 'cancelled'). Dans ce cas précis, il s'agit du chemin heureux
+    # de l'annulation qui rejoue, pas d'un échec — ne jamais le rapporter 'failed'.
+    if print_state == "cancelled" and cancel_requested:
+        return _report_terminal(hub, job_id, "cancelled", None, state, logger)
+
     if print_state in TERMINAL_ERROR_STATES:
         detail = stats.get("message") or f"Impression {print_state} sur l'imprimante"
         return _report_terminal(hub, job_id, "failed", detail, state, logger)

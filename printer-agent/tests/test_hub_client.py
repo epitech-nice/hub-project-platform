@@ -92,6 +92,24 @@ def test_heartbeat_raises_on_failure():
             client.heartbeat()
 
 
+def test_heartbeat_returns_false_on_non_json_2xx_body():
+    # Couvre le cas d'un hub pas encore mis à jour renvoyant un 204 No Content vide (ou tout
+    # autre corps non-JSON) à un agent neuf : ValueError de response.json() ne doit jamais
+    # s'échapper de heartbeat() et casser tout le tick (voir run_tick, qui ne catche que
+    # HubClientError autour de l'appel heartbeat).
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.get(f"{BASE_URL}/heartbeat", status_code=204, text="")
+        assert client.heartbeat() is False
+
+
+def test_heartbeat_returns_false_on_invalid_json_2xx_body():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.get(f"{BASE_URL}/heartbeat", status_code=200, text="not json")
+        assert client.heartbeat() is False
+
+
 def test_download_job_file_writes_content(tmp_path):
     client = make_client()
     dest = str(tmp_path / "job.gcode")
