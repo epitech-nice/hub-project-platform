@@ -149,12 +149,12 @@ export default function PrintPage() {
       await post(`/api/print/jobs/${pendingUpload.pendingUploadId}/confirm`, body);
       toast.success('Impression soumise');
       resetPendingUpload();
+      setShowOverrideModal(false);
       await refresh();
     } catch (err) {
       toast.error(err.message);
     } finally {
       setConfirming(false);
-      setShowOverrideModal(false);
     }
   };
 
@@ -287,7 +287,7 @@ export default function PrintPage() {
                   Fichier mono-matériau — choisissez la bobine à utiliser.
                 </p>
 
-                {pendingUpload.slots.length === 0 ? (
+                {!pendingUpload.spoolSlotsUpdatedAt ? (
                   <div>
                     <p className="text-sm text-danger">
                       Données bobines indisponibles pour cette imprimante — impossible de savoir ce qui est
@@ -303,22 +303,29 @@ export default function PrintPage() {
                     </Button>
                   </div>
                 ) : (
-                  <Select value={selectedGate} onChange={(e) => setSelectedGate(e.target.value)}>
-                    <option value="">— Choisir un slot —</option>
-                    {pendingUpload.slots.map((slot) => (
-                      <option key={slot.gate} value={slot.gate} disabled={slot.empty}>
-                        {GATE_LABELS[slot.gate] || `Slot ${slot.gate + 1}`} —{' '}
-                        {slot.empty ? 'Vide' : slot.material || 'Matière inconnue'}
-                      </option>
-                    ))}
-                  </Select>
+                  <div className="space-y-2">
+                    <Select value={selectedGate} onChange={(e) => setSelectedGate(e.target.value)}>
+                      <option value="">— Choisir un slot —</option>
+                      {pendingUpload.slots.map((slot) => (
+                        <option key={slot.gate} value={slot.gate} disabled={slot.empty}>
+                          {GATE_LABELS[slot.gate] || `Slot ${slot.gate + 1}`} —{' '}
+                          {slot.empty ? 'Vide' : slot.material || 'Matière inconnue'}
+                        </option>
+                      ))}
+                    </Select>
+                    {pendingUpload.slots.length > 0 && pendingUpload.slots.every((s) => s.empty) && (
+                      <p className="text-sm text-danger">
+                        Toutes les bobines sont signalées vides — vérifiez physiquement l&apos;imprimante.
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 <div className="flex gap-3">
                   <Button variant="subtle" onClick={resetPendingUpload} disabled={confirming}>
                     Retour
                   </Button>
-                  {pendingUpload.slots.length > 0 && (
+                  {pendingUpload.spoolSlotsUpdatedAt && (
                     <Button onClick={handleConfirm} loading={confirming} disabled={confirming}>
                       Confirmer et soumettre
                     </Button>
@@ -334,6 +341,7 @@ export default function PrintPage() {
                 <div className="space-y-2">
                   {pendingUpload.expectedTools.map((tool) => {
                     const mismatch = pendingUpload.mismatches.find((m) => m.tool === tool.tool);
+                    const unverifiable = !tool.material && !tool.color;
                     return (
                       <div
                         key={tool.tool}
@@ -349,9 +357,15 @@ export default function PrintPage() {
                             />
                           )}
                         </span>
-                        <Badge variant={mismatch ? 'rejected' : 'approved'} size="sm">
-                          {mismatch ? `Chargé : ${mismatch.actualMaterial || 'inconnu'}` : 'OK'}
-                        </Badge>
+                        {unverifiable ? (
+                          <Badge variant="neutral" size="sm">
+                            Non vérifiable
+                          </Badge>
+                        ) : (
+                          <Badge variant={mismatch ? 'rejected' : 'approved'} size="sm">
+                            {mismatch ? `Chargé : ${mismatch.actualMaterial || 'inconnu'}` : 'OK'}
+                          </Badge>
+                        )}
                       </div>
                     );
                   })}

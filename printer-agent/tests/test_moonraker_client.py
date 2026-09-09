@@ -216,3 +216,28 @@ def test_get_mmu_status_raises_on_unexpected_shape():
         m.get(f"{BASE_URL}/printer/objects/query", json={"result": {"status": {}}})
         with pytest.raises(MoonrakerClientError):
             client.get_mmu_status()
+
+
+def test_get_mmu_status_raises_moonraker_error_when_num_gates_is_not_an_int():
+    # num_gates non numérique (ex: chaîne) doit être détecté avant `range(num_gates)`,
+    # qui lèverait sinon un TypeError brut hors de tout except — voir Finding 3 : un
+    # échec de get_mmu_status ne doit jamais propager autre chose qu'un MoonrakerClientError.
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.get(
+            f"{BASE_URL}/printer/objects/query",
+            json={
+                "result": {
+                    "status": {
+                        "mmu": {
+                            "num_gates": "4",
+                            "gate_status": [1, 0, 1, 1],
+                            "gate_material": ["PLA", "PLA", "PETG", "PLA"],
+                            "gate_color": ["212721FF", "F40031FF", "FED141FF", "FF6A14FF"],
+                        }
+                    }
+                }
+            },
+        )
+        with pytest.raises(MoonrakerClientError):
+            client.get_mmu_status()

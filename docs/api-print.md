@@ -162,13 +162,17 @@ Base : `/api/print/jobs`
 
 | Route | Méthode | Auth | Description |
 |-------|---------|------|-------------|
-| `/` | POST | Authentifié | Soumettre un job d'impression (`multipart/form-data`) |
+| `/` | POST | Authentifié | Soumettre un job d'impression en une étape (`multipart/form-data`) — flux historique, pas de sélection de bobine ACE |
+| `/analyze` | POST | Authentifié | Analyser un fichier `.gcode` avant confirmation (`multipart/form-data`) — flux avec sélection de bobine ACE |
+| `/:pendingUploadId/confirm` | POST | Authentifié (propriétaire de l'analyse) | Confirmer la soumission d'une analyse (`POST /analyze`) |
 | `/me` | GET | Authentifié | Mes jobs |
 | `/` | GET | Admin | Tous les jobs (filtrable) |
 | `/:id` | GET | Admin | Détails d'un job |
 | `/:id/cancel` | POST | Authentifié (propriétaire ou admin) | Annuler un job `queued`/`sent`/`printing` |
 
-### `POST /` — Soumettre un job
+**Deux flux de soumission coexistent** : `POST /` reste le flux historique en une étape (toujours actif, aucune sélection de bobine). `POST /analyze` puis `POST /:pendingUploadId/confirm` est le flux à deux étapes qui permet de choisir/vérifier la bobine ACE chargée avant de lancer réellement l'impression — c'est celui utilisé par la page `/print` du frontend.
+
+### `POST /` — Soumettre un job (flux historique, une étape)
 
 **Body** : `multipart/form-data`
 - `printerId` : ObjectId de l'imprimante ciblée
@@ -197,6 +201,54 @@ Base : `/api/print/jobs`
 ### `GET /me`
 
 Jobs de l'étudiant connecté, triés par `submittedAt` décroissant.
+
+### `POST /analyze` — Analyser un fichier avant soumission (sélection de bobine ACE)
+
+**Body** : `multipart/form-data`
+- `printerId` : ObjectId de l'imprimante ciblée
+- `file` : fichier `.gcode` (extension vérifiée, 200 MB max) — stocké temporairement dans `storage/pending-print-jobs/`
+
+**Conditions, dans l'ordre** : fichier présent (sinon 400), imprimante trouvée (sinon 404), whitelist `authorized: true` (sinon 403). Contrairement à `POST /`, aucun `PrintJob` de traçabilité n'est créé en cas de rejet à cette étape — seul le fichier temporaire est supprimé.
+
+**Détection du mode** : le fichier est scanné à la recherche de commandes `Tx` isolées sur leur propre ligne (`server/src/utils/spoolAnalysis.js`) — au moins une commande `Tx` trouvée → `mode: "multi-material"`, aucune → `mode: "single"`. En mode `multi-material`, les métadonnées matière/couleur attendues par tool sont extraites des commentaires d'en-tête `filament_type`/`filament_colour` du slicer (OrcaSlicer/PrusaSlicer) quand ils sont présents ; sinon `material`/`color` valent `null` pour ce tool (non déterminable, pas comparé).
+
+**Réponse (201)** :
+```json
+{
+  "success": true,
+  "data": {
+    "pendingUploadId": "...",
+    "mode": "single",
+    "slots": [{ "gate": 0, "material": "PLA", "color": "212721FF", "empty": false }],
+    "spoolSlotsUpdatedAt": "2026-09-09T12:00:00.000Z",
+    "expectedTools": [],
+    "mismatches": []
+  }
+}
+```
+
+`slots` et `spoolSlotsUpdatedAt` sont une copie de l'état courant de `Printer.spoolSlots`/`Printer.spoolSlotsUpdatedAt` (dernier rapport de l'agent via `POST /agent/spool-status`, voir plus bas). `spoolSlotsUpdatedAt: null` signifie qu'aucune donnée bobine n'a *jamais* été reçue pour cette imprimante — état distinct d'un tableau `slots` vide avec `spoolSlotsUpdatedAt` posé (l'agent a bien répondu, mais l'imprimante ne détecte aucun gate). `mismatches` (voir `computeSlotMismatches`) n'est calculé qu'en mode `multi-material` (toujours `[]` en mode `single`), et ignore les tools dont `material`/`color` valent `null` (rien à comparer).
+
+Le document `PendingPrintUpload` créé expire automatiquement après 15 minutes (TTL Mongo) si jamais confirmé ; le fichier temporaire correspondant est nettoyé séparément par un sweeper applicatif (`server/src/utils/pendingUploadCleanup.js`, toutes les 5 min) puisqu'une expiration TTL Mongo ne peut pas déclencher de code applicatif — voir `docs/models.md`.
+
+### `POST /:pendingUploadId/confirm` — Confirmer la soumission
+
+**Body** :
+```json
+{ "selectedGate": 0, "overrideNoSpoolData": false }
+```
+
+Conditions selon `gcodeMode` de l'analyse :
+- **`single`** :
+  - Si `Printer.spoolSlotsUpdatedAt` est posé (données bobines disponibles) : `selectedGate` (entier 0-3) requis, doit désigner un slot existant et non vide — sinon 400 (`"Sélection de bobine requise"` ou `"Ce slot est vide, choisissez-en un autre"`)
+  - Si `Printer.spoolSlotsUpdatedAt` est `null` (aucune donnée bobine jamais reçue) : `overrideNoSpoolData: true` requis pour soumettre quand même — sinon 400
+- **`multi-material`** : aucun champ requis, la sélection de bobine se fait via les commandes `Tx` déjà présentes dans le gcode (injectées côté agent, voir `printer-agent`)
+
+**Conditions re-vérifiées à la confirmation** (l'analyse a pu dater) : le `PendingPrintUpload` doit encore exister (410 si expiré via TTL ou déjà confirmé — re-uploader), le requérant doit être l'auteur de l'analyse (403 sinon), la whitelist doit toujours autoriser l'email (403 sinon), l'imprimante doit toujours être `idle` (409 sinon). Comme pour `POST /`, un rejet sur whitelist/statut imprimante crée un `PrintJob` `rejected` de traçabilité (mêmes `rejectionReason`/messages que `POST /`) ; un 410 (analyse expirée) ne crée rien.
+
+**Effets en cas de succès** : le fichier est déplacé de `storage/pending-print-jobs/` vers `storage/print-jobs/`, un `PrintJob` est créé avec `selectedGate`, `slotSelectionOverridden`, `gcodeMode` et `slotMismatchWarnings` (copié depuis `mismatches` de l'analyse), l'imprimante est verrouillée atomiquement comme pour `POST /` (`idle` → `printing`, `currentJob`), et le `PendingPrintUpload` est supprimé.
+
+**Réponse (201)** : `{ "success": true, "data": <PrintJob> }`.
 
 ### `GET /` *(admin)*
 
@@ -237,6 +289,7 @@ La clé est hashée (SHA-256) et comparée à `apiKeyHash` en base ; échec → 
 | `/jobs/:id/file` | GET | Imprimante | Télécharger le fichier `.gcode` d'un job |
 | `/jobs/:id/status` | POST | Imprimante | Rapporter un changement de statut du job |
 | `/heartbeat` | GET | Imprimante | Signal de vie |
+| `/spool-status` | POST | Imprimante | Rapporter l'état des bobines ACE/MMU (matière, couleur, vide) |
 
 Voir `printer-agent/README.md` et `docs/printer-onboarding.md` pour le déploiement réel de l'agent (flash Rinkhals, configuration, boucle de polling) — non dupliqué ici.
 
@@ -287,6 +340,19 @@ Télécharge le fichier (`res.download`, `Content-Type: text/plain`). 404 si le 
 `cancelRequested` vaut `true` si le job actuellement assigné à cette imprimante (`Printer.currentJob`) a un `cancelRequestedAt` posé et n'est pas encore dans un statut terminal (`completed`/`failed`/`cancelled`/`rejected`) — c'est le signal que l'agent doit annuler l'impression physique au prochain tick.
 
 `authenticatePrinter` met à jour `lastSeenAt` sur chaque appel authentifié (donc sur toute route `/agent/*`, pas seulement `/heartbeat`). Si l'imprimante était `offline`, la reconnexion la fait automatiquement repasser à son `lastKnownStatus` (ou `awaiting_clearance` si le job en cours a échoué pendant la coupure).
+
+### `POST /spool-status`
+
+**Body** :
+```json
+{ "gates": [{ "gate": 0, "material": "PLA", "color": "212721FF", "empty": false }] }
+```
+
+`gates` (tableau, requis — 400 sinon) remplace intégralement `Printer.spoolSlots` et pose `Printer.spoolSlotsUpdatedAt` à la date courante, y compris avec un tableau **vide** (`num_gates: 0` côté agent, imprimante sans ACE/MMU détecté ou MMU sans gate configuré) : `spoolSlotsUpdatedAt` posé + `spoolSlots: []` est donc un état valide, distinct de `spoolSlotsUpdatedAt: null` (jamais reçu) — voir `POST /jobs/:pendingUploadId/confirm` plus haut, qui distingue explicitement ces deux cas.
+
+**Réponse (200)** : `{ "success": true }`.
+
+Appelé par `printer-agent` à chaque tick (`agent/main.py::_report_spool_status`), en best-effort : un échec de lecture Moonraker (`MoonrakerClient.get_mmu_status`) ou d'appel au hub (`HubClient.report_spool_status`) est loggé et n'interrompt jamais le reste du tick (dispatch/monitoring du job en cours).
 
 ---
 

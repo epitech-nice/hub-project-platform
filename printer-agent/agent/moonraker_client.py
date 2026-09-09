@@ -90,17 +90,21 @@ class MoonrakerClient:
             gate_status = mmu["gate_status"]
             gate_material = mmu["gate_material"]
             gate_color = mmu["gate_color"]
-        except (KeyError, ValueError, TypeError) as exc:
+
+            if not isinstance(num_gates, int):
+                raise MoonrakerClientError(f"num_gates inattendu dans la réponse Moonraker (mmu): {num_gates!r}")
+
+            gates = []
+            for i in range(num_gates):
+                gates.append(
+                    {
+                        "gate": i,
+                        "material": gate_material[i] if i < len(gate_material) else "",
+                        "color": gate_color[i] if i < len(gate_color) else "",
+                        "empty": not bool(gate_status[i]) if i < len(gate_status) else True,
+                    }
+                )
+        except (KeyError, ValueError, TypeError, IndexError) as exc:
             raise MoonrakerClientError(f"Réponse Moonraker inattendue (mmu): {exc}") from exc
 
-        gates = []
-        for i in range(num_gates):
-            gates.append(
-                {
-                    "gate": i,
-                    "material": gate_material[i] if i < len(gate_material) else "",
-                    "color": gate_color[i] if i < len(gate_color) else "",
-                    "empty": not bool(gate_status[i]) if i < len(gate_status) else True,
-                }
-            )
         return gates
