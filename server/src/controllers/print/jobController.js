@@ -4,11 +4,14 @@ const PrintJob = require('../../models/PrintJob');
 const PrintAuthorization = require('../../models/PrintAuthorization');
 const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
+const { parseGcodeSpoolInfo, computeSlotMismatches } = require('../../utils/spoolAnalysis');
+const PendingPrintUpload = require('../../models/PendingPrintUpload');
 const {
   PRINTER_STATUSES,
   PRINTER_STATUS_SOURCES,
   PRINT_JOB_STATUSES,
   PRINT_REJECTION_REASONS,
+  PRINT_JOB_GCODE_MODES,
 } = require('../../utils/constants');
 
 const REJECTION_MESSAGES = {
@@ -193,4 +196,51 @@ exports.cancelJob = asyncHandler(async (req, res, next) => {
   }
 
   return next(new ErrorResponse('Ce job ne peut plus être annulé', 400));
+});
+
+// POST /api/print/jobs/analyze
+// multipart form: printerId, file
+exports.analyzeJob = asyncHandler(async (req, res, next) => {
+  if (!req.file) return next(new ErrorResponse('Fichier .gcode requis', 400));
+
+  const { printerId } = req.body;
+  const printer = await Printer.findById(printerId);
+  if (!printer) {
+    fs.unlink(req.file.path, () => {});
+    return next(new ErrorResponse('Imprimante non trouvée', 404));
+  }
+
+  const authorization = await PrintAuthorization.findOne({ email: req.user.email.toLowerCase() });
+  if (!authorization || !authorization.authorized) {
+    fs.unlink(req.file.path, () => {});
+    return next(new ErrorResponse(REJECTION_MESSAGES[PRINT_REJECTION_REASONS.NOT_AUTHORIZED], 403));
+  }
+
+  const gcodeText = await fs.promises.readFile(req.file.path, 'utf8');
+  const { mode, expectedTools } = parseGcodeSpoolInfo(gcodeText);
+
+  const mismatches =
+    mode === PRINT_JOB_GCODE_MODES.MULTI_MATERIAL ? computeSlotMismatches(expectedTools, printer.spoolSlots) : [];
+
+  const pending = await PendingPrintUpload.create({
+    student: { email: req.user.email.toLowerCase(), name: req.user.name },
+    printer: printer._id,
+    fileName: req.file.originalname,
+    filePath: req.file.path,
+    gcodeMode: mode,
+    expectedTools,
+    mismatches,
+  });
+
+  res.status(201).json({
+    success: true,
+    data: {
+      pendingUploadId: pending._id,
+      mode,
+      slots: printer.spoolSlots,
+      spoolSlotsUpdatedAt: printer.spoolSlotsUpdatedAt,
+      expectedTools,
+      mismatches,
+    },
+  });
 });
