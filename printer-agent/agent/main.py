@@ -55,6 +55,17 @@ def _has_enough_disk_space(download_dir):
         return True  # la vérification elle-même échouant ne doit pas bloquer le dispatch
 
 
+def _inject_gate_selection(file_path, gate):
+    """Préfixe le fichier gcode d'une commande Tn — c'est le même canal que celui utilisé
+    nativement par un gcode multi-couleur pour changer de bobine côté ACE (jamais les commandes
+    manuelles MMU_SELECT/MMU_LOAD, réservées au panneau Fluidd — voir spec 2026-09-09)."""
+    with open(file_path, "r") as f:
+        original_content = f.read()
+    with open(file_path, "w") as f:
+        f.write(f"T{gate}\n")
+        f.write(original_content)
+
+
 def _try_dispatch(hub, moonraker, state, download_dir, logger):
     try:
         job = hub.get_next_job()
@@ -70,6 +81,7 @@ def _try_dispatch(hub, moonraker, state, download_dir, logger):
     # os.path.basename : le hub renvoie fileName tel que soumis par l'étudiant (originalname
     # multer, non assaini côté hub) ; ne jamais faire confiance à ce payload comme chemin local.
     file_name = os.path.basename(job["fileName"]) or f"{job_id}.gcode"
+    selected_gate = job.get("selectedGate")
     logger.info("Nouveau job détecté: %s (%s)", job_id, file_name)
 
     if not _has_enough_disk_space(download_dir):
@@ -85,6 +97,8 @@ def _try_dispatch(hub, moonraker, state, download_dir, logger):
     dest_path = os.path.join(download_dir, file_name)
     try:
         hub.download_job_file(job_id, dest_path)
+        if selected_gate is not None:
+            _inject_gate_selection(dest_path, selected_gate)
         moonraker.upload_and_start_print(dest_path, file_name)
     except Exception as exc:
         logger.error("Échec du dispatch du job %s: %s", job_id, exc, exc_info=True)
