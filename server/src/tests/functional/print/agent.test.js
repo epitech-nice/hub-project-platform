@@ -60,6 +60,29 @@ describe('GET /api/print/agent/next-job', () => {
       .set(printerAuthHeader(printer._id, rawKey));
     expect(second.body.data).toBeNull();
   });
+
+  it('includes selectedGate in the dispatched job payload when set on the job', async () => {
+    const { printer, rawKey } = await createPrinter();
+    const job = await submitAcceptedJob(printer);
+    await PrintJob.findByIdAndUpdate(job._id, { selectedGate: 2 });
+
+    const res = await request(app)
+      .get('/api/print/agent/next-job')
+      .set(printerAuthHeader(printer._id, rawKey));
+
+    expect(res.body.data.selectedGate).toBe(2);
+  });
+
+  it('reports selectedGate as null when not set on the job', async () => {
+    const { printer, rawKey } = await createPrinter();
+    await submitAcceptedJob(printer);
+
+    const res = await request(app)
+      .get('/api/print/agent/next-job')
+      .set(printerAuthHeader(printer._id, rawKey));
+
+    expect(res.body.data.selectedGate).toBeNull();
+  });
 });
 
 describe('GET /api/print/agent/jobs/:id/file', () => {
