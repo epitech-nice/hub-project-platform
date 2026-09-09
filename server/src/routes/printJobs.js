@@ -25,6 +25,7 @@ router.post('/', authenticateToken, handleUpload, jobController.submitJob);
 router.post('/analyze', authenticateToken, handleAnalyzeUpload, jobController.analyzeJob);
 router.get('/me', authenticateToken, jobController.getMyJobs);
 router.post('/:id/cancel', authenticateToken, jobController.cancelJob);
+router.post('/:pendingUploadId/confirm', authenticateToken, jobController.confirmJob);
 router.get('/', authenticateToken, isAdmin, jobController.getAllJobs);
 router.get('/:id', authenticateToken, isAdmin, jobController.getJobById);
 
