@@ -159,3 +159,22 @@ def test_update_job_status_raises_with_status_code_on_409():
         with pytest.raises(HubClientError) as exc_info:
             client.update_job_status("job-1", "completed")
     assert exc_info.value.status_code == 409
+
+
+def test_report_spool_status_sends_gates():
+    client = make_client()
+    gates = [{"gate": 0, "material": "PLA", "color": "212721FF", "empty": False}]
+    with requests_mock.Mocker() as m:
+        m.post(f"{BASE_URL}/spool-status", json={"success": True})
+        client.report_spool_status(gates)
+    assert m.last_request.json() == {"gates": gates}
+    assert m.last_request.headers["x-printer-id"] == "printer-1"
+    assert m.last_request.headers["x-api-key"] == "secret-key"
+
+
+def test_report_spool_status_raises_on_failure():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.post(f"{BASE_URL}/spool-status", status_code=400, json={"success": False, "error": "gates requis"})
+        with pytest.raises(HubClientError):
+            client.report_spool_status([])

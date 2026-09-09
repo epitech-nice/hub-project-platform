@@ -58,3 +58,6 @@ class HubClient:
         if error_message is not None:
             payload["errorMessage"] = error_message
         self._request("POST", f"/jobs/{job_id}/status", json=payload)
+
+    def report_spool_status(self, gates):
+        self._request("POST", "/spool-status", json={"gates": gates})
