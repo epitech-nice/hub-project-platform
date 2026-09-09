@@ -164,3 +164,55 @@ def test_cancel_print_raises_on_network_error():
         m.post(f"{BASE_URL}/printer/print/cancel", exc=requests.exceptions.ConnectTimeout)
         with pytest.raises(MoonrakerClientError):
             client.cancel_print()
+
+
+def test_get_mmu_status_parses_gates():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.get(
+            f"{BASE_URL}/printer/objects/query",
+            json={
+                "result": {
+                    "status": {
+                        "mmu": {
+                            "num_gates": 4,
+                            "gate_status": [1, 0, 1, 1],
+                            "gate_material": ["PLA", "PLA", "PETG", "PLA"],
+                            "gate_color": ["212721FF", "F40031FF", "FED141FF", "FF6A14FF"],
+                        }
+                    }
+                }
+            },
+        )
+        gates = client.get_mmu_status()
+    assert gates == [
+        {"gate": 0, "material": "PLA", "color": "212721FF", "empty": False},
+        {"gate": 1, "material": "PLA", "color": "F40031FF", "empty": True},
+        {"gate": 2, "material": "PETG", "color": "FED141FF", "empty": False},
+        {"gate": 3, "material": "PLA", "color": "FF6A14FF", "empty": False},
+    ]
+    assert m.last_request.method == "GET"
+
+
+def test_get_mmu_status_raises_on_network_error():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.get(f"{BASE_URL}/printer/objects/query", exc=requests.exceptions.ConnectTimeout)
+        with pytest.raises(MoonrakerClientError):
+            client.get_mmu_status()
+
+
+def test_get_mmu_status_raises_on_http_error():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.get(f"{BASE_URL}/printer/objects/query", status_code=500, text="internal error")
+        with pytest.raises(MoonrakerClientError):
+            client.get_mmu_status()
+
+
+def test_get_mmu_status_raises_on_unexpected_shape():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.get(f"{BASE_URL}/printer/objects/query", json={"result": {"status": {}}})
+        with pytest.raises(MoonrakerClientError):
+            client.get_mmu_status()
