@@ -6,6 +6,7 @@ const Printer = require('../../../models/Printer');
 const PendingPrintUpload = require('../../../models/PendingPrintUpload');
 const { createUser, authHeader } = require('../../helpers/auth');
 const { createPrinter, whitelistEmail } = require('../../helpers/print');
+const PrintAuthorization = require('../../../models/PrintAuthorization');
 const { PRINTER_STATUSES } = require('../../../utils/constants');
 
 const MONO_GCODE = 'G28\nG1 X10 Y10\nM104 S200\n';
@@ -181,5 +182,31 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
     expect(jobs).toHaveLength(1);
     expect(jobs[0].status).toBe('rejected');
     expect(jobs[0].rejectionReason).toBe('printer_busy');
+  });
+
+  it('creates a rejected PrintJob when whitelist authorization is revoked between analyze and confirm', async () => {
+    const student = await createUser({ email: 'ok@epitech.eu' });
+    await whitelistEmail(student.email);
+    const { printer } = await createPrinter({
+      spoolSlots: [{ gate: 0, material: 'PLA', color: '212721FF', empty: false }],
+      spoolSlotsUpdatedAt: new Date(),
+    });
+    const analyzeRes = await analyze(student, printer);
+
+    // L'autorisation est révoquée entre l'analyse et la confirmation.
+    await PrintAuthorization.findOneAndUpdate({ email: student.email }, { authorized: false });
+
+    const res = await request(app)
+      .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
+      .set(authHeader(student))
+      .send({ selectedGate: 0 });
+
+    expect(res.status).toBe(403);
+    const jobs = await PrintJob.find({ 'student.email': student.email });
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].status).toBe('rejected');
+    expect(jobs[0].rejectionReason).toBe('not_authorized');
+
+    expect(await PendingPrintUpload.findById(analyzeRes.body.data.pendingUploadId)).toBeNull();
   });
 });
