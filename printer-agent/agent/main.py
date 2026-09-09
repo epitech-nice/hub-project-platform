@@ -17,6 +17,8 @@ TICK_INTERVAL_SECONDS = 60
 MOONRAKER_FAILURE_THRESHOLD = 5
 MAX_JOB_AGE_SECONDS = 24 * 60 * 60  # filet de sécurité absolu, indépendant de ce que rapporte Moonraker
 MIN_FREE_DISK_BYTES = 100 * 1024 * 1024  # 100 Mo de marge avant de tenter un téléchargement
+MIN_ACE_GATE = 0
+MAX_ACE_GATE = 3  # même borne que confirmJob côté hub (Task 4) : selectedGate est un entier 0-3
 ACTIVE_STATES = ("printing", "paused")
 TERMINAL_ERROR_STATES = ("error", "cancelled")
 PERMANENT_HUB_ERROR_CODES = (400, 403, 404)
@@ -55,10 +57,24 @@ def _has_enough_disk_space(download_dir):
         return True  # la vérification elle-même échouant ne doit pas bloquer le dispatch
 
 
+def _validate_selected_gate(gate):
+    """Revalide selectedGate reçu du hub : un entier dans [MIN_ACE_GATE, MAX_ACE_GATE]. Même
+    posture que file_name plus haut — ne jamais faire confiance à ce payload JSON avant de
+    l'interpoler dans un fichier gcode exécuté par une vraie imprimante (borne alignée sur
+    confirmJob côté hub, Task 4, qui restreint déjà selectedGate à un Number 0-3 avant
+    persistance ; cette validation est une deuxième ligne de défense côté agent)."""
+    if isinstance(gate, bool) or not isinstance(gate, int):
+        raise ValueError(f"selectedGate doit être un entier, reçu: {gate!r}")
+    if not (MIN_ACE_GATE <= gate <= MAX_ACE_GATE):
+        raise ValueError(f"selectedGate hors plage [{MIN_ACE_GATE}-{MAX_ACE_GATE}]: {gate!r}")
+    return gate
+
+
 def _inject_gate_selection(file_path, gate):
     """Préfixe le fichier gcode d'une commande Tn — c'est le même canal que celui utilisé
     nativement par un gcode multi-couleur pour changer de bobine côté ACE (jamais les commandes
     manuelles MMU_SELECT/MMU_LOAD, réservées au panneau Fluidd — voir spec 2026-09-09)."""
+    gate = _validate_selected_gate(gate)
     with open(file_path, "r") as f:
         original_content = f.read()
     with open(file_path, "w") as f:
@@ -83,6 +99,21 @@ def _try_dispatch(hub, moonraker, state, download_dir, logger):
     file_name = os.path.basename(job["fileName"]) or f"{job_id}.gcode"
     selected_gate = job.get("selectedGate")
     logger.info("Nouveau job détecté: %s (%s)", job_id, file_name)
+
+    if selected_gate is not None:
+        try:
+            selected_gate = _validate_selected_gate(selected_gate)
+        except ValueError as exc:
+            logger.error("selectedGate invalide reçu du hub pour le job %s: %s", job_id, exc)
+            try:
+                hub.update_job_status(job_id, "failed", error_message=str(exc)[:500])
+            except HubClientError as report_exc:
+                logger.error(
+                    "Échec du signalement de selectedGate invalide pour le job %s: %s",
+                    job_id,
+                    report_exc,
+                )
+            return state
 
     if not _has_enough_disk_space(download_dir):
         logger.error("Espace disque insuffisant pour télécharger le job %s, abandon.", job_id)

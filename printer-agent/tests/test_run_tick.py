@@ -249,6 +249,58 @@ def test_dispatch_does_not_inject_gate_when_absent(tmp_path, logger):
     assert captured["content"] == "G28\nG1 X10\n"
 
 
+def test_dispatch_fails_job_when_selected_gate_out_of_range(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {
+        "jobId": "job-1",
+        "fileName": "a.gcode",
+        "downloadUrl": "/x",
+        "selectedGate": 4,
+    }
+
+    def fake_download(job_id, dest_path):
+        with open(dest_path, "w") as f:
+            f.write("G28\n")
+
+    hub.download_job_file.side_effect = fake_download
+    moonraker = make_moonraker()
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    moonraker.upload_and_start_print.assert_not_called()
+    hub.update_job_status.assert_called_once()
+    args, kwargs = hub.update_job_status.call_args
+    assert args[0] == "job-1"
+    assert args[1] == "failed"
+    assert "selectedGate" in kwargs.get("error_message", "")
+
+
+def test_dispatch_fails_job_when_selected_gate_is_not_an_integer(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {
+        "jobId": "job-1",
+        "fileName": "a.gcode",
+        "downloadUrl": "/x",
+        "selectedGate": "2\nM106 S255",
+    }
+
+    def fake_download(job_id, dest_path):
+        with open(dest_path, "w") as f:
+            f.write("G28\n")
+
+    hub.download_job_file.side_effect = fake_download
+    moonraker = make_moonraker()
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    moonraker.upload_and_start_print.assert_not_called()
+    hub.update_job_status.assert_called_once()
+    args, kwargs = hub.update_job_status.call_args
+    assert args[0] == "job-1"
+    assert args[1] == "failed"
+    assert "selectedGate" in kwargs.get("error_message", "")
+
+
 def test_dispatch_does_not_inject_gate_when_explicitly_null(tmp_path, logger):
     hub = make_hub()
     hub.get_next_job.return_value = {
