@@ -29,9 +29,23 @@ def run_tick(hub, moonraker, state, download_dir, logger):
     except HubClientError as exc:
         logger.warning("Échec du heartbeat vers le hub: %s", exc)
 
+    _report_spool_status(hub, moonraker, logger)
+
     if state.get("job_id") is None:
         return _try_dispatch(hub, moonraker, state, download_dir, logger)
     return _try_monitor(hub, moonraker, state, logger, cancel_requested)
+
+
+def _report_spool_status(hub, moonraker, logger):
+    try:
+        gates = moonraker.get_mmu_status()
+    except MoonrakerClientError as exc:
+        logger.warning("Échec de la lecture du statut bobines Moonraker: %s", exc)
+        return
+    try:
+        hub.report_spool_status(gates)
+    except HubClientError as exc:
+        logger.warning("Échec du signalement du statut bobines au hub: %s", exc)
 
 
 def _has_enough_disk_space(download_dir):

@@ -75,6 +75,57 @@ def test_heartbeat_failure_does_not_block_the_rest_of_the_tick(tmp_path, logger)
     hub.get_next_job.assert_called_once()
 
 
+# --- Remontée du statut bobines (nouveau : appelé à chaque tick, comme le heartbeat) ---
+
+def test_spool_status_reported_on_dispatch_tick(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = None
+    moonraker = make_moonraker()
+    moonraker.get_mmu_status.return_value = [{"gate": 0, "material": "PLA", "color": "212721FF", "empty": False}]
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    moonraker.get_mmu_status.assert_called_once()
+    hub.report_spool_status.assert_called_once_with(moonraker.get_mmu_status.return_value)
+
+
+def test_spool_status_reported_on_monitor_tick(tmp_path, logger):
+    hub = make_hub()
+    moonraker = make_moonraker()
+    moonraker.get_print_stats.return_value = {"state": "printing", "message": ""}
+    moonraker.get_mmu_status.return_value = [{"gate": 0, "material": "PLA", "color": "212721FF", "empty": False}]
+
+    run_tick(hub, moonraker, in_progress_state(), str(tmp_path), logger)
+
+    hub.report_spool_status.assert_called_once_with(moonraker.get_mmu_status.return_value)
+
+
+def test_spool_status_moonraker_failure_does_not_block_the_rest_of_the_tick(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = None
+    moonraker = make_moonraker()
+    moonraker.get_mmu_status.side_effect = MoonrakerClientError("mmu injoignable")
+
+    result = run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    hub.report_spool_status.assert_not_called()
+    assert result == IDLE_STATE
+    hub.get_next_job.assert_called_once()
+
+
+def test_spool_status_hub_failure_does_not_block_the_rest_of_the_tick(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = None
+    hub.report_spool_status.side_effect = HubClientError("hub down")
+    moonraker = make_moonraker()
+    moonraker.get_mmu_status.return_value = []
+
+    result = run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    assert result == IDLE_STATE
+    hub.get_next_job.assert_called_once()
+
+
 # --- Branche dispatch (state.job_id is None) ---
 
 def test_no_job_available_returns_state_unchanged(tmp_path, logger):
