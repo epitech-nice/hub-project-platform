@@ -100,6 +100,12 @@ const PRINT_REJECTION_REASONS = {
   PRINTER_DISABLED: 'printer_disabled',
 };
 
+// Mode d'un gcode vis-à-vis de la sélection de bobine ACE
+const PRINT_JOB_GCODE_MODES = {
+  SINGLE: 'single',
+  MULTI_MATERIAL: 'multi-material',
+};
+
 // Statuts d'une demande d'accès à l'impression 3D
 const PRINT_ACCESS_REQUEST_STATUSES = {
   PENDING: 'pending',
@@ -119,5 +125,6 @@ module.exports = {
   CLEARANCE_METHODS,
   PRINT_JOB_STATUSES,
   PRINT_REJECTION_REASONS,
+  PRINT_JOB_GCODE_MODES,
   PRINT_ACCESS_REQUEST_STATUSES
 };

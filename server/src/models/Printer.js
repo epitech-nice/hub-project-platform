@@ -42,6 +42,18 @@ const PrinterSchema = new mongoose.Schema({
     ],
     default: [],
   },
+  spoolSlots: {
+    type: [
+      {
+        gate: { type: Number, required: true },
+        material: { type: String, default: '' },
+        color: { type: String, default: '' },
+        empty: { type: Boolean, default: true },
+      },
+    ],
+    default: [],
+  },
+  spoolSlotsUpdatedAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
 });
 
