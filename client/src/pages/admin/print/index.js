@@ -519,20 +519,18 @@ export default function AdminPrintPage() {
                         {' — '}
                         {new Date(job.submittedAt).toLocaleString('fr-FR')}
                       </p>
-                      {job.gcodeMode === 'single' && (
+                      {job.gcodeMode && (
                         <p className="text-xs text-text-muted">
                           {job.slotSelectionOverridden
                             ? 'Bobine : non spécifiée (soumis sans données bobines)'
-                            : job.selectedGate !== null && job.selectedGate !== undefined
-                            ? `Bobine : ${GATE_LABELS[job.selectedGate] || `Slot ${job.selectedGate + 1}`}`
+                            : job.gateAssignments?.length > 0
+                            ? `Bobine${job.gateAssignments.length > 1 ? 's' : ''} : ${job.gateAssignments
+                                .map(
+                                  (a) =>
+                                    `${a.tool ? `${a.tool}→` : ''}${GATE_LABELS[a.gate] ?? `Slot ${a.gate + 1}`}`
+                                )
+                                .join(', ')}`
                             : null}
-                        </p>
-                      )}
-                      {job.slotMismatchWarnings?.length > 0 && (
-                        <p className="text-xs text-danger">
-                          {job.slotMismatchWarnings.length} avertissement
-                          {job.slotMismatchWarnings.length > 1 ? 's' : ''} matière/couleur signalé
-                          {job.slotMismatchWarnings.length > 1 ? 's' : ''} à la soumission
                         </p>
                       )}
                     </div>
