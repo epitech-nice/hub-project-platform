@@ -1,0 +1,64 @@
+// Fusionne le rapport brut de l'agent (POST /agent/spool-status) avec les slots existants, en
+// préservant une déclaration manuelle tant que la valeur auto-détectée n'a pas dérivé depuis
+// qu'elle a été posée. L'API Moonraker n'expose aucun signal direct "ceci vient d'une lecture
+// RFID" (voir spec 2026-09-10, section spike) — un changement de valeur auto-rapportée est donc
+// traité comme une nouvelle détection faisant autorité : une heuristique, pas une certitude.
+//
+// Prend des slots existants sous forme de tableau d'objets à accès par propriété (fonctionne
+// aussi bien avec des sous-documents Mongoose qu'avec des objets JS simples) et retourne
+// toujours de NOUVEAUX objets simples — jamais les sous-documents existants eux-mêmes, pour
+// éviter tout problème de ré-attachement de sous-document Mongoose au moment de la réaffectation
+// de `printer.spoolSlots`.
+//
+// Note sur la forme de `manualSetBy` : dans le schéma Mongoose (Printer.spoolSlots[].manualSetBy,
+// voir Task 1), ce champ est un sous-document structuré `{ email, name }` avec des valeurs par
+// défaut à `null` chacune — pas un champ qui accepte `null` au niveau racine. On retourne donc
+// `{ email: null, name: null }` (et non `null`) dans les branches "auto" ci-dessous, pour que ce
+// que produit cette fonction pure corresponde exactement à ce que Mongoose lit/écrit réellement
+// une fois assigné à un document `Printer` et rechargé.
+function mergeSpoolSlots(existingSlots, reportedGates) {
+  return reportedGates.map((g) => {
+    const reported = {
+      gate: g.gate,
+      material: g.material || '',
+      color: g.color || '',
+      empty: !!g.empty,
+    };
+
+    const existing = existingSlots.find((s) => s.gate === g.gate);
+
+    if (existing && existing.source === 'manual') {
+      const unchanged =
+        reported.material === existing.autoMaterialAtSet &&
+        reported.color === existing.autoColorAtSet &&
+        reported.empty === existing.autoEmptyAtSet;
+
+      if (unchanged) {
+        return {
+          gate: existing.gate,
+          material: existing.material,
+          color: existing.color,
+          empty: existing.empty,
+          source: existing.source,
+          manualSetBy: existing.manualSetBy,
+          manualSetAt: existing.manualSetAt,
+          autoMaterialAtSet: existing.autoMaterialAtSet,
+          autoColorAtSet: existing.autoColorAtSet,
+          autoEmptyAtSet: existing.autoEmptyAtSet,
+        };
+      }
+    }
+
+    return {
+      ...reported,
+      source: 'auto',
+      manualSetBy: { email: null, name: null },
+      manualSetAt: null,
+      autoMaterialAtSet: null,
+      autoColorAtSet: null,
+      autoEmptyAtSet: null,
+    };
+  });
+}
+
+module.exports = { mergeSpoolSlots };
