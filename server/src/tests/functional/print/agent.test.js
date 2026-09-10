@@ -74,19 +74,19 @@ describe('GET /api/print/agent/next-job', () => {
     expect(second.body.data).toBeNull();
   });
 
-  it('includes selectedGate in the dispatched job payload when set on the job', async () => {
+  it('includes gateAssignments in the dispatched job payload when set on the job', async () => {
     const { printer, rawKey } = await createPrinter();
     const job = await submitAcceptedJob(printer);
-    await PrintJob.findByIdAndUpdate(job._id, { selectedGate: 2 });
+    await PrintJob.findByIdAndUpdate(job._id, { gateAssignments: [{ tool: null, gate: 2 }] });
 
     const res = await request(app)
       .get('/api/print/agent/next-job')
       .set(printerAuthHeader(printer._id, rawKey));
 
-    expect(res.body.data.selectedGate).toBe(2);
+    expect(res.body.data.gateAssignments).toEqual([{ tool: null, gate: 2 }]);
   });
 
-  it('reports selectedGate as null when not set on the job', async () => {
+  it('reports gateAssignments as an empty array when not set on the job', async () => {
     const { printer, rawKey } = await createPrinter();
     await submitAcceptedJob(printer);
 
@@ -94,7 +94,7 @@ describe('GET /api/print/agent/next-job', () => {
       .get('/api/print/agent/next-job')
       .set(printerAuthHeader(printer._id, rawKey));
 
-    expect(res.body.data.selectedGate).toBeNull();
+    expect(res.body.data.gateAssignments).toEqual([]);
   });
 });
 

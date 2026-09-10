@@ -191,7 +191,7 @@ exports.analyzeJob = asyncHandler(async (req, res, next) => {
 });
 
 // POST /api/print/jobs/:pendingUploadId/confirm
-// body: { selectedGate?, overrideNoSpoolData? }
+// body: { gateAssignments?, overrideNoSpoolData? }
 exports.confirmJob = asyncHandler(async (req, res, next) => {
   const pending = await PendingPrintUpload.findById(req.params.pendingUploadId);
   if (!pending) {
@@ -221,33 +221,44 @@ exports.confirmJob = asyncHandler(async (req, res, next) => {
     return rejectPendingSubmission(next, pending, printer, reason);
   }
 
-  let selectedGate = null;
+  let gateAssignments = [];
   let slotSelectionOverridden = false;
+  const hasSpoolData = !!printer.spoolSlotsUpdatedAt;
 
-  if (pending.gcodeMode === PRINT_JOB_GCODE_MODES.SINGLE) {
-    const { selectedGate: requestedGate, overrideNoSpoolData } = req.body;
-    const hasSpoolData = !!printer.spoolSlotsUpdatedAt;
+  if (!hasSpoolData) {
+    if (!req.body.overrideNoSpoolData) {
+      return next(
+        new ErrorResponse(
+          "Données bobines indisponibles pour cette imprimante — utilisez l'option de contournement si vous souhaitez continuer quand même",
+          400
+        )
+      );
+    }
+    slotSelectionOverridden = true;
+  } else {
+    // Un tool attendu par entrée d'expectedTools (multi-couleur), ou une seule entrée à tool
+    // null pour un fichier sans aucune commande Tx (mono-matériau) — voir spec 2026-09-10.
+    const expectedToolKeys =
+      pending.gcodeMode === PRINT_JOB_GCODE_MODES.SINGLE ? [null] : pending.expectedTools.map((t) => t.tool);
+    const provided = Array.isArray(req.body.gateAssignments) ? req.body.gateAssignments : [];
 
-    if (!hasSpoolData) {
-      if (!overrideNoSpoolData) {
-        return next(
-          new ErrorResponse(
-            "Données bobines indisponibles pour cette imprimante — utilisez l'option de contournement si vous souhaitez continuer quand même",
-            400
-          )
-        );
+    const everyToolCovered = expectedToolKeys.every((tool) => provided.some((a) => a.tool === tool));
+    if (provided.length !== expectedToolKeys.length || !everyToolCovered) {
+      return next(new ErrorResponse('Une bobine doit être assignée à chaque tool détecté', 400));
+    }
+
+    for (const assignment of provided) {
+      const gate = assignment.gate;
+      if (typeof gate !== 'number' || gate < 0 || gate > 3) {
+        return next(new ErrorResponse('Sélection de bobine requise pour chaque tool', 400));
       }
-      slotSelectionOverridden = true;
-    } else {
-      if (typeof requestedGate !== 'number' || requestedGate < 0 || requestedGate > 3) {
-        return next(new ErrorResponse('Sélection de bobine requise', 400));
-      }
-      const slot = printer.spoolSlots.find((s) => s.gate === requestedGate);
+      const slot = printer.spoolSlots.find((s) => s.gate === gate);
       if (!slot || slot.empty) {
         return next(new ErrorResponse('Ce slot est vide, choisissez-en un autre', 400));
       }
-      selectedGate = requestedGate;
     }
+
+    gateAssignments = provided.map((a) => ({ tool: a.tool, gate: a.gate }));
   }
 
   // Déplace le fichier de son emplacement temporaire (pending-print-jobs/) vers l'emplacement
@@ -265,10 +276,9 @@ exports.confirmJob = asyncHandler(async (req, res, next) => {
     printer: printer._id,
     fileName: pending.fileName,
     filePath: finalPath,
-    selectedGate,
+    gateAssignments,
     slotSelectionOverridden,
     gcodeMode: pending.gcodeMode,
-    slotMismatchWarnings: pending.mismatches,
     history: [{ status: PRINT_JOB_STATUSES.QUEUED, date: new Date(), detail: 'Soumission acceptée' }],
   });
 

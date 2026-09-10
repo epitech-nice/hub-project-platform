@@ -68,7 +68,7 @@ exports.getNextJob = asyncHandler(async (req, res) => {
       jobId: job._id.toString(),
       fileName: job.fileName,
       downloadUrl: `/api/print/agent/jobs/${job._id}/file`,
-      selectedGate: job.selectedGate,
+      gateAssignments: job.gateAssignments,
     },
   });
 });

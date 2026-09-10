@@ -28,6 +28,7 @@ const PrintJobSchema = new mongoose.Schema({
   gateAssignments: {
     type: [
       {
+        _id: false,
         tool: { type: String, default: null },
         gate: { type: Number, required: true },
       },
