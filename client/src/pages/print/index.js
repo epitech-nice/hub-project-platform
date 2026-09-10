@@ -326,7 +326,7 @@ export default function PrintPage() {
                   </p>
                 )}
               </form>
-            ) : !pendingUpload.spoolSlotsUpdatedAt ? (
+            ) : !pendingUpload.spoolSlotsUpdatedAt || pendingUpload.slots.length === 0 ? (
               <div className="space-y-4">
                 <p className="text-sm text-danger">
                   Données bobines indisponibles pour cette imprimante — impossible de savoir ce qui est

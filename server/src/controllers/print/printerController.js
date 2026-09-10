@@ -6,6 +6,11 @@ const ErrorResponse = require('../../utils/errorResponse');
 const { generateApiKey } = require('../../utils/apiKey');
 const { PRINTER_STATUSES, PRINTER_STATUS_SOURCES, CLEARANCE_METHODS } = require('../../utils/constants');
 
+const MAX_MATERIAL_LENGTH = 64;
+// Accepte "#RRGGBB" comme "RRGGBB" — le format que <input type="color"> (GatePicker) envoie
+// réellement est sans '#', mais on tolère les deux plutôt que d'imposer un format côté client.
+const HEX_COLOR_REGEX = /^#?[0-9a-fA-F]{6}$/;
+
 // GET /api/print/printers
 exports.listPrinters = asyncHandler(async (req, res) => {
   const printers = await Printer.find().select('-apiKeyHash').sort({ name: 1 });
@@ -112,6 +117,12 @@ exports.setManualSpoolSlot = asyncHandler(async (req, res, next) => {
   const { material, color } = req.body;
   if (!material || !color) {
     return next(new ErrorResponse('material et color sont requis', 400));
+  }
+  if (material.length > MAX_MATERIAL_LENGTH) {
+    return next(new ErrorResponse(`material ne peut pas dépasser ${MAX_MATERIAL_LENGTH} caractères`, 400));
+  }
+  if (!HEX_COLOR_REGEX.test(color)) {
+    return next(new ErrorResponse('color doit être une couleur hexadécimale valide (ex: #RRGGBB)', 400));
   }
 
   const printer = await Printer.findById(req.params.id);

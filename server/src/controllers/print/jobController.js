@@ -223,7 +223,7 @@ exports.confirmJob = asyncHandler(async (req, res, next) => {
 
   let gateAssignments = [];
   let slotSelectionOverridden = false;
-  const hasSpoolData = !!printer.spoolSlotsUpdatedAt;
+  const hasSpoolData = !!printer.spoolSlotsUpdatedAt && printer.spoolSlots.length > 0;
 
   if (!hasSpoolData) {
     if (!req.body.overrideNoSpoolData) {

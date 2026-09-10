@@ -197,6 +197,10 @@ def test_dispatch_sanitizes_filename_from_hub_payload(tmp_path, logger):
 
 
 def test_dispatch_injects_gate_selection_for_a_mono_gate_assignment(tmp_path, logger):
+    # Couvre le finding #1 de la revue finale : le dispatch mono doit AUSSI reset le ttg_map à
+    # l'identité avant d'injecter Tn, sinon un ttg_map laissé non-identité par un job multi-outils
+    # précédent ferait résoudre ce Tn vers le mauvais gate physique (état PERSISTENT côté
+    # firmware, jamais reset automatiquement par l'imprimante).
     hub = make_hub()
     hub.get_next_job.return_value = {
         "jobId": "job-1",
@@ -205,12 +209,19 @@ def test_dispatch_injects_gate_selection_for_a_mono_gate_assignment(tmp_path, lo
         "gateAssignments": [{"tool": None, "gate": 2}],
     }
 
+    call_order = []
+
+    def fake_set_ttg_map(mapping):
+        call_order.append(("set_ttg_map", mapping))
+
     def fake_download(job_id, dest_path):
+        call_order.append(("download", None))
         with open(dest_path, "w") as f:
             f.write("G28\nG1 X10\n")
 
-    hub.download_job_file.side_effect = fake_download
     moonraker = make_moonraker()
+    moonraker.set_ttg_map.side_effect = fake_set_ttg_map
+    hub.download_job_file.side_effect = fake_download
 
     captured = {}
 
@@ -223,7 +234,9 @@ def test_dispatch_injects_gate_selection_for_a_mono_gate_assignment(tmp_path, lo
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     assert captured["content"] == "T2\nG28\nG1 X10\n"
-    moonraker.set_ttg_map.assert_not_called()
+    moonraker.set_ttg_map.assert_called_once_with([0, 1, 2, 3])
+    assert call_order[0] == ("set_ttg_map", [0, 1, 2, 3])
+    assert call_order[1] == ("download", None)
 
 
 def test_dispatch_does_not_inject_or_map_when_gate_assignments_absent(tmp_path, logger):

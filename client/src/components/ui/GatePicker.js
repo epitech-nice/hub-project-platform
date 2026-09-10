@@ -32,6 +32,10 @@ export default function GatePicker({ slots, value, onChange, onManualDeclare }) 
     try {
       await onManualDeclare(editingGate, { material: editMaterial.trim(), color: editColor });
       closeEdit();
+    } catch {
+      // L'erreur a déjà été affichée (toast) par onManualDeclare, qui la relance délibérément
+      // pour empêcher la fermeture de la modale — ce catch existe seulement pour éviter une
+      // unhandled promise rejection, pas pour changer le comportement.
     } finally {
       setSaving(false);
     }

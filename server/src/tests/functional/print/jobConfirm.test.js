@@ -149,6 +149,31 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
     expect(overridden.body.data.slotSelectionOverridden).toBe(true);
   });
 
+  it('blocks confirm when spoolSlotsUpdatedAt is set but spoolSlots is empty, unless overridden', async () => {
+    // Couvre le finding #3 de la revue finale : une imprimante dont l'agent a bien répondu mais
+    // ne détecte aucun gate (num_gates: 0 côté Moonraker) doit être traitée comme "pas de donnée
+    // utilisable", exactement comme spoolSlotsUpdatedAt jamais posé — sinon le frontend n'a rien
+    // à proposer à l'étudiant et le bouton de confirmation reste bloqué sans échappatoire.
+    const student = await createUser({ email: 'ok@epitech.eu' });
+    await whitelistEmail(student.email);
+    const { printer } = await createPrinter({ spoolSlots: [], spoolSlotsUpdatedAt: new Date() });
+    const analyzeRes = await analyze(student, printer);
+
+    const blocked = await request(app)
+      .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
+      .set(authHeader(student))
+      .send({});
+    expect(blocked.status).toBe(400);
+
+    const overridden = await request(app)
+      .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
+      .set(authHeader(student))
+      .send({ overrideNoSpoolData: true });
+    expect(overridden.status).toBe(201);
+    expect(overridden.body.data.gateAssignments).toEqual([]);
+    expect(overridden.body.data.slotSelectionOverridden).toBe(true);
+  });
+
   it('confirms a single-tool multi-material upload with one gate assignment', async () => {
     const student = await createUser({ email: 'ok@epitech.eu' });
     await whitelistEmail(student.email);
