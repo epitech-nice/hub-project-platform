@@ -1,21 +1,34 @@
 const request = require('supertest');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const app = require('../../../app');
 const PrintJob = require('../../../models/PrintJob');
 const Printer = require('../../../models/Printer');
-const { createUser } = require('../../helpers/auth');
-const { createPrinter, whitelistEmail, printerAuthHeader } = require('../../helpers/print');
+const { createPrinter, printerAuthHeader } = require('../../helpers/print');
 const { PRINTER_STATUSES } = require('../../../utils/constants');
 
+// Crée un PrintJob 'queued' et verrouille l'imprimante directement via les modèles — l'ancien
+// endpoint POST /api/print/jobs (soumission en une étape) a été retiré, ce fixture reproduit
+// juste l'état qu'il laissait derrière lui (job créé + imprimante verrouillée avec un vrai
+// fichier sur disque, pour le test de téléchargement), sans dépendre d'un endpoint HTTP de
+// soumission particulier.
 const submitAcceptedJob = async (printer) => {
-  const student = await createUser({ email: 'ok@epitech.eu' });
-  await whitelistEmail(student.email);
-  const { authHeader } = require('../../helpers/auth');
-  const res = await request(app)
-    .post('/api/print/jobs')
-    .set(authHeader(student))
-    .field('printerId', printer._id.toString())
-    .attach('file', Buffer.from('G1 X10\n'), 'part.gcode');
-  return res.body.data;
+  const filePath = path.join(os.tmpdir(), `${Date.now()}-${Math.random().toString(36).slice(2)}-part.gcode`);
+  fs.writeFileSync(filePath, 'G1 X10\n');
+
+  const job = await PrintJob.create({
+    student: { email: 'ok@epitech.eu', name: 'Ok' },
+    printer: printer._id,
+    fileName: 'part.gcode',
+    filePath,
+    history: [{ status: 'queued', date: new Date(), detail: 'Soumission acceptée' }],
+  });
+  await Printer.findByIdAndUpdate(printer._id, { status: PRINTER_STATUSES.PRINTING, currentJob: job._id });
+  // JSON.parse(JSON.stringify(...)) matche la sérialisation qu'une réponse Express aurait
+  // produite (_id en string, dates en ISO string) — les tests de ce fichier comparent job._id
+  // (toBe, égalité stricte) à res.body.data.jobId, qui est toujours une string côté API.
+  return JSON.parse(JSON.stringify(job));
 };
 
 describe('GET /api/print/agent/next-job', () => {

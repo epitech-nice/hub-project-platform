@@ -209,4 +209,51 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
 
     expect(await PendingPrintUpload.findById(analyzeRes.body.data.pendingUploadId)).toBeNull();
   });
+
+  it('lets only one of two concurrent confirms on the same idle printer win the atomic lock', async () => {
+    const studentA = await createUser({ email: 'racer-a@epitech.eu' });
+    const studentB = await createUser({ email: 'racer-b@epitech.eu' });
+    await whitelistEmail(studentA.email);
+    await whitelistEmail(studentB.email);
+    const { printer } = await createPrinter({
+      spoolSlots: [{ gate: 0, material: 'PLA', color: '212721FF', empty: false }],
+      spoolSlotsUpdatedAt: new Date(),
+    });
+
+    // Les deux analyses réussissent (aucun verrou posé par /analyze) — seule la confirmation
+    // pose le verrou atomique, donc les deux pending uploads coexistent avant la course.
+    const analyzeResA = await analyze(studentA, printer, MONO_GCODE, 'a.gcode');
+    const analyzeResB = await analyze(studentB, printer, MONO_GCODE, 'b.gcode');
+
+    const confirm = (student, pendingUploadId) =>
+      request(app)
+        .post(`/api/print/jobs/${pendingUploadId}/confirm`)
+        .set(authHeader(student))
+        .send({ selectedGate: 0 });
+
+    const [resA, resB] = await Promise.all([
+      confirm(studentA, analyzeResA.body.data.pendingUploadId),
+      confirm(studentB, analyzeResB.body.data.pendingUploadId),
+    ]);
+
+    const statuses = [resA.status, resB.status].sort();
+    expect(statuses).toEqual([201, 409]);
+
+    const winner = resA.status === 201 ? resA : resB;
+    const reloadedPrinter = await Printer.findById(printer._id);
+    expect(reloadedPrinter.status).toBe(PRINTER_STATUSES.PRINTING);
+    expect(reloadedPrinter.currentJob.toString()).toBe(winner.body.data._id);
+
+    const jobs = await PrintJob.find({ printer: printer._id }).sort({ submittedAt: 1 });
+    expect(jobs).toHaveLength(2);
+    const statusesInDb = jobs.map((j) => j.status).sort();
+    expect(statusesInDb).toEqual(['queued', 'rejected']);
+    const rejectedJob = jobs.find((j) => j.status === 'rejected');
+    expect(rejectedJob.rejectionReason).toBe('printer_busy');
+
+    // Les deux PendingPrintUpload sont supprimés (gagnant : chemin de succès ; perdant : verrou
+    // atomique échoué après création du job, même traitement que le gagnant côté nettoyage).
+    expect(await PendingPrintUpload.findById(analyzeResA.body.data.pendingUploadId)).toBeNull();
+    expect(await PendingPrintUpload.findById(analyzeResB.body.data.pendingUploadId)).toBeNull();
+  });
 });

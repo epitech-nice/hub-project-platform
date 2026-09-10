@@ -30,25 +30,10 @@ const STATUS_TO_REJECTION_REASON = {
   [PRINTER_STATUSES.DISABLED]: PRINT_REJECTION_REASONS.PRINTER_DISABLED,
 };
 
-// Crée un PrintJob rejeté (avant tout verrouillage de l'imprimante) et nettoie le fichier uploadé.
-const rejectSubmission = async (req, next, printer, reason) => {
-  fs.unlink(req.file.path, () => {});
-  await PrintJob.create({
-    student: { email: req.user.email.toLowerCase(), name: req.user.name },
-    printer: printer._id,
-    fileName: req.file.originalname,
-    filePath: req.file.path,
-    status: PRINT_JOB_STATUSES.REJECTED,
-    rejectionReason: reason,
-    history: [{ status: PRINT_JOB_STATUSES.REJECTED, date: new Date(), detail: REJECTION_MESSAGES[reason] }],
-  });
-  const statusCode = reason === PRINT_REJECTION_REASONS.NOT_AUTHORIZED ? 403 : 409;
-  return next(new ErrorResponse(REJECTION_MESSAGES[reason], statusCode));
-};
-
-// Symétrique à rejectSubmission, mais pour un rejet au moment de la confirmation : le
-// PendingPrintUpload est déjà connu à cette étape (contrairement à /analyze), donc on
-// applique le même traitement d'audit que submitJob aujourd'hui plutôt que de s'en écarter.
+// Crée un PrintJob rejeté (avant tout verrouillage de l'imprimante) et nettoie le fichier
+// temporaire de PendingPrintUpload — utilisé quand un rejet survient au moment de la
+// confirmation (whitelist révoquée ou statut imprimante devenu défavorable entre l'analyse
+// et la confirmation).
 const rejectPendingSubmission = async (next, pending, printer, reason) => {
   fs.unlink(pending.filePath, () => {});
   await PrintJob.create({
@@ -65,61 +50,6 @@ const rejectPendingSubmission = async (next, pending, printer, reason) => {
   const statusCode = reason === PRINT_REJECTION_REASONS.NOT_AUTHORIZED ? 403 : 409;
   return next(new ErrorResponse(REJECTION_MESSAGES[reason], statusCode));
 };
-
-// POST /api/print/jobs
-// multipart form: printerId, file
-exports.submitJob = asyncHandler(async (req, res, next) => {
-  if (!req.file) return next(new ErrorResponse('Fichier .gcode requis', 400));
-
-  const { printerId } = req.body;
-  const printer = await Printer.findById(printerId);
-  if (!printer) {
-    fs.unlink(req.file.path, () => {});
-    return next(new ErrorResponse('Imprimante non trouvée', 404));
-  }
-
-  const authorization = await PrintAuthorization.findOne({ email: req.user.email.toLowerCase() });
-  if (!authorization || !authorization.authorized) {
-    return rejectSubmission(req, next, printer, PRINT_REJECTION_REASONS.NOT_AUTHORIZED);
-  }
-
-  if (printer.status !== PRINTER_STATUSES.IDLE) {
-    const reason = STATUS_TO_REJECTION_REASON[printer.status] || PRINT_REJECTION_REASONS.PRINTER_OFFLINE;
-    return rejectSubmission(req, next, printer, reason);
-  }
-
-  const job = await PrintJob.create({
-    student: { email: req.user.email.toLowerCase(), name: req.user.name },
-    printer: printer._id,
-    fileName: req.file.originalname,
-    filePath: req.file.path,
-    history: [{ status: PRINT_JOB_STATUSES.QUEUED, date: new Date(), detail: 'Soumission acceptée' }],
-  });
-
-  // Verrou atomique : ne réussit que si le statut est encore 'idle' au moment de l'écriture,
-  // ce qui empêche deux soumissions simultanées de passer toutes les deux la vérification ci-dessus.
-  // Le job est créé AVANT cette tentative de verrou : si le verrou échoue, on le repasse en
-  // 'rejected' plutôt que de le laisser 'queued' sans imprimante réellement réservée.
-  const locked = await Printer.findOneAndUpdate(
-    { _id: printer._id, status: PRINTER_STATUSES.IDLE },
-    { status: PRINTER_STATUSES.PRINTING, currentJob: job._id }
-  );
-
-  if (!locked) {
-    fs.unlink(job.filePath, () => {});
-    job.status = PRINT_JOB_STATUSES.REJECTED;
-    job.rejectionReason = PRINT_REJECTION_REASONS.PRINTER_BUSY;
-    job.history.push({
-      status: PRINT_JOB_STATUSES.REJECTED,
-      date: new Date(),
-      detail: REJECTION_MESSAGES[PRINT_REJECTION_REASONS.PRINTER_BUSY],
-    });
-    await job.save();
-    return next(new ErrorResponse(REJECTION_MESSAGES[PRINT_REJECTION_REASONS.PRINTER_BUSY], 409));
-  }
-
-  res.status(201).json({ success: true, data: job });
-});
 
 // GET /api/print/jobs/me
 exports.getMyJobs = asyncHandler(async (req, res) => {
@@ -157,8 +87,8 @@ exports.cancelJob = asyncHandler(async (req, res, next) => {
   const cancelledBy = { email: req.user.email.toLowerCase(), role: req.user.role };
 
   if (job.status === PRINT_JOB_STATUSES.QUEUED) {
-    // Verrou atomique symétrique à celui de submitJob : ne réussit que si le job est encore
-    // 'queued' au moment de l'écriture. Empêche une course avec getNextJob (qui fait passer le
+    // Verrou atomique symétrique à celui posé à la confirmation (confirmJob) : ne réussit que si
+    // le job est encore 'queued' au moment de l'écriture. Empêche une course avec getNextJob (qui fait passer le
     // job en 'sent' de façon atomique) — si l'agent a déjà récupéré le job entre notre lecture
     // et cette écriture, ce findOneAndUpdate ne trouve plus rien et on renvoie 409 plutôt que
     // d'annuler un job que l'agent croit désormais devoir imprimer.
@@ -347,7 +277,8 @@ exports.confirmJob = asyncHandler(async (req, res, next) => {
     history: [{ status: PRINT_JOB_STATUSES.QUEUED, date: new Date(), detail: 'Soumission acceptée' }],
   });
 
-  // Verrou atomique identique à submitJob.
+  // Verrou atomique : ne réussit que si le statut est encore 'idle' au moment de l'écriture,
+  // ce qui empêche deux confirmations simultanées de réserver la même imprimante.
   const locked = await Printer.findOneAndUpdate(
     { _id: printer._id, status: PRINTER_STATUSES.IDLE },
     { status: PRINTER_STATUSES.PRINTING, currentJob: job._id }

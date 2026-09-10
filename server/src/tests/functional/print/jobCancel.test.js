@@ -6,13 +6,22 @@ const { createUser, createAdmin, authHeader } = require('../../helpers/auth');
 const { createPrinter, whitelistEmail, printerAuthHeader } = require('../../helpers/print');
 const { PRINTER_STATUSES } = require('../../../utils/constants');
 
+// Crée un PrintJob 'queued' et verrouille l'imprimante directement via les modèles — l'ancien
+// endpoint POST /api/print/jobs (soumission en une étape) a été retiré, ce fixture reproduit
+// juste l'état qu'il laissait derrière lui (job créé + imprimante verrouillée), sans dépendre
+// d'un endpoint HTTP de soumission particulier.
 const submitAcceptedJob = async (printer, student) => {
-  const res = await request(app)
-    .post('/api/print/jobs')
-    .set(authHeader(student))
-    .field('printerId', printer._id.toString())
-    .attach('file', Buffer.from('G1 X10\n'), 'part.gcode');
-  return res.body.data;
+  const job = await PrintJob.create({
+    student: { email: student.email, name: student.name },
+    printer: printer._id,
+    fileName: 'part.gcode',
+    filePath: `/tmp/${Date.now()}-part.gcode`,
+    history: [{ status: 'queued', date: new Date(), detail: 'Soumission acceptée' }],
+  });
+  await Printer.findByIdAndUpdate(printer._id, { status: PRINTER_STATUSES.PRINTING, currentJob: job._id });
+  // Matche la sérialisation qu'une réponse Express aurait produite (_id en string) — les tests
+  // de ce fichier utilisent job._id dans des URLs et des comparaisons.
+  return JSON.parse(JSON.stringify(job));
 };
 
 describe('POST /api/print/jobs/:id/cancel', () => {
