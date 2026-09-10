@@ -196,13 +196,13 @@ def test_dispatch_sanitizes_filename_from_hub_payload(tmp_path, logger):
     assert os.path.basename(captured["dest_path"]) == "evil.gcode"
 
 
-def test_dispatch_injects_gate_selection_when_present(tmp_path, logger):
+def test_dispatch_injects_gate_selection_for_a_mono_gate_assignment(tmp_path, logger):
     hub = make_hub()
     hub.get_next_job.return_value = {
         "jobId": "job-1",
         "fileName": "a.gcode",
         "downloadUrl": "/x",
-        "selectedGate": 2,
+        "gateAssignments": [{"tool": None, "gate": 2}],
     }
 
     def fake_download(job_id, dest_path):
@@ -223,9 +223,10 @@ def test_dispatch_injects_gate_selection_when_present(tmp_path, logger):
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     assert captured["content"] == "T2\nG28\nG1 X10\n"
+    moonraker.set_ttg_map.assert_not_called()
 
 
-def test_dispatch_does_not_inject_gate_when_absent(tmp_path, logger):
+def test_dispatch_does_not_inject_or_map_when_gate_assignments_absent(tmp_path, logger):
     hub = make_hub()
     hub.get_next_job.return_value = {"jobId": "job-1", "fileName": "a.gcode", "downloadUrl": "/x"}
 
@@ -247,67 +248,16 @@ def test_dispatch_does_not_inject_gate_when_absent(tmp_path, logger):
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     assert captured["content"] == "G28\nG1 X10\n"
+    moonraker.set_ttg_map.assert_not_called()
 
 
-def test_dispatch_fails_job_when_selected_gate_out_of_range(tmp_path, logger):
+def test_dispatch_does_not_inject_or_map_when_gate_assignments_empty(tmp_path, logger):
     hub = make_hub()
     hub.get_next_job.return_value = {
         "jobId": "job-1",
         "fileName": "a.gcode",
         "downloadUrl": "/x",
-        "selectedGate": 4,
-    }
-
-    def fake_download(job_id, dest_path):
-        with open(dest_path, "w") as f:
-            f.write("G28\n")
-
-    hub.download_job_file.side_effect = fake_download
-    moonraker = make_moonraker()
-
-    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
-
-    moonraker.upload_and_start_print.assert_not_called()
-    hub.update_job_status.assert_called_once()
-    args, kwargs = hub.update_job_status.call_args
-    assert args[0] == "job-1"
-    assert args[1] == "failed"
-    assert "selectedGate" in kwargs.get("error_message", "")
-
-
-def test_dispatch_fails_job_when_selected_gate_is_not_an_integer(tmp_path, logger):
-    hub = make_hub()
-    hub.get_next_job.return_value = {
-        "jobId": "job-1",
-        "fileName": "a.gcode",
-        "downloadUrl": "/x",
-        "selectedGate": "2\nM106 S255",
-    }
-
-    def fake_download(job_id, dest_path):
-        with open(dest_path, "w") as f:
-            f.write("G28\n")
-
-    hub.download_job_file.side_effect = fake_download
-    moonraker = make_moonraker()
-
-    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
-
-    moonraker.upload_and_start_print.assert_not_called()
-    hub.update_job_status.assert_called_once()
-    args, kwargs = hub.update_job_status.call_args
-    assert args[0] == "job-1"
-    assert args[1] == "failed"
-    assert "selectedGate" in kwargs.get("error_message", "")
-
-
-def test_dispatch_does_not_inject_gate_when_explicitly_null(tmp_path, logger):
-    hub = make_hub()
-    hub.get_next_job.return_value = {
-        "jobId": "job-1",
-        "fileName": "a.gcode",
-        "downloadUrl": "/x",
-        "selectedGate": None,
+        "gateAssignments": [],
     }
 
     def fake_download(job_id, dest_path):
@@ -328,6 +278,106 @@ def test_dispatch_does_not_inject_gate_when_explicitly_null(tmp_path, logger):
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     assert captured["content"] == "G28\n"
+    moonraker.set_ttg_map.assert_not_called()
+
+
+def test_dispatch_calls_set_ttg_map_before_download_and_upload_for_multi_tool_assignment(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {
+        "jobId": "job-1",
+        "fileName": "a.gcode",
+        "downloadUrl": "/x",
+        "gateAssignments": [{"tool": "T0", "gate": 3}, {"tool": "T2", "gate": 1}],
+    }
+
+    call_order = []
+
+    def fake_set_ttg_map(mapping):
+        call_order.append(("set_ttg_map", mapping))
+
+    def fake_download(job_id, dest_path):
+        call_order.append(("download", None))
+        with open(dest_path, "w") as f:
+            f.write("G28\nT0\nG1 X10\nT2\nG1 X20\n")
+
+    captured = {}
+
+    def fake_upload(file_path, filename):
+        call_order.append(("upload", None))
+        with open(file_path, "r") as f:
+            captured["content"] = f.read()
+
+    moonraker = make_moonraker()
+    moonraker.set_ttg_map.side_effect = fake_set_ttg_map
+    hub.download_job_file.side_effect = fake_download
+    moonraker.upload_and_start_print.side_effect = fake_upload
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    # ttg_map par défaut [0,1,2,3] ; T0 (index 0) -> gate 3, T2 (index 2) -> gate 1 : [3,1,1,3]
+    assert call_order[0] == ("set_ttg_map", [3, 1, 1, 3])
+    assert [c[0] for c in call_order[1:]] == ["download", "upload"]
+    assert captured["content"] == "G28\nT0\nG1 X10\nT2\nG1 X20\n"
+
+
+def test_dispatch_fails_job_when_gate_assignment_out_of_range(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {
+        "jobId": "job-1",
+        "fileName": "a.gcode",
+        "downloadUrl": "/x",
+        "gateAssignments": [{"tool": None, "gate": 4}],
+    }
+    moonraker = make_moonraker()
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    hub.download_job_file.assert_not_called()
+    moonraker.upload_and_start_print.assert_not_called()
+    hub.update_job_status.assert_called_once()
+    args, kwargs = hub.update_job_status.call_args
+    assert args[0] == "job-1"
+    assert args[1] == "failed"
+    assert "gate" in kwargs.get("error_message", "").lower()
+
+
+def test_dispatch_fails_job_when_gate_assignment_gate_is_not_an_integer(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {
+        "jobId": "job-1",
+        "fileName": "a.gcode",
+        "downloadUrl": "/x",
+        "gateAssignments": [{"tool": None, "gate": "2\nM106 S255"}],
+    }
+    moonraker = make_moonraker()
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    hub.download_job_file.assert_not_called()
+    moonraker.upload_and_start_print.assert_not_called()
+    hub.update_job_status.assert_called_once()
+    args, kwargs = hub.update_job_status.call_args
+    assert args[1] == "failed"
+
+
+def test_dispatch_fails_job_when_tool_is_invalid_in_a_multi_tool_assignment(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {
+        "jobId": "job-1",
+        "fileName": "a.gcode",
+        "downloadUrl": "/x",
+        "gateAssignments": [{"tool": "T9", "gate": 1}],
+    }
+    moonraker = make_moonraker()
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    hub.download_job_file.assert_not_called()
+    moonraker.set_ttg_map.assert_not_called()
+    moonraker.upload_and_start_print.assert_not_called()
+    hub.update_job_status.assert_called_once()
+    args, kwargs = hub.update_job_status.call_args
+    assert args[1] == "failed"
 
 
 def test_dispatch_skipped_when_disk_space_too_low(tmp_path, logger):
