@@ -49,4 +49,44 @@ describe('Printer model', () => {
     expect(printer.spoolSlots).toHaveLength(4);
     expect(printer.spoolSlots[1].empty).toBe(true);
   });
+
+  it('defaults spoolSlots manual-declaration fields to auto/null', async () => {
+    const printer = await Printer.create({
+      name: 'P1',
+      model: 'kobra3',
+      apiKeyHash: 'x'.repeat(64),
+      spoolSlots: [{ gate: 0, material: 'PLA', color: '212721FF', empty: false }],
+    });
+    expect(printer.spoolSlots[0].source).toBe('auto');
+    expect(printer.spoolSlots[0].manualSetBy).toBeNull();
+    expect(printer.spoolSlots[0].manualSetAt).toBeNull();
+    expect(printer.spoolSlots[0].autoMaterialAtSet).toBeNull();
+    expect(printer.spoolSlots[0].autoColorAtSet).toBeNull();
+    expect(printer.spoolSlots[0].autoEmptyAtSet).toBeNull();
+  });
+
+  it('accepts a manually-declared spoolSlot with its drift-detection snapshot', async () => {
+    const printer = await Printer.create({
+      name: 'P1',
+      model: 'kobra3',
+      apiKeyHash: 'x'.repeat(64),
+      spoolSlots: [
+        {
+          gate: 0,
+          material: 'PLA',
+          color: 'FFFFFF',
+          empty: false,
+          source: 'manual',
+          manualSetBy: { email: 's@epitech.eu', name: 'Student' },
+          manualSetAt: new Date(),
+          autoMaterialAtSet: '',
+          autoColorAtSet: '',
+          autoEmptyAtSet: false,
+        },
+      ],
+    });
+    expect(printer.spoolSlots[0].source).toBe('manual');
+    expect(printer.spoolSlots[0].manualSetBy.email).toBe('s@epitech.eu');
+    expect(printer.spoolSlots[0].autoEmptyAtSet).toBe(false);
+  });
 });

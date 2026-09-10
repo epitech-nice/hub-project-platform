@@ -24,19 +24,6 @@ const PendingPrintUploadSchema = new mongoose.Schema({
     ],
     default: [],
   },
-  mismatches: {
-    type: [
-      {
-        tool: String,
-        expectedMaterial: String,
-        expectedColor: String,
-        actualGate: Number,
-        actualMaterial: String,
-        actualColor: String,
-      },
-    ],
-    default: [],
-  },
   createdAt: { type: Date, default: Date.now },
 });
 

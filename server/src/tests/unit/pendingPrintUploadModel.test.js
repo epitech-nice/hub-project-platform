@@ -13,7 +13,6 @@ describe('PendingPrintUpload model', () => {
       gcodeMode: 'single',
     });
     expect(pending.expectedTools).toEqual([]);
-    expect(pending.mismatches).toEqual([]);
     expect(pending.createdAt).toBeInstanceOf(Date);
   });
 

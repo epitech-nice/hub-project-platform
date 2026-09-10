@@ -25,25 +25,20 @@ const PrintJobSchema = new mongoose.Schema({
     email: { type: String, default: null },
     role: { type: String, default: null },
   },
-  selectedGate: { type: Number, default: null },
+  gateAssignments: {
+    type: [
+      {
+        tool: { type: String, default: null },
+        gate: { type: Number, required: true },
+      },
+    ],
+    default: [],
+  },
   slotSelectionOverridden: { type: Boolean, default: false },
   gcodeMode: {
     type: String,
     enum: [...Object.values(PRINT_JOB_GCODE_MODES), null],
     default: null,
-  },
-  slotMismatchWarnings: {
-    type: [
-      {
-        tool: String,
-        expectedMaterial: String,
-        expectedColor: String,
-        actualGate: Number,
-        actualMaterial: String,
-        actualColor: String,
-      },
-    ],
-    default: [],
   },
   submittedAt: { type: Date, default: Date.now },
   startedAt: { type: Date, default: null },

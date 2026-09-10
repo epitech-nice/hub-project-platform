@@ -49,6 +49,15 @@ const PrinterSchema = new mongoose.Schema({
         material: { type: String, default: '' },
         color: { type: String, default: '' },
         empty: { type: Boolean, default: true },
+        // Déclaration manuelle (bobines sans puce RFID, voir spec 2026-09-10) : source vaut
+        // 'manual' tant que la valeur auto-rapportée par l'agent n'a pas dérivé de ce qui était
+        // vrai au moment de la déclaration (autoXAtSet) — voir server/src/utils/spoolSlotMerge.js.
+        source: { type: String, enum: ['auto', 'manual'], default: 'auto' },
+        manualSetBy: { type: Object, default: null },
+        manualSetAt: { type: Date, default: null },
+        autoMaterialAtSet: { type: String, default: null },
+        autoColorAtSet: { type: String, default: null },
+        autoEmptyAtSet: { type: Boolean, default: null },
       },
     ],
     default: [],
