@@ -59,6 +59,7 @@ describe('mergeSpoolSlots', () => {
     expect(result[0].source).toBe('manual');
     expect(result[0].material).toBe('Blanc générique');
     expect(result[0].color).toBe('ffffff');
+    expect(result[0].manualSetBy).toEqual({ email: 's@epitech.eu', name: 'Student' });
   });
 
   it('clears a manual declaration and adopts the fresh value when the auto-reported value has changed', () => {

@@ -40,7 +40,9 @@ function mergeSpoolSlots(existingSlots, reportedGates) {
           color: existing.color,
           empty: existing.empty,
           source: existing.source,
-          manualSetBy: existing.manualSetBy,
+          manualSetBy: existing.manualSetBy
+            ? { email: existing.manualSetBy.email, name: existing.manualSetBy.name }
+            : { email: null, name: null },
           manualSetAt: existing.manualSetAt,
           autoMaterialAtSet: existing.autoMaterialAtSet,
           autoColorAtSet: existing.autoColorAtSet,
