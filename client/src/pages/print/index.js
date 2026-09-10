@@ -16,6 +16,8 @@ import Skeleton from '../../components/ui/Skeleton';
 import Modal from '../../components/ui/Modal';
 import { useAuth } from '../../context/AuthContext';
 import { useApi } from '../../hooks/useApi';
+import GatePicker from '../../components/ui/GatePicker';
+import { computeGateMismatch } from '../../utils/spoolMatch';
 
 const STATUS_LABELS = {
   queued: "En attente",
@@ -48,12 +50,10 @@ const PRINTER_STATUS_LABELS = {
   disabled: 'Désactivée',
 };
 
-const GATE_LABELS = ['Slot 1', 'Slot 2', 'Slot 3', 'Slot 4'];
-
 export default function PrintPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
-  const { get, post } = useApi();
+  const { get, post, put } = useApi();
 
   const [printers, setPrinters] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -65,7 +65,7 @@ export default function PrintPage() {
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelling, setCancelling] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(null);
-  const [selectedGate, setSelectedGate] = useState('');
+  const [gateAssignments, setGateAssignments] = useState({});
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -112,6 +112,18 @@ export default function PrintPage() {
   const selectedPrinter = printers.find((p) => p._id === selectedPrinterId);
   const canSubmit = selectedPrinter?.status === 'idle';
 
+  // Une seule entrée à tool=null pour un fichier sans aucune commande Tx (cas "toute
+  // l'impression"), sinon une entrée par tool détecté par le backend (expectedTools).
+  const gateKey = (tool) => tool ?? '_single';
+
+  const toolsToAssign = pendingUpload
+    ? pendingUpload.mode === 'single'
+      ? [{ tool: null, material: null, color: null }]
+      : pendingUpload.expectedTools
+    : [];
+
+  const allToolsAssigned = toolsToAssign.every((t) => gateAssignments[gateKey(t.tool)] !== undefined);
+
   const handleAnalyze = async (e) => {
     e.preventDefault();
     if (!selectedPrinterId || !file) {
@@ -127,7 +139,7 @@ export default function PrintPage() {
     try {
       const res = await post('/api/print/jobs/analyze', formData);
       setPendingUpload(res.data);
-      setSelectedGate('');
+      setGateAssignments({});
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -137,10 +149,46 @@ export default function PrintPage() {
 
   const resetPendingUpload = () => {
     setPendingUpload(null);
-    setSelectedGate('');
+    setGateAssignments({});
     setFile(null);
     setFileInputKey((k) => k + 1);
   };
+
+  const setGateForTool = (tool, gate) =>
+    setGateAssignments((prev) => ({ ...prev, [gateKey(tool)]: gate }));
+
+  const refreshPendingSlots = async () => {
+    if (!pendingUpload) return;
+    try {
+      const res = await get('/api/print/printers');
+      const printer = res.data.find((p) => p._id === selectedPrinterId);
+      if (printer) {
+        setPendingUpload((prev) =>
+          prev ? { ...prev, slots: printer.spoolSlots, spoolSlotsUpdatedAt: printer.spoolSlotsUpdatedAt } : prev
+        );
+      }
+    } catch {
+      // Un rafraîchissement périodique raté n'est pas une erreur à signaler à l'étudiant.
+    }
+  };
+
+  const handleManualDeclare = async (gate, { material, color }) => {
+    try {
+      await put(`/api/print/printers/${selectedPrinterId}/spool-slots/${gate}/manual`, { material, color });
+      await refreshPendingSlots();
+      toast.success('Bobine déclarée');
+    } catch (err) {
+      toast.error(err.message);
+      throw err;
+    }
+  };
+
+  useEffect(() => {
+    if (!pendingUpload) return undefined;
+    const interval = setInterval(refreshPendingSlots, 12000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingUpload?.pendingUploadId]);
 
   const confirmPendingUpload = async (body) => {
     if (!pendingUpload) return;
@@ -159,15 +207,12 @@ export default function PrintPage() {
   };
 
   const handleConfirm = () => {
-    if (pendingUpload.mode === 'single') {
-      if (selectedGate === '') {
-        toast.error('Choisissez un slot');
-        return;
-      }
-      confirmPendingUpload({ selectedGate: Number(selectedGate) });
+    if (!allToolsAssigned) {
+      toast.error('Choisissez une bobine pour chaque tool détecté');
       return;
     }
-    confirmPendingUpload({});
+    const assignments = toolsToAssign.map((t) => ({ tool: t.tool, gate: gateAssignments[gateKey(t.tool)] }));
+    confirmPendingUpload({ gateAssignments: assignments });
   };
 
   const handleConfirmOverride = () => confirmPendingUpload({ overrideNoSpoolData: true });
@@ -281,101 +326,75 @@ export default function PrintPage() {
                   </p>
                 )}
               </form>
-            ) : pendingUpload.mode === 'single' ? (
+            ) : !pendingUpload.spoolSlotsUpdatedAt ? (
               <div className="space-y-4">
-                <p className="text-sm text-text-muted">
-                  Fichier mono-matériau — choisissez la bobine à utiliser.
+                <p className="text-sm text-danger">
+                  Données bobines indisponibles pour cette imprimante — impossible de savoir ce qui est
+                  chargé dans chaque slot.
                 </p>
-
-                {!pendingUpload.spoolSlotsUpdatedAt ? (
-                  <div>
-                    <p className="text-sm text-danger">
-                      Données bobines indisponibles pour cette imprimante — impossible de savoir ce qui est
-                      chargé dans chaque slot.
-                    </p>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      className="mt-3"
-                      onClick={() => setShowOverrideModal(true)}
-                    >
-                      Soumettre quand même
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Select value={selectedGate} onChange={(e) => setSelectedGate(e.target.value)}>
-                      <option value="">— Choisir un slot —</option>
-                      {pendingUpload.slots.map((slot) => (
-                        <option key={slot.gate} value={slot.gate} disabled={slot.empty}>
-                          {GATE_LABELS[slot.gate] || `Slot ${slot.gate + 1}`} —{' '}
-                          {slot.empty ? 'Vide' : slot.material || 'Matière inconnue'}
-                        </option>
-                      ))}
-                    </Select>
-                    {pendingUpload.slots.length > 0 && pendingUpload.slots.every((s) => s.empty) && (
-                      <p className="text-sm text-danger">
-                        Toutes les bobines sont signalées vides — vérifiez physiquement l&apos;imprimante.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex gap-3">
+                <Button variant="danger" size="sm" onClick={() => setShowOverrideModal(true)}>
+                  Soumettre quand même
+                </Button>
+                <div>
                   <Button variant="subtle" onClick={resetPendingUpload} disabled={confirming}>
                     Retour
                   </Button>
-                  {pendingUpload.spoolSlotsUpdatedAt && (
-                    <Button onClick={handleConfirm} loading={confirming} disabled={confirming}>
-                      Confirmer et soumettre
-                    </Button>
-                  )}
                 </div>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <p className="text-sm text-text-muted">
-                  Fichier multi-couleur — comparaison avec le contenu actuel des slots.
+                  {pendingUpload.mode === 'single'
+                    ? 'Choisissez la bobine à utiliser pour cette impression.'
+                    : 'Assignez une bobine à chaque couleur détectée dans le fichier.'}
                 </p>
 
-                <div className="space-y-2">
-                  {pendingUpload.expectedTools.map((tool) => {
-                    const mismatch = pendingUpload.mismatches.find((m) => m.tool === tool.tool);
-                    const unverifiable = !tool.material && !tool.color;
-                    return (
-                      <div
-                        key={tool.tool}
-                        className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm"
-                      >
-                        <span className="font-medium text-text">{tool.tool}</span>
-                        <span className="text-text-muted">
-                          Attendu : {tool.material || '?'}
+                {pendingUpload.slots.length > 0 && pendingUpload.slots.every((s) => s.empty) && (
+                  <p className="text-sm text-danger">
+                    Toutes les bobines sont signalées vides — vérifiez physiquement l&apos;imprimante.
+                  </p>
+                )}
+
+                {toolsToAssign.map((tool) => {
+                  const chosenGate = gateAssignments[gateKey(tool.tool)];
+                  const chosenSlot = pendingUpload.slots.find((s) => s.gate === chosenGate);
+                  const mismatch = chosenGate !== undefined ? computeGateMismatch(tool, chosenSlot) : null;
+
+                  return (
+                    <div key={gateKey(tool.tool)} className="space-y-2">
+                      {tool.tool && (
+                        <p className="text-sm font-medium text-text">
+                          {tool.tool}
+                          {tool.material && ` — attendu : ${tool.material}`}
                           {tool.color && (
                             <span
                               className="inline-block h-3 w-3 rounded-full align-middle ml-2 border border-border"
                               style={{ backgroundColor: `#${tool.color.replace('#', '')}` }}
                             />
                           )}
-                        </span>
-                        {unverifiable ? (
-                          <Badge variant="neutral" size="sm">
-                            Non vérifiable
-                          </Badge>
-                        ) : (
-                          <Badge variant={mismatch ? 'rejected' : 'approved'} size="sm">
-                            {mismatch ? `Chargé : ${mismatch.actualMaterial || 'inconnu'}` : 'OK'}
-                          </Badge>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                        </p>
+                      )}
+                      <GatePicker
+                        slots={pendingUpload.slots}
+                        value={chosenGate}
+                        onChange={(gate) => setGateForTool(tool.tool, gate)}
+                        onManualDeclare={handleManualDeclare}
+                      />
+                      {mismatch && (
+                        <p className="text-sm text-danger">
+                          Attention : la bobine choisie ({mismatch.actualMaterial || 'inconnue'}) ne correspond
+                          pas à ce que le fichier attend ({mismatch.expectedMaterial || '?'}).
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
 
                 <div className="flex gap-3">
                   <Button variant="subtle" onClick={resetPendingUpload} disabled={confirming}>
                     Retour
                   </Button>
-                  <Button onClick={handleConfirm} loading={confirming} disabled={confirming}>
+                  <Button onClick={handleConfirm} loading={confirming} disabled={confirming || !allToolsAssigned}>
                     Confirmer et soumettre
                   </Button>
                 </div>
