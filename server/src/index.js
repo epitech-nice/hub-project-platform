@@ -3,10 +3,12 @@ require('dotenv').config();
 const app = require('./app');
 const connectDB = require('./config/database');
 const { startPrinterScheduler } = require('./utils/printerScheduler');
+const { startPendingUploadCleanup } = require('./utils/pendingUploadCleanup');
 
 // Connexion à la base de données
 connectDB();
 startPrinterScheduler();
+startPendingUploadCleanup();
 
 const PORT = process.env.PORT || 5000;
 

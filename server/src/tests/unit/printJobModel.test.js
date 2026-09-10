@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const PrintJob = require('../../models/PrintJob');
 const Printer = require('../../models/Printer');
-const { PRINT_JOB_STATUSES } = require('../../utils/constants');
+const { PRINT_JOB_STATUSES, PRINT_JOB_GCODE_MODES } = require('../../utils/constants');
 
 describe('PrintJob model', () => {
   it('defaults to queued status', async () => {
@@ -53,5 +53,37 @@ describe('PrintJob model', () => {
     });
     expect(job.cancelRequestedAt).toBeNull();
     expect(job.cancelledBy.email).toBeNull();
+  });
+
+  it('defaults the spool-selection fields to null/false/empty', async () => {
+    const printer = await Printer.create({ name: 'P1', model: 'kobra3', apiKeyHash: 'x'.repeat(64) });
+    const job = await PrintJob.create({
+      student: { email: 's@epitech.eu', name: 'Student' },
+      printer: printer._id,
+      fileName: 'part.gcode',
+      filePath: '/x',
+    });
+    expect(job.selectedGate).toBeNull();
+    expect(job.slotSelectionOverridden).toBe(false);
+    expect(job.gcodeMode).toBeNull();
+    expect(job.slotMismatchWarnings).toEqual([]);
+  });
+
+  it('accepts a populated selectedGate and slotMismatchWarnings', async () => {
+    const printer = await Printer.create({ name: 'P1', model: 'kobra3', apiKeyHash: 'x'.repeat(64) });
+    const job = await PrintJob.create({
+      student: { email: 's@epitech.eu', name: 'Student' },
+      printer: printer._id,
+      fileName: 'part.gcode',
+      filePath: '/x',
+      selectedGate: 2,
+      gcodeMode: PRINT_JOB_GCODE_MODES.SINGLE,
+      slotMismatchWarnings: [
+        { tool: 'T0', expectedMaterial: 'PETG', expectedColor: 'F40031', actualGate: 0, actualMaterial: 'PLA', actualColor: '212721' },
+      ],
+    });
+    expect(job.selectedGate).toBe(2);
+    expect(job.gcodeMode).toBe('single');
+    expect(job.slotMismatchWarnings).toHaveLength(1);
   });
 });

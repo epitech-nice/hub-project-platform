@@ -75,6 +75,57 @@ def test_heartbeat_failure_does_not_block_the_rest_of_the_tick(tmp_path, logger)
     hub.get_next_job.assert_called_once()
 
 
+# --- Remontée du statut bobines (nouveau : appelé à chaque tick, comme le heartbeat) ---
+
+def test_spool_status_reported_on_dispatch_tick(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = None
+    moonraker = make_moonraker()
+    moonraker.get_mmu_status.return_value = [{"gate": 0, "material": "PLA", "color": "212721FF", "empty": False}]
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    moonraker.get_mmu_status.assert_called_once()
+    hub.report_spool_status.assert_called_once_with(moonraker.get_mmu_status.return_value)
+
+
+def test_spool_status_reported_on_monitor_tick(tmp_path, logger):
+    hub = make_hub()
+    moonraker = make_moonraker()
+    moonraker.get_print_stats.return_value = {"state": "printing", "message": ""}
+    moonraker.get_mmu_status.return_value = [{"gate": 0, "material": "PLA", "color": "212721FF", "empty": False}]
+
+    run_tick(hub, moonraker, in_progress_state(), str(tmp_path), logger)
+
+    hub.report_spool_status.assert_called_once_with(moonraker.get_mmu_status.return_value)
+
+
+def test_spool_status_moonraker_failure_does_not_block_the_rest_of_the_tick(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = None
+    moonraker = make_moonraker()
+    moonraker.get_mmu_status.side_effect = MoonrakerClientError("mmu injoignable")
+
+    result = run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    hub.report_spool_status.assert_not_called()
+    assert result == IDLE_STATE
+    hub.get_next_job.assert_called_once()
+
+
+def test_spool_status_hub_failure_does_not_block_the_rest_of_the_tick(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = None
+    hub.report_spool_status.side_effect = HubClientError("hub down")
+    moonraker = make_moonraker()
+    moonraker.get_mmu_status.return_value = []
+
+    result = run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    assert result == IDLE_STATE
+    hub.get_next_job.assert_called_once()
+
+
 # --- Branche dispatch (state.job_id is None) ---
 
 def test_no_job_available_returns_state_unchanged(tmp_path, logger):
@@ -143,6 +194,140 @@ def test_dispatch_sanitizes_filename_from_hub_payload(tmp_path, logger):
     # le chemin final doit rester dans tmp_path, jamais remonter via ../..
     assert os.path.dirname(captured["dest_path"]) == str(tmp_path)
     assert os.path.basename(captured["dest_path"]) == "evil.gcode"
+
+
+def test_dispatch_injects_gate_selection_when_present(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {
+        "jobId": "job-1",
+        "fileName": "a.gcode",
+        "downloadUrl": "/x",
+        "selectedGate": 2,
+    }
+
+    def fake_download(job_id, dest_path):
+        with open(dest_path, "w") as f:
+            f.write("G28\nG1 X10\n")
+
+    hub.download_job_file.side_effect = fake_download
+    moonraker = make_moonraker()
+
+    captured = {}
+
+    def fake_upload(file_path, filename):
+        with open(file_path, "r") as f:
+            captured["content"] = f.read()
+
+    moonraker.upload_and_start_print.side_effect = fake_upload
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    assert captured["content"] == "T2\nG28\nG1 X10\n"
+
+
+def test_dispatch_does_not_inject_gate_when_absent(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {"jobId": "job-1", "fileName": "a.gcode", "downloadUrl": "/x"}
+
+    def fake_download(job_id, dest_path):
+        with open(dest_path, "w") as f:
+            f.write("G28\nG1 X10\n")
+
+    hub.download_job_file.side_effect = fake_download
+    moonraker = make_moonraker()
+
+    captured = {}
+
+    def fake_upload(file_path, filename):
+        with open(file_path, "r") as f:
+            captured["content"] = f.read()
+
+    moonraker.upload_and_start_print.side_effect = fake_upload
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    assert captured["content"] == "G28\nG1 X10\n"
+
+
+def test_dispatch_fails_job_when_selected_gate_out_of_range(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {
+        "jobId": "job-1",
+        "fileName": "a.gcode",
+        "downloadUrl": "/x",
+        "selectedGate": 4,
+    }
+
+    def fake_download(job_id, dest_path):
+        with open(dest_path, "w") as f:
+            f.write("G28\n")
+
+    hub.download_job_file.side_effect = fake_download
+    moonraker = make_moonraker()
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    moonraker.upload_and_start_print.assert_not_called()
+    hub.update_job_status.assert_called_once()
+    args, kwargs = hub.update_job_status.call_args
+    assert args[0] == "job-1"
+    assert args[1] == "failed"
+    assert "selectedGate" in kwargs.get("error_message", "")
+
+
+def test_dispatch_fails_job_when_selected_gate_is_not_an_integer(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {
+        "jobId": "job-1",
+        "fileName": "a.gcode",
+        "downloadUrl": "/x",
+        "selectedGate": "2\nM106 S255",
+    }
+
+    def fake_download(job_id, dest_path):
+        with open(dest_path, "w") as f:
+            f.write("G28\n")
+
+    hub.download_job_file.side_effect = fake_download
+    moonraker = make_moonraker()
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    moonraker.upload_and_start_print.assert_not_called()
+    hub.update_job_status.assert_called_once()
+    args, kwargs = hub.update_job_status.call_args
+    assert args[0] == "job-1"
+    assert args[1] == "failed"
+    assert "selectedGate" in kwargs.get("error_message", "")
+
+
+def test_dispatch_does_not_inject_gate_when_explicitly_null(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {
+        "jobId": "job-1",
+        "fileName": "a.gcode",
+        "downloadUrl": "/x",
+        "selectedGate": None,
+    }
+
+    def fake_download(job_id, dest_path):
+        with open(dest_path, "w") as f:
+            f.write("G28\n")
+
+    hub.download_job_file.side_effect = fake_download
+    moonraker = make_moonraker()
+
+    captured = {}
+
+    def fake_upload(file_path, filename):
+        with open(file_path, "r") as f:
+            captured["content"] = f.read()
+
+    moonraker.upload_and_start_print.side_effect = fake_upload
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    assert captured["content"] == "G28\n"
 
 
 def test_dispatch_skipped_when_disk_space_too_low(tmp_path, logger):

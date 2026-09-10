@@ -48,10 +48,12 @@ const PRINTER_STATUS_LABELS = {
   disabled: 'Désactivée',
 };
 
+const GATE_LABELS = ['Slot 1', 'Slot 2', 'Slot 3', 'Slot 4'];
+
 export default function PrintPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
-  const { get, post, loading: apiLoading } = useApi();
+  const { get, post } = useApi();
 
   const [printers, setPrinters] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -62,6 +64,11 @@ export default function PrintPage() {
   const [requestingAccess, setRequestingAccess] = useState(false);
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelling, setCancelling] = useState(false);
+  const [pendingUpload, setPendingUpload] = useState(null);
+  const [selectedGate, setSelectedGate] = useState('');
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/');
@@ -105,7 +112,7 @@ export default function PrintPage() {
   const selectedPrinter = printers.find((p) => p._id === selectedPrinterId);
   const canSubmit = selectedPrinter?.status === 'idle';
 
-  const handleSubmit = async (e) => {
+  const handleAnalyze = async (e) => {
     e.preventDefault();
     if (!selectedPrinterId || !file) {
       toast.error('Choisissez une imprimante et un fichier .gcode');
@@ -116,16 +123,54 @@ export default function PrintPage() {
     formData.append('printerId', selectedPrinterId);
     formData.append('file', file);
 
+    setAnalyzing(true);
     try {
-      await post('/api/print/jobs', formData);
+      const res = await post('/api/print/jobs/analyze', formData);
+      setPendingUpload(res.data);
+      setSelectedGate('');
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const resetPendingUpload = () => {
+    setPendingUpload(null);
+    setSelectedGate('');
+    setFile(null);
+    setFileInputKey((k) => k + 1);
+  };
+
+  const confirmPendingUpload = async (body) => {
+    if (!pendingUpload) return;
+    setConfirming(true);
+    try {
+      await post(`/api/print/jobs/${pendingUpload.pendingUploadId}/confirm`, body);
       toast.success('Impression soumise');
-      setFile(null);
-      setFileInputKey((k) => k + 1);
+      resetPendingUpload();
+      setShowOverrideModal(false);
       await refresh();
     } catch (err) {
       toast.error(err.message);
+    } finally {
+      setConfirming(false);
     }
   };
+
+  const handleConfirm = () => {
+    if (pendingUpload.mode === 'single') {
+      if (selectedGate === '') {
+        toast.error('Choisissez un slot');
+        return;
+      }
+      confirmPendingUpload({ selectedGate: Number(selectedGate) });
+      return;
+    }
+    confirmPendingUpload({});
+  };
+
+  const handleConfirmOverride = () => confirmPendingUpload({ overrideNoSpoolData: true });
 
   const handleCancelJob = async () => {
     if (!cancelTarget) return;
@@ -203,38 +248,139 @@ export default function PrintPage() {
 
         {accessStatus?.authorized === true && (
           <Card className="mb-8">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block mb-2 font-medium text-text">Imprimante</label>
-                <Select
-                  value={selectedPrinterId}
-                  onChange={(e) => setSelectedPrinterId(e.target.value)}
-                >
-                  <option value="">— Choisir —</option>
-                  {printers.map((p) => (
-                    <option key={p._id} value={p._id} disabled={p.status !== 'idle'}>
-                      {p.name} — {PRINTER_STATUS_LABELS[p.status] || p.status}
-                    </option>
-                  ))}
-                </Select>
-              </div>
+            {!pendingUpload ? (
+              <form onSubmit={handleAnalyze} className="space-y-4">
+                <div>
+                  <label className="block mb-2 font-medium text-text">Imprimante</label>
+                  <Select
+                    value={selectedPrinterId}
+                    onChange={(e) => setSelectedPrinterId(e.target.value)}
+                  >
+                    <option value="">— Choisir —</option>
+                    {printers.map((p) => (
+                      <option key={p._id} value={p._id} disabled={p.status !== 'idle'}>
+                        {p.name} — {PRINTER_STATUS_LABELS[p.status] || p.status}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
 
-              <div>
-                <label className="block mb-2 font-medium text-text">Fichier .gcode</label>
-                <FileInput key={fileInputKey} accept=".gcode" onChange={setFile} />
-              </div>
+                <div>
+                  <label className="block mb-2 font-medium text-text">Fichier .gcode</label>
+                  <FileInput key={fileInputKey} accept=".gcode" onChange={setFile} />
+                </div>
 
-              <Button type="submit" loading={apiLoading} disabled={!canSubmit}>
-                Soumettre l&apos;impression
-              </Button>
+                <Button type="submit" loading={analyzing} disabled={!canSubmit}>
+                  Analyser le fichier
+                </Button>
 
-              {selectedPrinter && !canSubmit && (
-                <p className="text-sm text-danger">
-                  Cette imprimante n&apos;est pas disponible (
-                  {PRINTER_STATUS_LABELS[selectedPrinter.status] || selectedPrinter.status}).
+                {selectedPrinter && !canSubmit && (
+                  <p className="text-sm text-danger">
+                    Cette imprimante n&apos;est pas disponible (
+                    {PRINTER_STATUS_LABELS[selectedPrinter.status] || selectedPrinter.status}).
+                  </p>
+                )}
+              </form>
+            ) : pendingUpload.mode === 'single' ? (
+              <div className="space-y-4">
+                <p className="text-sm text-text-muted">
+                  Fichier mono-matériau — choisissez la bobine à utiliser.
                 </p>
-              )}
-            </form>
+
+                {!pendingUpload.spoolSlotsUpdatedAt ? (
+                  <div>
+                    <p className="text-sm text-danger">
+                      Données bobines indisponibles pour cette imprimante — impossible de savoir ce qui est
+                      chargé dans chaque slot.
+                    </p>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => setShowOverrideModal(true)}
+                    >
+                      Soumettre quand même
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Select value={selectedGate} onChange={(e) => setSelectedGate(e.target.value)}>
+                      <option value="">— Choisir un slot —</option>
+                      {pendingUpload.slots.map((slot) => (
+                        <option key={slot.gate} value={slot.gate} disabled={slot.empty}>
+                          {GATE_LABELS[slot.gate] || `Slot ${slot.gate + 1}`} —{' '}
+                          {slot.empty ? 'Vide' : slot.material || 'Matière inconnue'}
+                        </option>
+                      ))}
+                    </Select>
+                    {pendingUpload.slots.length > 0 && pendingUpload.slots.every((s) => s.empty) && (
+                      <p className="text-sm text-danger">
+                        Toutes les bobines sont signalées vides — vérifiez physiquement l&apos;imprimante.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button variant="subtle" onClick={resetPendingUpload} disabled={confirming}>
+                    Retour
+                  </Button>
+                  {pendingUpload.spoolSlotsUpdatedAt && (
+                    <Button onClick={handleConfirm} loading={confirming} disabled={confirming}>
+                      Confirmer et soumettre
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-text-muted">
+                  Fichier multi-couleur — comparaison avec le contenu actuel des slots.
+                </p>
+
+                <div className="space-y-2">
+                  {pendingUpload.expectedTools.map((tool) => {
+                    const mismatch = pendingUpload.mismatches.find((m) => m.tool === tool.tool);
+                    const unverifiable = !tool.material && !tool.color;
+                    return (
+                      <div
+                        key={tool.tool}
+                        className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm"
+                      >
+                        <span className="font-medium text-text">{tool.tool}</span>
+                        <span className="text-text-muted">
+                          Attendu : {tool.material || '?'}
+                          {tool.color && (
+                            <span
+                              className="inline-block h-3 w-3 rounded-full align-middle ml-2 border border-border"
+                              style={{ backgroundColor: `#${tool.color.replace('#', '')}` }}
+                            />
+                          )}
+                        </span>
+                        {unverifiable ? (
+                          <Badge variant="neutral" size="sm">
+                            Non vérifiable
+                          </Badge>
+                        ) : (
+                          <Badge variant={mismatch ? 'rejected' : 'approved'} size="sm">
+                            {mismatch ? `Chargé : ${mismatch.actualMaterial || 'inconnu'}` : 'OK'}
+                          </Badge>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex gap-3">
+                  <Button variant="subtle" onClick={resetPendingUpload} disabled={confirming}>
+                    Retour
+                  </Button>
+                  <Button onClick={handleConfirm} loading={confirming} disabled={confirming}>
+                    Confirmer et soumettre
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         )}
 
@@ -290,6 +436,28 @@ export default function PrintPage() {
             {cancelTarget && ['sent', 'printing'].includes(cancelTarget.status)
               ? "L'impression est peut-être déjà en cours : elle s'arrêtera au prochain contact avec l'imprimante (jusqu'à 60 secondes), et le plateau devra être vérifié physiquement avant la prochaine impression."
               : "Le job n'a pas encore démarré, l'imprimante sera immédiatement libérée."}
+          </p>
+        </Modal>
+
+        <Modal
+          open={showOverrideModal}
+          onClose={() => setShowOverrideModal(false)}
+          title="Soumettre sans données bobines ?"
+          footer={
+            <div className="flex justify-end gap-3">
+              <Button variant="subtle" onClick={() => setShowOverrideModal(false)} disabled={confirming}>
+                Retour
+              </Button>
+              <Button variant="danger" onClick={handleConfirmOverride} loading={confirming} disabled={confirming}>
+                Soumettre quand même
+              </Button>
+            </div>
+          }
+        >
+          <p className="text-sm text-text">
+            Aucune bobine ne sera sélectionnée automatiquement — le comportement dépendra entièrement du
+            fichier gcode tel quel. Vérifiez physiquement l&apos;imprimante avant de continuer si vous n&apos;êtes
+            pas sûr·e de ce qui est chargé.
           </p>
         </Modal>
       </main>

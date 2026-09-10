@@ -60,6 +60,8 @@ const JOB_STATUS_BADGE_VARIANTS = {
 
 const CANCELLABLE_JOB_STATUSES = ['queued', 'sent', 'printing'];
 
+const GATE_LABELS = ['Slot 1', 'Slot 2', 'Slot 3', 'Slot 4'];
+
 const REJECTION_REASON_LABELS = {
   not_authorized: 'Email non autorisé',
   printer_busy: 'Imprimante occupée',
@@ -517,6 +519,22 @@ export default function AdminPrintPage() {
                         {' — '}
                         {new Date(job.submittedAt).toLocaleString('fr-FR')}
                       </p>
+                      {job.gcodeMode === 'single' && (
+                        <p className="text-xs text-text-muted">
+                          {job.slotSelectionOverridden
+                            ? 'Bobine : non spécifiée (soumis sans données bobines)'
+                            : job.selectedGate !== null && job.selectedGate !== undefined
+                            ? `Bobine : ${GATE_LABELS[job.selectedGate] || `Slot ${job.selectedGate + 1}`}`
+                            : null}
+                        </p>
+                      )}
+                      {job.slotMismatchWarnings?.length > 0 && (
+                        <p className="text-xs text-danger">
+                          {job.slotMismatchWarnings.length} avertissement
+                          {job.slotMismatchWarnings.length > 1 ? 's' : ''} matière/couleur signalé
+                          {job.slotMismatchWarnings.length > 1 ? 's' : ''} à la soumission
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant={JOB_STATUS_BADGE_VARIANTS[job.status] || 'neutral'} size="sm">

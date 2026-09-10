@@ -25,6 +25,26 @@ exports.heartbeat = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, cancelRequested });
 });
 
+// POST /api/print/agent/spool-status
+// Body: { gates: [{ gate, material, color, empty }] }
+exports.reportSpoolStatus = asyncHandler(async (req, res, next) => {
+  const { gates } = req.body;
+  if (!Array.isArray(gates)) {
+    return next(new ErrorResponse('gates (tableau) requis', 400));
+  }
+
+  req.printer.spoolSlots = gates.map((g) => ({
+    gate: g.gate,
+    material: g.material || '',
+    color: g.color || '',
+    empty: !!g.empty,
+  }));
+  req.printer.spoolSlotsUpdatedAt = new Date();
+  await req.printer.save();
+
+  res.status(200).json({ success: true });
+});
+
 // GET /api/print/agent/next-job
 // req.printer est posé par authenticatePrinter
 exports.getNextJob = asyncHandler(async (req, res) => {
@@ -52,6 +72,7 @@ exports.getNextJob = asyncHandler(async (req, res) => {
       jobId: job._id.toString(),
       fileName: job.fileName,
       downloadUrl: `/api/print/agent/jobs/${job._id}/file`,
+      selectedGate: job.selectedGate,
     },
   });
 });

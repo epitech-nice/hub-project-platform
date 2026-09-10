@@ -73,3 +73,38 @@ class MoonrakerClient:
             raise MoonrakerClientError(
                 f"Erreur Moonraker à l'annulation (HTTP {response.status_code}): {response.text}"
             )
+
+    def get_mmu_status(self):
+        url = f"{self.base_url}/printer/objects/query"
+        try:
+            response = requests.get(url, params={"mmu": ""}, timeout=self.timeout)
+        except requests.RequestException as exc:
+            raise MoonrakerClientError(f"Moonraker injoignable (mmu): {exc}") from exc
+
+        if response.status_code >= 400:
+            raise MoonrakerClientError(f"Erreur Moonraker (mmu, HTTP {response.status_code}): {response.text}")
+
+        try:
+            mmu = response.json()["result"]["status"]["mmu"]
+            num_gates = mmu["num_gates"]
+            gate_status = mmu["gate_status"]
+            gate_material = mmu["gate_material"]
+            gate_color = mmu["gate_color"]
+
+            if not isinstance(num_gates, int):
+                raise MoonrakerClientError(f"num_gates inattendu dans la réponse Moonraker (mmu): {num_gates!r}")
+
+            gates = []
+            for i in range(num_gates):
+                gates.append(
+                    {
+                        "gate": i,
+                        "material": gate_material[i] if i < len(gate_material) else "",
+                        "color": gate_color[i] if i < len(gate_color) else "",
+                        "empty": not bool(gate_status[i]) if i < len(gate_status) else True,
+                    }
+                )
+        except (KeyError, ValueError, TypeError, IndexError) as exc:
+            raise MoonrakerClientError(f"Réponse Moonraker inattendue (mmu): {exc}") from exc
+
+        return gates

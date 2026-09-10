@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { PRINT_JOB_STATUSES, PRINT_REJECTION_REASONS } = require('../utils/constants');
+const { PRINT_JOB_STATUSES, PRINT_REJECTION_REASONS, PRINT_JOB_GCODE_MODES } = require('../utils/constants');
 
 const PrintJobSchema = new mongoose.Schema({
   student: {
@@ -24,6 +24,26 @@ const PrintJobSchema = new mongoose.Schema({
   cancelledBy: {
     email: { type: String, default: null },
     role: { type: String, default: null },
+  },
+  selectedGate: { type: Number, default: null },
+  slotSelectionOverridden: { type: Boolean, default: false },
+  gcodeMode: {
+    type: String,
+    enum: [...Object.values(PRINT_JOB_GCODE_MODES), null],
+    default: null,
+  },
+  slotMismatchWarnings: {
+    type: [
+      {
+        tool: String,
+        expectedMaterial: String,
+        expectedColor: String,
+        actualGate: Number,
+        actualMaterial: String,
+        actualColor: String,
+      },
+    ],
+    default: [],
   },
   submittedAt: { type: Date, default: Date.now },
   startedAt: { type: Date, default: null },

@@ -4,11 +4,14 @@ const PrintJob = require('../../models/PrintJob');
 const PrintAuthorization = require('../../models/PrintAuthorization');
 const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
+const { parseGcodeSpoolInfo, computeSlotMismatches } = require('../../utils/spoolAnalysis');
+const PendingPrintUpload = require('../../models/PendingPrintUpload');
 const {
   PRINTER_STATUSES,
   PRINTER_STATUS_SOURCES,
   PRINT_JOB_STATUSES,
   PRINT_REJECTION_REASONS,
+  PRINT_JOB_GCODE_MODES,
 } = require('../../utils/constants');
 
 const REJECTION_MESSAGES = {
@@ -27,76 +30,26 @@ const STATUS_TO_REJECTION_REASON = {
   [PRINTER_STATUSES.DISABLED]: PRINT_REJECTION_REASONS.PRINTER_DISABLED,
 };
 
-// Crée un PrintJob rejeté (avant tout verrouillage de l'imprimante) et nettoie le fichier uploadé.
-const rejectSubmission = async (req, next, printer, reason) => {
-  fs.unlink(req.file.path, () => {});
+// Crée un PrintJob rejeté (avant tout verrouillage de l'imprimante) et nettoie le fichier
+// temporaire de PendingPrintUpload — utilisé quand un rejet survient au moment de la
+// confirmation (whitelist révoquée ou statut imprimante devenu défavorable entre l'analyse
+// et la confirmation).
+const rejectPendingSubmission = async (next, pending, printer, reason) => {
+  fs.unlink(pending.filePath, () => {});
   await PrintJob.create({
-    student: { email: req.user.email.toLowerCase(), name: req.user.name },
+    student: pending.student,
     printer: printer._id,
-    fileName: req.file.originalname,
-    filePath: req.file.path,
+    fileName: pending.fileName,
+    filePath: pending.filePath,
     status: PRINT_JOB_STATUSES.REJECTED,
     rejectionReason: reason,
+    gcodeMode: pending.gcodeMode,
     history: [{ status: PRINT_JOB_STATUSES.REJECTED, date: new Date(), detail: REJECTION_MESSAGES[reason] }],
   });
+  await pending.deleteOne();
   const statusCode = reason === PRINT_REJECTION_REASONS.NOT_AUTHORIZED ? 403 : 409;
   return next(new ErrorResponse(REJECTION_MESSAGES[reason], statusCode));
 };
-
-// POST /api/print/jobs
-// multipart form: printerId, file
-exports.submitJob = asyncHandler(async (req, res, next) => {
-  if (!req.file) return next(new ErrorResponse('Fichier .gcode requis', 400));
-
-  const { printerId } = req.body;
-  const printer = await Printer.findById(printerId);
-  if (!printer) {
-    fs.unlink(req.file.path, () => {});
-    return next(new ErrorResponse('Imprimante non trouvée', 404));
-  }
-
-  const authorization = await PrintAuthorization.findOne({ email: req.user.email.toLowerCase() });
-  if (!authorization || !authorization.authorized) {
-    return rejectSubmission(req, next, printer, PRINT_REJECTION_REASONS.NOT_AUTHORIZED);
-  }
-
-  if (printer.status !== PRINTER_STATUSES.IDLE) {
-    const reason = STATUS_TO_REJECTION_REASON[printer.status] || PRINT_REJECTION_REASONS.PRINTER_OFFLINE;
-    return rejectSubmission(req, next, printer, reason);
-  }
-
-  const job = await PrintJob.create({
-    student: { email: req.user.email.toLowerCase(), name: req.user.name },
-    printer: printer._id,
-    fileName: req.file.originalname,
-    filePath: req.file.path,
-    history: [{ status: PRINT_JOB_STATUSES.QUEUED, date: new Date(), detail: 'Soumission acceptée' }],
-  });
-
-  // Verrou atomique : ne réussit que si le statut est encore 'idle' au moment de l'écriture,
-  // ce qui empêche deux soumissions simultanées de passer toutes les deux la vérification ci-dessus.
-  // Le job est créé AVANT cette tentative de verrou : si le verrou échoue, on le repasse en
-  // 'rejected' plutôt que de le laisser 'queued' sans imprimante réellement réservée.
-  const locked = await Printer.findOneAndUpdate(
-    { _id: printer._id, status: PRINTER_STATUSES.IDLE },
-    { status: PRINTER_STATUSES.PRINTING, currentJob: job._id }
-  );
-
-  if (!locked) {
-    fs.unlink(job.filePath, () => {});
-    job.status = PRINT_JOB_STATUSES.REJECTED;
-    job.rejectionReason = PRINT_REJECTION_REASONS.PRINTER_BUSY;
-    job.history.push({
-      status: PRINT_JOB_STATUSES.REJECTED,
-      date: new Date(),
-      detail: REJECTION_MESSAGES[PRINT_REJECTION_REASONS.PRINTER_BUSY],
-    });
-    await job.save();
-    return next(new ErrorResponse(REJECTION_MESSAGES[PRINT_REJECTION_REASONS.PRINTER_BUSY], 409));
-  }
-
-  res.status(201).json({ success: true, data: job });
-});
 
 // GET /api/print/jobs/me
 exports.getMyJobs = asyncHandler(async (req, res) => {
@@ -134,8 +87,8 @@ exports.cancelJob = asyncHandler(async (req, res, next) => {
   const cancelledBy = { email: req.user.email.toLowerCase(), role: req.user.role };
 
   if (job.status === PRINT_JOB_STATUSES.QUEUED) {
-    // Verrou atomique symétrique à celui de submitJob : ne réussit que si le job est encore
-    // 'queued' au moment de l'écriture. Empêche une course avec getNextJob (qui fait passer le
+    // Verrou atomique symétrique à celui posé à la confirmation (confirmJob) : ne réussit que si
+    // le job est encore 'queued' au moment de l'écriture. Empêche une course avec getNextJob (qui fait passer le
     // job en 'sent' de façon atomique) — si l'agent a déjà récupéré le job entre notre lecture
     // et cette écriture, ce findOneAndUpdate ne trouve plus rien et on renvoie 409 plutôt que
     // d'annuler un job que l'agent croit désormais devoir imprimer.
@@ -193,4 +146,158 @@ exports.cancelJob = asyncHandler(async (req, res, next) => {
   }
 
   return next(new ErrorResponse('Ce job ne peut plus être annulé', 400));
+});
+
+// POST /api/print/jobs/analyze
+// multipart form: printerId, file
+exports.analyzeJob = asyncHandler(async (req, res, next) => {
+  if (!req.file) return next(new ErrorResponse('Fichier .gcode requis', 400));
+
+  const { printerId } = req.body;
+  const printer = await Printer.findById(printerId);
+  if (!printer) {
+    fs.unlink(req.file.path, () => {});
+    return next(new ErrorResponse('Imprimante non trouvée', 404));
+  }
+
+  const authorization = await PrintAuthorization.findOne({ email: req.user.email.toLowerCase() });
+  if (!authorization || !authorization.authorized) {
+    fs.unlink(req.file.path, () => {});
+    return next(new ErrorResponse(REJECTION_MESSAGES[PRINT_REJECTION_REASONS.NOT_AUTHORIZED], 403));
+  }
+
+  const gcodeText = await fs.promises.readFile(req.file.path, 'utf8');
+  const { mode, expectedTools } = parseGcodeSpoolInfo(gcodeText);
+
+  const mismatches =
+    mode === PRINT_JOB_GCODE_MODES.MULTI_MATERIAL ? computeSlotMismatches(expectedTools, printer.spoolSlots) : [];
+
+  const pending = await PendingPrintUpload.create({
+    student: { email: req.user.email.toLowerCase(), name: req.user.name },
+    printer: printer._id,
+    fileName: req.file.originalname,
+    filePath: req.file.path,
+    gcodeMode: mode,
+    expectedTools,
+    mismatches,
+  });
+
+  res.status(201).json({
+    success: true,
+    data: {
+      pendingUploadId: pending._id,
+      mode,
+      slots: printer.spoolSlots,
+      spoolSlotsUpdatedAt: printer.spoolSlotsUpdatedAt,
+      expectedTools,
+      mismatches,
+    },
+  });
+});
+
+// POST /api/print/jobs/:pendingUploadId/confirm
+// body: { selectedGate?, overrideNoSpoolData? }
+exports.confirmJob = asyncHandler(async (req, res, next) => {
+  const pending = await PendingPrintUpload.findById(req.params.pendingUploadId);
+  if (!pending) {
+    return next(
+      new ErrorResponse('Cette analyse a expiré ou a déjà été confirmée, veuillez re-uploader le fichier', 410)
+    );
+  }
+
+  if (pending.student.email !== req.user.email.toLowerCase()) {
+    return next(new ErrorResponse('Vous ne pouvez confirmer que vos propres analyses', 403));
+  }
+
+  const printer = await Printer.findById(pending.printer);
+  if (!printer) {
+    fs.unlink(pending.filePath, () => {});
+    await pending.deleteOne();
+    return next(new ErrorResponse('Imprimante non trouvée', 404));
+  }
+
+  const authorization = await PrintAuthorization.findOne({ email: req.user.email.toLowerCase() });
+  if (!authorization || !authorization.authorized) {
+    return rejectPendingSubmission(next, pending, printer, PRINT_REJECTION_REASONS.NOT_AUTHORIZED);
+  }
+
+  if (printer.status !== PRINTER_STATUSES.IDLE) {
+    const reason = STATUS_TO_REJECTION_REASON[printer.status] || PRINT_REJECTION_REASONS.PRINTER_OFFLINE;
+    return rejectPendingSubmission(next, pending, printer, reason);
+  }
+
+  let selectedGate = null;
+  let slotSelectionOverridden = false;
+
+  if (pending.gcodeMode === PRINT_JOB_GCODE_MODES.SINGLE) {
+    const { selectedGate: requestedGate, overrideNoSpoolData } = req.body;
+    const hasSpoolData = !!printer.spoolSlotsUpdatedAt;
+
+    if (!hasSpoolData) {
+      if (!overrideNoSpoolData) {
+        return next(
+          new ErrorResponse(
+            "Données bobines indisponibles pour cette imprimante — utilisez l'option de contournement si vous souhaitez continuer quand même",
+            400
+          )
+        );
+      }
+      slotSelectionOverridden = true;
+    } else {
+      if (typeof requestedGate !== 'number' || requestedGate < 0 || requestedGate > 3) {
+        return next(new ErrorResponse('Sélection de bobine requise', 400));
+      }
+      const slot = printer.spoolSlots.find((s) => s.gate === requestedGate);
+      if (!slot || slot.empty) {
+        return next(new ErrorResponse('Ce slot est vide, choisissez-en un autre', 400));
+      }
+      selectedGate = requestedGate;
+    }
+  }
+
+  // Déplace le fichier de son emplacement temporaire (pending-print-jobs/) vers l'emplacement
+  // définitif (print-jobs/) — les deux répertoires partagent le même parent (storage/), donc un
+  // simple remplacement de segment de chemin suffit, pas besoin de reconstruire le chemin.
+  const finalPath = pending.filePath.replace('pending-print-jobs', 'print-jobs');
+  try {
+    await fs.promises.rename(pending.filePath, finalPath);
+  } catch (err) {
+    return next(new ErrorResponse('Cette analyse a déjà été confirmée', 410));
+  }
+
+  const job = await PrintJob.create({
+    student: pending.student,
+    printer: printer._id,
+    fileName: pending.fileName,
+    filePath: finalPath,
+    selectedGate,
+    slotSelectionOverridden,
+    gcodeMode: pending.gcodeMode,
+    slotMismatchWarnings: pending.mismatches,
+    history: [{ status: PRINT_JOB_STATUSES.QUEUED, date: new Date(), detail: 'Soumission acceptée' }],
+  });
+
+  // Verrou atomique : ne réussit que si le statut est encore 'idle' au moment de l'écriture,
+  // ce qui empêche deux confirmations simultanées de réserver la même imprimante.
+  const locked = await Printer.findOneAndUpdate(
+    { _id: printer._id, status: PRINTER_STATUSES.IDLE },
+    { status: PRINTER_STATUSES.PRINTING, currentJob: job._id }
+  );
+
+  if (!locked) {
+    fs.unlink(job.filePath, () => {});
+    job.status = PRINT_JOB_STATUSES.REJECTED;
+    job.rejectionReason = PRINT_REJECTION_REASONS.PRINTER_BUSY;
+    job.history.push({
+      status: PRINT_JOB_STATUSES.REJECTED,
+      date: new Date(),
+      detail: REJECTION_MESSAGES[PRINT_REJECTION_REASONS.PRINTER_BUSY],
+    });
+    await job.save();
+    await pending.deleteOne();
+    return next(new ErrorResponse(REJECTION_MESSAGES[PRINT_REJECTION_REASONS.PRINTER_BUSY], 409));
+  }
+
+  await pending.deleteOne();
+  res.status(201).json({ success: true, data: job });
 });

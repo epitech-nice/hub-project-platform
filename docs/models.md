@@ -238,6 +238,17 @@ Base de données : **MongoDB** via **Mongoose**.
   currentJob: ObjectId,        // → PrintJob, null si aucun job en cours
   lastSeenAt: Date,            // Dernier heartbeat reçu de l'agent (défaut : maintenant)
 
+  spoolSlots: [{                // État des bobines ACE/MMU, rapporté par l'agent (POST /agent/spool-status)
+    gate: Number,                // Requis
+    material: String,            // Défaut ''
+    color: String,                // Défaut '' — format Moonraker "RRGGBBAA" (sans '#')
+    empty: Boolean                // Défaut true
+  }],
+  spoolSlotsUpdatedAt: Date,    // Défaut null — null = aucune donnée bobine jamais reçue pour
+                                 // cette imprimante ; posé (même avec spoolSlots: []) dès le
+                                 // premier rapport de l'agent, ce sont deux états distincts
+                                 // (voir docs/api-print.md, POST /jobs/:pendingUploadId/confirm)
+
   clearanceHistory: [{         // Historique des libérations de plateau
     method: String,            // Enum CLEARANCE_METHODS : 'qr' | 'admin_override'
     byUserId: ObjectId,        // → User
@@ -310,6 +321,24 @@ Base de données : **MongoDB** via **Mongoose**.
     role: String
   },
 
+  selectedGate: Number,          // Défaut null — gate ACE choisi par l'étudiant (mode 'single'
+                                  // avec données bobines disponibles) ; null si mode 'multi-material',
+                                  // si override sans données bobines, ou si soumis via le flux
+                                  // historique POST /api/print/jobs
+  slotSelectionOverridden: Boolean, // Défaut false — true si soumis via overrideNoSpoolData
+                                     // (aucune donnée bobine disponible pour l'imprimante)
+  gcodeMode: String,              // Enum PRINT_JOB_GCODE_MODES | null (défaut null) :
+                                   // 'single' | 'multi-material' — null pour le flux historique
+                                   // POST /api/print/jobs (pas d'analyse de sélection de bobine)
+  slotMismatchWarnings: [{        // Copié depuis PendingPrintUpload.mismatches à la confirmation
+    tool: String,                 // ex: "T0" — toujours [] en mode 'single' ou flux historique
+    expectedMaterial: String,
+    expectedColor: String,
+    actualGate: Number,
+    actualMaterial: String,
+    actualColor: String
+  }],
+
   submittedAt: Date,            // Défaut : maintenant
   startedAt: Date,              // Défaut null
   completedAt: Date,            // Défaut null
@@ -323,6 +352,42 @@ Base de données : **MongoDB** via **Mongoose**.
 ```
 
 **Indexes** : `{ 'student.email': 1, submittedAt: -1 }`, `{ printer: 1, status: 1 }`
+
+---
+
+## PendingPrintUpload *(analyse en attente de confirmation — sélection de bobine ACE)*
+
+```js
+{
+  student: { email: String, name: String },   // Requis
+
+  printer: ObjectId,           // Requis — → Printer
+  fileName: String,            // Requis — nom du fichier envoyé
+  filePath: String,            // Requis — chemin de stockage temporaire (storage/pending-print-jobs/)
+
+  gcodeMode: String,           // Requis — Enum PRINT_JOB_GCODE_MODES : 'single' | 'multi-material'
+
+  expectedTools: [{            // Rempli seulement en mode 'multi-material' (extrait des Tx + des
+    tool: String,               // commentaires filament_type/filament_colour du slicer)
+    material: String,
+    color: String
+  }],
+  mismatches: [{                // Calculé à l'analyse, copié vers PrintJob.slotMismatchWarnings
+    tool: String,                // à la confirmation — toujours [] en mode 'single'
+    expectedMaterial: String,
+    expectedColor: String,
+    actualGate: Number,
+    actualMaterial: String,
+    actualColor: String
+  }],
+
+  createdAt: Date               // Défaut : maintenant
+}
+```
+
+**Indexes** : TTL sur `createdAt` (`expireAfterSeconds: 900`, 15 min) — un document non confirmé (étudiant qui ferme l'onglet, etc.) est supprimé automatiquement par `mongod`.
+
+**Note — nettoyage du fichier temporaire** : l'expiration TTL a lieu directement dans `mongod`, sans qu'aucun code applicatif (middleware, hook Mongoose) ne puisse jamais l'observer pour supprimer le fichier `.gcode` correspondant sur disque. `server/src/utils/pendingUploadCleanup.js` compense en balayant périodiquement (`startPendingUploadCleanup`, toutes les 5 min) `storage/pending-print-jobs/` : tout fichier plus vieux qu'une marge de sécurité de 20 min (confortablement au-delà du TTL, pour ne pas courir après une confirmation en cours de déplacement du fichier) et ne correspondant plus à aucun document `PendingPrintUpload.filePath` est supprimé.
 
 ---
 

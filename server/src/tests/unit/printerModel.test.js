@@ -26,4 +26,27 @@ describe('Printer model', () => {
       Printer.create({ name: 'X', model: 'kobra3', apiKeyHash: 'x'.repeat(64), status: 'nonsense' })
     ).rejects.toThrow();
   });
+
+  it('defaults spoolSlots to an empty array and spoolSlotsUpdatedAt to null', async () => {
+    const printer = await Printer.create({ name: 'P1', model: 'kobra3', apiKeyHash: 'x'.repeat(64) });
+    expect(printer.spoolSlots).toEqual([]);
+    expect(printer.spoolSlotsUpdatedAt).toBeNull();
+  });
+
+  it('accepts a populated spoolSlots array', async () => {
+    const printer = await Printer.create({
+      name: 'P1',
+      model: 'kobra3',
+      apiKeyHash: 'x'.repeat(64),
+      spoolSlots: [
+        { gate: 0, material: 'PLA', color: '212721FF', empty: false },
+        { gate: 1, material: '', color: '', empty: true },
+        { gate: 2, material: 'PETG', color: 'F40031FF', empty: false },
+        { gate: 3, material: 'PLA', color: 'FED141FF', empty: false },
+      ],
+      spoolSlotsUpdatedAt: new Date(),
+    });
+    expect(printer.spoolSlots).toHaveLength(4);
+    expect(printer.spoolSlots[1].empty).toBe(true);
+  });
 });
