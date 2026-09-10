@@ -53,7 +53,10 @@ const PrinterSchema = new mongoose.Schema({
         // 'manual' tant que la valeur auto-rapportée par l'agent n'a pas dérivé de ce qui était
         // vrai au moment de la déclaration (autoXAtSet) — voir server/src/utils/spoolSlotMerge.js.
         source: { type: String, enum: ['auto', 'manual'], default: 'auto' },
-        manualSetBy: { type: Object, default: null },
+        manualSetBy: {
+          email: { type: String, default: null },
+          name: { type: String, default: null },
+        },
         manualSetAt: { type: Date, default: null },
         autoMaterialAtSet: { type: String, default: null },
         autoColorAtSet: { type: String, default: null },

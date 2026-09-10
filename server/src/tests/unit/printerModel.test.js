@@ -58,7 +58,8 @@ describe('Printer model', () => {
       spoolSlots: [{ gate: 0, material: 'PLA', color: '212721FF', empty: false }],
     });
     expect(printer.spoolSlots[0].source).toBe('auto');
-    expect(printer.spoolSlots[0].manualSetBy).toBeNull();
+    expect(printer.spoolSlots[0].manualSetBy.email).toBeNull();
+    expect(printer.spoolSlots[0].manualSetBy.name).toBeNull();
     expect(printer.spoolSlots[0].manualSetAt).toBeNull();
     expect(printer.spoolSlots[0].autoMaterialAtSet).toBeNull();
     expect(printer.spoolSlots[0].autoColorAtSet).toBeNull();
