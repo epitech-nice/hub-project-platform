@@ -4,7 +4,7 @@ const PrintJob = require('../../models/PrintJob');
 const PrintAuthorization = require('../../models/PrintAuthorization');
 const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
-const { parseGcodeSpoolInfo, computeSlotMismatches } = require('../../utils/spoolAnalysis');
+const { parseGcodeSpoolInfo } = require('../../utils/spoolAnalysis');
 const PendingPrintUpload = require('../../models/PendingPrintUpload');
 const {
   PRINTER_STATUSES,
@@ -169,9 +169,6 @@ exports.analyzeJob = asyncHandler(async (req, res, next) => {
   const gcodeText = await fs.promises.readFile(req.file.path, 'utf8');
   const { mode, expectedTools } = parseGcodeSpoolInfo(gcodeText);
 
-  const mismatches =
-    mode === PRINT_JOB_GCODE_MODES.MULTI_MATERIAL ? computeSlotMismatches(expectedTools, printer.spoolSlots) : [];
-
   const pending = await PendingPrintUpload.create({
     student: { email: req.user.email.toLowerCase(), name: req.user.name },
     printer: printer._id,
@@ -179,7 +176,6 @@ exports.analyzeJob = asyncHandler(async (req, res, next) => {
     filePath: req.file.path,
     gcodeMode: mode,
     expectedTools,
-    mismatches,
   });
 
   res.status(201).json({
@@ -190,7 +186,6 @@ exports.analyzeJob = asyncHandler(async (req, res, next) => {
       slots: printer.spoolSlots,
       spoolSlotsUpdatedAt: printer.spoolSlotsUpdatedAt,
       expectedTools,
-      mismatches,
     },
   });
 });

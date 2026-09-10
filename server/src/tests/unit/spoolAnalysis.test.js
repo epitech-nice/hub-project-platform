@@ -1,4 +1,4 @@
-const { parseGcodeSpoolInfo, computeSlotMismatches } = require('../../utils/spoolAnalysis');
+const { parseGcodeSpoolInfo } = require('../../utils/spoolAnalysis');
 
 describe('parseGcodeSpoolInfo', () => {
   it('returns mode single when no Tx line is present', () => {
@@ -40,54 +40,5 @@ describe('parseGcodeSpoolInfo', () => {
     // Un gcode généré pour une autre config MMU pourrait référencer T4+ — hors périmètre ACE 4 slots.
     const gcode = 'G28\nT4\nG1 X10\n';
     expect(parseGcodeSpoolInfo(gcode)).toEqual({ mode: 'single', expectedTools: [] });
-  });
-});
-
-describe('computeSlotMismatches', () => {
-  const spoolSlots = [
-    { gate: 0, material: 'PLA', color: '212721FF', empty: false },
-    { gate: 1, material: '', color: '', empty: true },
-    { gate: 2, material: 'PLA', color: 'F40031FF', empty: false },
-    { gate: 3, material: 'PLA', color: 'FED141FF', empty: false },
-  ];
-
-  it('returns no mismatch when material and color match (case/format-insensitive)', () => {
-    const expectedTools = [{ tool: 'T0', material: 'pla', color: '#212721' }];
-    expect(computeSlotMismatches(expectedTools, spoolSlots)).toEqual([]);
-  });
-
-  it('flags a material mismatch', () => {
-    const expectedTools = [{ tool: 'T2', material: 'PETG', color: '#F40031' }];
-    const result = computeSlotMismatches(expectedTools, spoolSlots);
-    expect(result).toEqual([
-      { tool: 'T2', expectedMaterial: 'PETG', expectedColor: '#F40031', actualGate: 2, actualMaterial: 'PLA', actualColor: 'F40031FF' },
-    ]);
-  });
-
-  it('flags a color mismatch even when material matches', () => {
-    const expectedTools = [{ tool: 'T3', material: 'PLA', color: '#000000' }];
-    const result = computeSlotMismatches(expectedTools, spoolSlots);
-    expect(result).toHaveLength(1);
-    expect(result[0].tool).toBe('T3');
-  });
-
-  it('flags a gate that is empty', () => {
-    const expectedTools = [{ tool: 'T1', material: 'PLA', color: '#212721' }];
-    const result = computeSlotMismatches(expectedTools, spoolSlots);
-    expect(result).toHaveLength(1);
-    expect(result[0].actualMaterial).toBeNull();
-  });
-
-  it('flags a gate with no known material/color as unable to verify, without crashing', () => {
-    const expectedTools = [{ tool: 'T0', material: null, color: null }];
-    expect(computeSlotMismatches(expectedTools, spoolSlots)).toEqual([]);
-  });
-
-  it('flags a tool referencing a gate not present in spoolSlots', () => {
-    const expectedTools = [{ tool: 'T2', material: 'PLA', color: '#212721' }];
-    const result = computeSlotMismatches(expectedTools, []);
-    expect(result).toEqual([
-      { tool: 'T2', expectedMaterial: 'PLA', expectedColor: '#212721', actualGate: 2, actualMaterial: null, actualColor: null },
-    ]);
   });
 });

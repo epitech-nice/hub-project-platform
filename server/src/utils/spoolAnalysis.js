@@ -37,42 +37,4 @@ function parseGcodeSpoolInfo(gcodeText) {
   return { mode: 'multi-material', expectedTools };
 }
 
-// Normalise un hex couleur venant de deux sources au format différent (slicer: "#RRGGBB",
-// Moonraker/ACE: "RRGGBBAA" sans '#') vers une forme comparable : 6 caractères hex, minuscules,
-// sans '#', sans canal alpha.
-function normalizeColor(hex) {
-  if (!hex) return null;
-  return hex.replace('#', '').toLowerCase().slice(0, 6);
-}
-
-function computeSlotMismatches(expectedTools, spoolSlots) {
-  const mismatches = [];
-
-  for (const expected of expectedTools) {
-    if (!expected.material && !expected.color) continue; // rien à comparer, pas un mismatch
-
-    const gate = Number(expected.tool.slice(1));
-    const actual = spoolSlots.find((slot) => slot.gate === gate);
-
-    const materialMismatch =
-      !!expected.material && (!actual || (actual.material || '').toLowerCase() !== expected.material.toLowerCase());
-    const colorMismatch =
-      !!expected.color && (!actual || normalizeColor(actual.color) !== normalizeColor(expected.color));
-    const isEmpty = !actual || actual.empty;
-
-    if (isEmpty || materialMismatch || colorMismatch) {
-      mismatches.push({
-        tool: expected.tool,
-        expectedMaterial: expected.material,
-        expectedColor: expected.color,
-        actualGate: gate,
-        actualMaterial: actual && !actual.empty ? actual.material || null : null,
-        actualColor: actual && !actual.empty ? actual.color || null : null,
-      });
-    }
-  }
-
-  return mismatches;
-}
-
-module.exports = { parseGcodeSpoolInfo, computeSlotMismatches };
+module.exports = { parseGcodeSpoolInfo };
