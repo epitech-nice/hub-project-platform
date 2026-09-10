@@ -1,5 +1,6 @@
 const QRCode = require('qrcode');
 const Printer = require('../../models/Printer');
+const PrintAuthorization = require('../../models/PrintAuthorization');
 const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
 const { generateApiKey } = require('../../utils/apiKey');
@@ -104,3 +105,49 @@ exports.confirmClearance = asyncHandler((req, res, next) => confirmClearanceInte
 
 // POST /api/print/printers/:id/confirm-clearance/override
 exports.confirmClearanceOverride = asyncHandler((req, res, next) => confirmClearanceInternal(req, res, next, CLEARANCE_METHODS.ADMIN_OVERRIDE));
+
+// PUT /api/print/printers/:id/spool-slots/:gate/manual
+// body: { material, color }
+exports.setManualSpoolSlot = asyncHandler(async (req, res, next) => {
+  const { material, color } = req.body;
+  if (!material || !color) {
+    return next(new ErrorResponse('material et color sont requis', 400));
+  }
+
+  const printer = await Printer.findById(req.params.id);
+  if (!printer) return next(new ErrorResponse('Imprimante non trouvée', 404));
+
+  // Permission avant existence du gate — cohérent avec confirmJob, qui vérifie déjà la
+  // propriété/l'autorisation avant l'existence de la ressource ciblée.
+  if (req.user.role !== 'admin') {
+    const authorization = await PrintAuthorization.findOne({ email: req.user.email.toLowerCase() });
+    if (!authorization || !authorization.authorized) {
+      return next(new ErrorResponse("Vous n'êtes pas autorisé à déclarer le contenu d'une bobine", 403));
+    }
+  }
+
+  const gate = Number(req.params.gate);
+  const slotIndex = printer.spoolSlots.findIndex((s) => s.gate === gate);
+  if (slotIndex === -1) {
+    return next(new ErrorResponse('Gate inconnu pour cette imprimante', 404));
+  }
+
+  const slot = printer.spoolSlots[slotIndex];
+  // Ne capture le snapshot de dérive que si ce n'était pas déjà une déclaration manuelle —
+  // corriger une déclaration existante ne doit pas déplacer la référence utilisée pour détecter
+  // une future vraie lecture RFID (voir spec 2026-09-10).
+  if (slot.source !== 'manual') {
+    slot.autoMaterialAtSet = slot.material;
+    slot.autoColorAtSet = slot.color;
+    slot.autoEmptyAtSet = slot.empty;
+  }
+  slot.material = material;
+  slot.color = color;
+  slot.empty = false;
+  slot.source = 'manual';
+  slot.manualSetBy = { email: req.user.email.toLowerCase(), name: req.user.name };
+  slot.manualSetAt = new Date();
+
+  await printer.save();
+  res.status(200).json({ success: true, data: printer.spoolSlots[slotIndex] });
+});

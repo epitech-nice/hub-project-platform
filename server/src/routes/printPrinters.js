@@ -10,5 +10,6 @@ router.patch('/:id/disabled', authenticateToken, isAdmin, printerController.setD
 router.get('/:id/qr', authenticateToken, isAdmin, printerController.getQrCode);
 router.post('/:id/confirm-clearance', authenticateToken, printerController.confirmClearance);
 router.post('/:id/confirm-clearance/override', authenticateToken, isAdmin, printerController.confirmClearanceOverride);
+router.put('/:id/spool-slots/:gate/manual', authenticateToken, printerController.setManualSpoolSlot);
 
 module.exports = router;
