@@ -1,3 +1,6 @@
+import logging
+import time
+
 import requests
 
 
@@ -46,9 +49,52 @@ class MoonrakerClient:
             raise MoonrakerClientError(f"Réponse Moonraker inattendue à l'upload: {exc}") from exc
 
         if not print_started:
-            raise MoonrakerClientError(
-                "Moonraker a accepté le fichier mais n'a pas démarré l'impression (print_started=false)"
+            detail = self._get_recent_gcode_error()
+            message = "Moonraker a accepté le fichier mais n'a pas démarré l'impression (print_started=false)"
+            if detail:
+                message += f" — {detail}"
+            raise MoonrakerClientError(message)
+
+    # Fenêtre de corrélation pour _get_recent_gcode_error : au-delà, une entrée est considérée
+    # trop ancienne pour être liée à l'échec en cours (voir docstring de la méthode).
+    RECENT_GCODE_ERROR_WINDOW_SECONDS = 30
+
+    def _get_recent_gcode_error(self):
+        """Best-effort : va chercher la vraie raison d'un échec de démarrage d'impression dans
+        server/gcode_store (journal des dernières commandes/réponses gcode Klipper), la seule
+        source qui l'expose. /server/files/upload avale l'exception réelle de start_print côté
+        Moonraker (file_manager.py::_finish_gcode_upload fait `except self.server.error: pass`)
+        et ne renvoie qu'un booléen print_started=false sans aucun détail — confirmé en direct
+        sur l'imprimante (2026-09-11, échec réel : "unknown filament in extruder" invisible dans
+        la réponse d'upload, présent uniquement dans gcode_store).
+
+        Ne retient une entrée que si elle date de moins de RECENT_GCODE_ERROR_WINDOW_SECONDS —
+        sinon, si Klipper n'a rien échoté du tout pour CETTE tentative (déjà en shutdown/occupé,
+        cas déjà couvert par ailleurs), la dernière erreur du store pourrait être une erreur
+        ancienne et sans rapport (une commande manuelle d'un opérateur, un appel MMU_TTG_MAP
+        précédent...), attribuée à tort à l'échec courant.
+
+        Ne doit jamais lever : un échec de cette recherche d'enrichissement (store indisponible,
+        forme de réponse différente sur un autre firmware, etc.) ne doit pas masquer/remplacer
+        l'erreur déjà en cours de levée par l'appelant — on retombe sur le message générique, en
+        laissant une trace en debug pour ne pas perdre silencieusement ce signal.
+        """
+        url = f"{self.base_url}/server/gcode_store"
+        try:
+            response = requests.get(url, params={"count": 5}, timeout=self.timeout)
+            entries = response.json()["result"]["gcode_store"]
+            cutoff = time.time() - self.RECENT_GCODE_ERROR_WINDOW_SECONDS
+            for entry in reversed(entries):
+                if entry.get("time", 0) < cutoff:
+                    break
+                message = entry.get("message") or ""
+                if entry.get("type") == "response" and "error" in message.lower():
+                    return message
+        except Exception as exc:
+            logging.getLogger("printer_agent").debug(
+                "Échec de l'enrichissement d'erreur via gcode_store (non bloquant): %s", exc
             )
+        return None
 
     def get_print_stats(self):
         url = f"{self.base_url}/printer/objects/query"
