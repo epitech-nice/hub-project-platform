@@ -239,7 +239,10 @@ def test_dispatch_injects_gate_selection_for_a_mono_gate_assignment(tmp_path, lo
     assert call_order[1] == ("download", None)
 
 
-def test_dispatch_does_not_inject_or_map_when_gate_assignments_absent(tmp_path, logger):
+def test_dispatch_resets_ttg_map_but_injects_nothing_when_gate_assignments_absent(tmp_path, logger):
+    # Un vieux hub qui n'envoie pas encore ce champ ne doit pas laisser un ttg_map non-identité
+    # hérité d'un job multi-outils précédent résoudre silencieusement les Tx embarquées dans ce
+    # fichier vers la mauvaise bobine (voir finding de la 2e revue finale de branche, PR #17).
     hub = make_hub()
     hub.get_next_job.return_value = {"jobId": "job-1", "fileName": "a.gcode", "downloadUrl": "/x"}
 
@@ -261,10 +264,11 @@ def test_dispatch_does_not_inject_or_map_when_gate_assignments_absent(tmp_path, 
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     assert captured["content"] == "G28\nG1 X10\n"
-    moonraker.set_ttg_map.assert_not_called()
+    moonraker.set_ttg_map.assert_called_once_with([0, 1, 2, 3])
 
 
-def test_dispatch_does_not_inject_or_map_when_gate_assignments_empty(tmp_path, logger):
+def test_dispatch_resets_ttg_map_but_injects_nothing_when_gate_assignments_empty(tmp_path, logger):
+    # Cas overrideNoSpoolData : mêmes conséquences qu'un hub sans le champ, même correctif.
     hub = make_hub()
     hub.get_next_job.return_value = {
         "jobId": "job-1",
@@ -291,7 +295,7 @@ def test_dispatch_does_not_inject_or_map_when_gate_assignments_empty(tmp_path, l
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     assert captured["content"] == "G28\n"
-    moonraker.set_ttg_map.assert_not_called()
+    moonraker.set_ttg_map.assert_called_once_with([0, 1, 2, 3])
 
 
 def test_dispatch_calls_set_ttg_map_before_download_and_upload_for_multi_tool_assignment(tmp_path, logger):

@@ -5,6 +5,8 @@
 // Règle de détection (voir spec 2026-09-09) : présence d'AU MOINS une commande Tx → mode
 // multi-material, quel que soit le nombre de Tx distincts. Aucune Tx → mode single.
 
+const { normalizeColor } = require('./colorNormalize');
+
 const TOOL_LINE_REGEX = /^[ \t]*T([0-3])[ \t]*(;.*)?$/gm;
 const FILAMENT_COLOUR_REGEX = /^;\s*filament_colour\s*=\s*(.+)$/m;
 const FILAMENT_TYPE_REGEX = /^;\s*filament_type\s*=\s*(.+)$/m;
@@ -35,13 +37,6 @@ function parseGcodeSpoolInfo(gcodeText) {
     }));
 
   return { mode: 'multi-material', expectedTools };
-}
-
-// Même normalisation que client/src/utils/spoolMatch.js#normalizeColor (slicer "#RRGGBB" vs
-// Moonraker/ACE "RRGGBBAA") — dupliquée ici, pas de module partagé client/server dans ce repo.
-function normalizeColor(hex) {
-  if (!hex) return null;
-  return hex.replace('#', '').toLowerCase().slice(0, 6);
 }
 
 // Recalcule, au moment de la confirmation, les écarts matière/couleur entre ce que le slicer

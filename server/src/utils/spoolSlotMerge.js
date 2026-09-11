@@ -17,14 +17,7 @@
 // que produit cette fonction pure corresponde exactement à ce que Mongoose lit/écrit réellement
 // une fois assigné à un document `Printer` et rechargé.
 
-// Même normalisation que client/src/utils/spoolMatch.js#normalizeColor (slicer "#RRGGBB" vs
-// Moonraker/ACE "RRGGBBAA") — utilisée ici pour que le check de dérive d'une déclaration manuelle
-// ne soit pas trompé par un simple changement de casse/format entre deux rapports de la même
-// couleur physique.
-function normalizeColor(hex) {
-  if (!hex) return null;
-  return hex.replace('#', '').toLowerCase().slice(0, 6);
-}
+const { normalizeColor } = require('./colorNormalize');
 
 function toPlainSlot(existing) {
   return {

@@ -111,6 +111,18 @@ describe('PUT /api/print/printers/:id/spool-slots/:gate/manual', () => {
     expect(res.status).toBe(400);
   });
 
+  it('returns 400 when material is not a string (e.g. an array)', async () => {
+    const admin = await createAdmin();
+    const { printer } = await createPrinter({ spoolSlots: [{ gate: 0, material: '', color: '', empty: true }] });
+
+    const res = await request(app)
+      .put(`/api/print/printers/${printer._id}/spool-slots/0/manual`)
+      .set(authHeader(admin))
+      .send({ material: ['PLA'], color: '#ffffff' });
+
+    expect(res.status).toBe(400);
+  });
+
   it('returns 400 when color is not a valid hex color', async () => {
     const admin = await createAdmin();
     const { printer } = await createPrinter({ spoolSlots: [{ gate: 0, material: '', color: '', empty: true }] });

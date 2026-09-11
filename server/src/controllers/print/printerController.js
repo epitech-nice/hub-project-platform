@@ -116,7 +116,7 @@ exports.confirmClearanceOverride = asyncHandler((req, res, next) => confirmClear
 // body: { material, color }
 exports.setManualSpoolSlot = asyncHandler(async (req, res, next) => {
   const { material, color } = req.body;
-  if (!material || !color) {
+  if (typeof material !== 'string' || typeof color !== 'string' || !material || !color) {
     return next(new ErrorResponse('material et color sont requis', 400));
   }
   if (material.length > MAX_MATERIAL_LENGTH) {

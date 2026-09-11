@@ -85,17 +85,21 @@ def _resolve_gate_assignments(gate_assignments):
     """Traduit gateAssignments (reçu du hub, voir spec 2026-09-10) en soit un gate unique à
     injecter en tête de fichier (Tn, cas mono-matériau : une seule entrée à tool=null), soit une
     table complète tool→gate pour MMU_TTG_MAP (cas multi-couleur : au moins une entrée à tool
-    non-null). Retourne (single_gate, ttg_map). Une liste vide retourne (None, None) : rien à
-    assigner (cas "soumis sans données bobines").
+    non-null). Retourne (single_gate, ttg_map).
 
-    Cas mono (tool=null) : ttg_map est TOUJOURS l'identité ([0,1,2,3]), pas None. La commande Tn
-    injectée en tête de fichier par _inject_gate_selection est un index logique résolu au
-    print-time via le ttg_map courant du firmware (état PERSISTENT, jamais reset automatiquement
-    par l'imprimante). Si un job multi-outils précédent a laissé ce ttg_map dans un état non-
-    identité (ex: [3,1,2,3]), le Tn de ce job mono résoudrait vers le mauvais gate physique sans
-    ce reset explicite — voir finding #1 de la revue finale de branche."""
+    Une liste vide/absente (soumis sans données bobines via overrideNoSpoolData, ou un vieux hub
+    qui n'envoie pas encore ce champ) retourne (None, ttg_map identité) : aucun Tn n'est injecté,
+    mais le ttg_map est quand même remis à l'identité avant dispatch — sinon les commandes Tx déjà
+    présentes dans le fichier gcode (slicer) se résoudraient via un ttg_map potentiellement laissé
+    non-identité par un job multi-outils précédent (état PERSISTENT côté firmware, jamais reset
+    automatiquement par l'imprimante), imprimant silencieusement la mauvaise bobine.
+
+    Cas mono (tool=null) : même raisonnement — la commande Tn injectée en tête de fichier par
+    _inject_gate_selection est un index logique résolu au print-time via le ttg_map courant du
+    firmware, d'où le même reset à l'identité avant injection — voir finding #1 de la revue finale
+    de branche."""
     if not gate_assignments:
-        return None, None
+        return None, list(range(MAX_ACE_GATE + 1))
 
     has_null_tool = any(a.get("tool") is None for a in gate_assignments)
     if has_null_tool:
