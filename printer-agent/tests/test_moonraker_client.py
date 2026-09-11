@@ -26,7 +26,7 @@ def test_upload_and_start_print_uses_a_longer_timeout_than_status_checks(tmp_pat
 
     with patch("agent.moonraker_client.requests.post") as mock_post:
         mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = {"result": {"print_started": True}}
+        mock_post.return_value.json.return_value = {"print_started": True}
         client.upload_and_start_print(str(gcode_path), "print.gcode")
 
     _, kwargs = mock_post.call_args
@@ -39,9 +39,17 @@ def test_upload_and_start_print_success(tmp_path):
     gcode_path.write_text("G28\n")
 
     with requests_mock.Mocker() as m:
+        # Forme réelle observée sur le firmware Rinkhals/GoKlipper (pas d'enveloppe "result",
+        # contrairement à printer/objects/query) — confirmé par un upload de test print=false
+        # en direct sur l'imprimante le 2026-09-11.
         m.post(
             f"{BASE_URL}/server/files/upload",
-            json={"result": {"item": {"path": "print.gcode", "root": "gcodes"}, "print_started": True}},
+            json={
+                "action": "create_file",
+                "item": {"path": "print.gcode", "root": "gcodes"},
+                "print_started": True,
+                "print_queued": False,
+            },
         )
         client.upload_and_start_print(str(gcode_path), "print.gcode")
 
@@ -64,9 +72,28 @@ def test_upload_and_start_print_raises_when_print_not_started(tmp_path):
     with requests_mock.Mocker() as m:
         m.post(
             f"{BASE_URL}/server/files/upload",
-            json={"result": {"item": {"path": "print.gcode", "root": "gcodes"}, "print_started": False}},
+            json={"action": "create_file", "item": {"path": "print.gcode", "root": "gcodes"}, "print_started": False},
         )
         with pytest.raises(MoonrakerClientError):
+            client.upload_and_start_print(str(gcode_path), "print.gcode")
+
+
+def test_upload_and_start_print_raises_on_missing_result_wrapper(tmp_path):
+    # Bug réel en prod (2026-09-11) : le code lisait ["result"]["print_started"], qui levait un
+    # KeyError('result') sur ce firmware — le job était rapporté "failed" au hub alors que
+    # l'impression démarrait réellement côté Moonraker (upload déjà accepté avant le crash de
+    # parsing). Ce test capture l'ancienne forme, désormais invalide, pour garantir que la levée
+    # de MoonrakerClientError reste explicite si jamais un firmware future la réintroduit.
+    client = make_client()
+    gcode_path = tmp_path / "print.gcode"
+    gcode_path.write_text("G28\n")
+
+    with requests_mock.Mocker() as m:
+        m.post(
+            f"{BASE_URL}/server/files/upload",
+            json={"result": {"item": {"path": "print.gcode", "root": "gcodes"}, "print_started": True}},
+        )
+        with pytest.raises(MoonrakerClientError, match="print_started"):
             client.upload_and_start_print(str(gcode_path), "print.gcode")
 
 
