@@ -7,10 +7,31 @@ import Button from './Button';
 import Modal from './Modal';
 import Input from './Input';
 import { cn } from '../../lib/cn';
+import { normalizeColor } from '../../utils/spoolMatch';
 
 const GATE_LABELS = ['Slot 1', 'Slot 2', 'Slot 3', 'Slot 4'];
 
 const swatchColor = (hex) => (hex ? `#${hex.replace('#', '').slice(0, 6)}` : 'transparent');
+
+// Couleurs filament courantes, pour éviter d'obliger l'étudiant à régler une teinte précise au
+// pixel près sur le <input type="color"> natif (peu pratique pour "juste dire c'est marron") —
+// le picker natif reste disponible en-dessous pour une couleur non listée ici.
+const PRESET_COLORS = [
+  { name: 'Blanc', hex: 'ffffff' },
+  { name: 'Noir', hex: '000000' },
+  { name: 'Gris', hex: '808080' },
+  { name: 'Rouge', hex: 'e53935' },
+  { name: 'Orange', hex: 'ff6a14' },
+  { name: 'Jaune', hex: 'fed141' },
+  { name: 'Vert', hex: '43a047' },
+  { name: 'Bleu', hex: '1e88e5' },
+  { name: 'Violet', hex: '8e24aa' },
+  { name: 'Rose', hex: 'ec407a' },
+  { name: 'Marron', hex: '6d4c41' },
+  { name: 'Or', hex: 'd4af37' },
+  { name: 'Argent', hex: 'c0c0c0' },
+  { name: 'Naturel', hex: 'e8d6b3' },
+];
 
 export default function GatePicker({ slots, value, onChange, onManualDeclare }) {
   const [editingGate, setEditingGate] = useState(null);
@@ -103,12 +124,34 @@ export default function GatePicker({ slots, value, onChange, onManualDeclare }) 
           </div>
           <div>
             <label className="block mb-2 font-medium text-text">Couleur</label>
-            <input
-              type="color"
-              value={editColor}
-              onChange={(e) => setEditColor(e.target.value)}
-              className="h-10 w-full rounded-md border border-border cursor-pointer"
-            />
+            <div className="grid grid-cols-7 gap-2">
+              {PRESET_COLORS.map((preset) => {
+                const isSelected = normalizeColor(editColor) === preset.hex;
+                return (
+                  <button
+                    key={preset.hex}
+                    type="button"
+                    onClick={() => setEditColor(`#${preset.hex}`)}
+                    title={preset.name}
+                    aria-label={preset.name}
+                    className={cn(
+                      'h-8 w-8 rounded-full border',
+                      isSelected ? 'border-primary ring-2 ring-primary/40' : 'border-border'
+                    )}
+                    style={{ backgroundColor: `#${preset.hex}` }}
+                  />
+                );
+              })}
+            </div>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs text-primary">Couleur personnalisée</summary>
+              <input
+                type="color"
+                value={editColor}
+                onChange={(e) => setEditColor(e.target.value)}
+                className="mt-2 h-10 w-full rounded-md border border-border cursor-pointer"
+              />
+            </details>
           </div>
           <p className="text-xs text-text-muted">
             Utile pour une bobine générique sans puce RFID, que l&apos;imprimante ne peut pas détecter

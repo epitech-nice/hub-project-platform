@@ -33,7 +33,15 @@ class MoonrakerClient:
             )
 
         try:
-            print_started = response.json()["result"]["print_started"]
+            # Contrairement à printer/objects/query (result.status.*), la réponse réelle de
+            # /server/files/upload sur ce firmware Rinkhals/GoKlipper n'est PAS enveloppée dans
+            # "result" : {"action": ..., "item": {...}, "print_started": bool, "print_queued":
+            # bool} directement à la racine — vérifié par un upload de test (print=false) en
+            # direct sur l'imprimante. L'ancien code lisait ["result"]["print_started"], qui
+            # levait systématiquement un KeyError('result') : le job était rapporté "failed" au
+            # hub alors que l'impression démarrait réellement (le KeyError survient après l'appel
+            # HTTP, qui avait déjà réussi côté Moonraker).
+            print_started = response.json()["print_started"]
         except (KeyError, ValueError, TypeError) as exc:
             raise MoonrakerClientError(f"Réponse Moonraker inattendue à l'upload: {exc}") from exc
 
