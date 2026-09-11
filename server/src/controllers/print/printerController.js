@@ -1,9 +1,16 @@
 const QRCode = require('qrcode');
 const Printer = require('../../models/Printer');
+const PrintAuthorization = require('../../models/PrintAuthorization');
 const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
 const { generateApiKey } = require('../../utils/apiKey');
 const { PRINTER_STATUSES, PRINTER_STATUS_SOURCES, CLEARANCE_METHODS } = require('../../utils/constants');
+const { withOptimisticRetry } = require('../../utils/optimisticRetry');
+
+const MAX_MATERIAL_LENGTH = 64;
+// Accepte "#RRGGBB" comme "RRGGBB" — le format que <input type="color"> (GatePicker) envoie
+// réellement est sans '#', mais on tolère les deux plutôt que d'imposer un format côté client.
+const HEX_COLOR_REGEX = /^#?[0-9a-fA-F]{6}$/;
 
 // GET /api/print/printers
 exports.listPrinters = asyncHandler(async (req, res) => {
@@ -104,3 +111,64 @@ exports.confirmClearance = asyncHandler((req, res, next) => confirmClearanceInte
 
 // POST /api/print/printers/:id/confirm-clearance/override
 exports.confirmClearanceOverride = asyncHandler((req, res, next) => confirmClearanceInternal(req, res, next, CLEARANCE_METHODS.ADMIN_OVERRIDE));
+
+// PUT /api/print/printers/:id/spool-slots/:gate/manual
+// body: { material, color }
+exports.setManualSpoolSlot = asyncHandler(async (req, res, next) => {
+  const { material, color } = req.body;
+  if (typeof material !== 'string' || typeof color !== 'string' || !material || !color) {
+    return next(new ErrorResponse('material et color sont requis', 400));
+  }
+  if (material.length > MAX_MATERIAL_LENGTH) {
+    return next(new ErrorResponse(`material ne peut pas dépasser ${MAX_MATERIAL_LENGTH} caractères`, 400));
+  }
+  if (!HEX_COLOR_REGEX.test(color)) {
+    return next(new ErrorResponse('color doit être une couleur hexadécimale valide (ex: #RRGGBB)', 400));
+  }
+
+  // Permission avant existence du gate — cohérent avec confirmJob, qui vérifie déjà la
+  // propriété/l'autorisation avant l'existence de la ressource ciblée.
+  if (req.user.role !== 'admin') {
+    const authorization = await PrintAuthorization.findOne({ email: req.user.email.toLowerCase() });
+    if (!authorization || !authorization.authorized) {
+      return next(new ErrorResponse("Vous n'êtes pas autorisé à déclarer le contenu d'une bobine", 403));
+    }
+  }
+
+  const gate = Number(req.params.gate);
+  let updatedSlot;
+
+  // Relit puis réessaie sur VersionError plutôt qu'un simple read-then-save : ce endpoint peut
+  // être appelé en même temps que le rapport périodique de l'agent (POST /agent/spool-status),
+  // qui sauvegarde lui aussi Printer.spoolSlots en entier.
+  await withOptimisticRetry(
+    () => Printer.findById(req.params.id),
+    async (printer) => {
+      if (!printer) throw new ErrorResponse('Imprimante non trouvée', 404);
+
+      const slotIndex = printer.spoolSlots.findIndex((s) => s.gate === gate);
+      if (slotIndex === -1) throw new ErrorResponse('Gate inconnu pour cette imprimante', 404);
+
+      const slot = printer.spoolSlots[slotIndex];
+      // Ne capture le snapshot de dérive que si ce n'était pas déjà une déclaration manuelle —
+      // corriger une déclaration existante ne doit pas déplacer la référence utilisée pour
+      // détecter une future vraie lecture RFID (voir spec 2026-09-10).
+      if (slot.source !== 'manual') {
+        slot.autoMaterialAtSet = slot.material;
+        slot.autoColorAtSet = slot.color;
+        slot.autoEmptyAtSet = slot.empty;
+      }
+      slot.material = material;
+      slot.color = color;
+      slot.empty = false;
+      slot.source = 'manual';
+      slot.manualSetBy = { email: req.user.email.toLowerCase(), name: req.user.name };
+      slot.manualSetAt = new Date();
+
+      await printer.save();
+      updatedSlot = printer.spoolSlots[slotIndex];
+    }
+  );
+
+  res.status(200).json({ success: true, data: updatedSlot });
+});

@@ -35,6 +35,7 @@ Base : `/api/print/printers`
 | `/:id/qr` | GET | Admin | Générer le QR code de libération de plateau (PNG) |
 | `/:id/confirm-clearance` | POST | Authentifié | Confirmer la libération du plateau (scan QR) |
 | `/:id/confirm-clearance/override` | POST | Admin | Forcer la confirmation sans scan QR |
+| `/:id/spool-slots/:gate/manual` | PUT | Whitelisté ou Admin | Déclarer manuellement le contenu d'une bobine (sans puce RFID) |
 
 ### `POST /` — Créer une imprimante
 
@@ -82,6 +83,25 @@ Retourne directement une image `image/png` (pas de JSON) encodant l'URL
 ### `POST /:id/confirm-clearance` et `/:id/confirm-clearance/override`
 
 Voir la section [Clearance (QR code)](#clearance-qr-code) plus bas.
+
+### `PUT /:id/spool-slots/:gate/manual` — Déclarer manuellement une bobine
+
+Pour les bobines sans puce RFID (l'ACE/MMU ne peut alors pas détecter automatiquement leur matière/couleur) : permet à un utilisateur autorisé de renseigner ces informations à la main.
+
+**Body** :
+```json
+{ "material": "PLA", "color": "212721" }
+```
+
+`material` et `color` sont requis (400 sinon). `material` est limité à 64 caractères (400 si dépassé). `color` doit correspondre à une couleur hexadécimale sur 6 chiffres, avec ou sans `#` (`/^#?[0-9a-fA-F]{6}$/`) — 400 sinon.
+
+**Auth** : authentifié, et soit whitelisté (`PrintAuthorization.authorized: true`), soit admin (403 sinon) — même posture que la soumission d'un job, cohérente avec le fait que déclarer une bobine influence directement le prochain job imprimé sur cette imprimante.
+
+**Conditions** : imprimante trouvée (404 sinon), gate existant dans `Printer.spoolSlots` pour cette imprimante (404 sinon — `"Gate inconnu pour cette imprimante"`).
+
+**Effets** : pose `material`, `color`, `empty: false`, `source: 'manual'`, `manualSetBy` (`{ email, name }` de l'auteur) et `manualSetAt` sur le slot ciblé. Capture aussi la valeur auto-rapportée courante du slot (`autoMaterialAtSet`/`autoColorAtSet`/`autoEmptyAtSet`) comme référence pour la détection de dérive (voir `docs/models.md`, `Printer.spoolSlots`) — **sauf** si le slot était déjà `source: 'manual'`, auquel cas cette référence d'origine est préservée (une correction successive d'une déclaration manuelle ne déplace pas le point de comparaison utilisé pour détecter une future vraie lecture RFID).
+
+**Réponse (200)** : `{ "success": true, "data": <spoolSlot mis à jour> }`.
 
 ---
 
@@ -196,13 +216,12 @@ Jobs de l'étudiant connecté, triés par `submittedAt` décroissant.
     "mode": "single",
     "slots": [{ "gate": 0, "material": "PLA", "color": "212721FF", "empty": false }],
     "spoolSlotsUpdatedAt": "2026-09-09T12:00:00.000Z",
-    "expectedTools": [],
-    "mismatches": []
+    "expectedTools": []
   }
 }
 ```
 
-`slots` et `spoolSlotsUpdatedAt` sont une copie de l'état courant de `Printer.spoolSlots`/`Printer.spoolSlotsUpdatedAt` (dernier rapport de l'agent via `POST /agent/spool-status`, voir plus bas). `spoolSlotsUpdatedAt: null` signifie qu'aucune donnée bobine n'a *jamais* été reçue pour cette imprimante — état distinct d'un tableau `slots` vide avec `spoolSlotsUpdatedAt` posé (l'agent a bien répondu, mais l'imprimante ne détecte aucun gate). `mismatches` (voir `computeSlotMismatches`) n'est calculé qu'en mode `multi-material` (toujours `[]` en mode `single`), et ignore les tools dont `material`/`color` valent `null` (rien à comparer).
+`slots` et `spoolSlotsUpdatedAt` sont une copie de l'état courant de `Printer.spoolSlots`/`Printer.spoolSlotsUpdatedAt` (dernier rapport de l'agent via `POST /agent/spool-status`, voir plus bas). `spoolSlotsUpdatedAt: null` signifie qu'aucune donnée bobine n'a *jamais* été reçue pour cette imprimante — état distinct d'un tableau `slots` vide avec `spoolSlotsUpdatedAt` posé (l'agent a bien répondu, mais l'imprimante ne détecte aucun gate). La comparaison entre bobine chargée et matière/couleur attendue par tool (`expectedTools`) se fait désormais côté client, au moment où l'étudiant choisit interactivement un gate par tool — l'analyse ne calcule plus elle-même de liste d'écarts.
 
 Le document `PendingPrintUpload` créé expire automatiquement après 15 minutes (TTL Mongo) si jamais confirmé ; le fichier temporaire correspondant est nettoyé séparément par un sweeper applicatif (`server/src/utils/pendingUploadCleanup.js`, toutes les 5 min) puisqu'une expiration TTL Mongo ne peut pas déclencher de code applicatif — voir `docs/models.md`.
 
@@ -210,18 +229,20 @@ Le document `PendingPrintUpload` créé expire automatiquement après 15 minutes
 
 **Body** :
 ```json
-{ "selectedGate": 0, "overrideNoSpoolData": false }
+{ "gateAssignments": [{ "tool": null, "gate": 0 }], "overrideNoSpoolData": false }
 ```
 
-Conditions selon `gcodeMode` de l'analyse :
-- **`single`** :
-  - Si `Printer.spoolSlotsUpdatedAt` est posé (données bobines disponibles) : `selectedGate` (entier 0-3) requis, doit désigner un slot existant et non vide — sinon 400 (`"Sélection de bobine requise"` ou `"Ce slot est vide, choisissez-en un autre"`)
-  - Si `Printer.spoolSlotsUpdatedAt` est `null` (aucune donnée bobine jamais reçue) : `overrideNoSpoolData: true` requis pour soumettre quand même — sinon 400
-- **`multi-material`** : aucun champ requis, la sélection de bobine se fait via les commandes `Tx` déjà présentes dans le gcode (injectées côté agent, voir `printer-agent`)
+`gateAssignments` contient exactement une entrée par tool détecté à l'analyse (`PendingPrintUpload.expectedTools`, ou un fichier mono zéro-Tx) : `[{ "tool": null, "gate": 0 }]` pour un fichier mono, `[{ "tool": "T0", "gate": 2 }, { "tool": "T2", "gate": 1 }]` pour un fichier multi-outils avec deux tools détectés.
+
+Conditions (indépendantes du `gcodeMode` de l'analyse — mono et multi-outils suivent désormais exactement la même logique) :
+- `hasSpoolData = !!Printer.spoolSlotsUpdatedAt && Printer.spoolSlots.length > 0` : si `false` — soit aucune donnée bobine jamais reçue pour cette imprimante, soit l'agent a bien répondu mais l'imprimante ne détecte aucun gate (`spoolSlots: []`, ex: `num_gates: 0` côté Moonraker) — `overrideNoSpoolData: true` est requis pour soumettre quand même (`gateAssignments` ignoré dans ce cas) — sinon 400 (`"Données bobines indisponibles..."`). Ces deux cas sont traités de façon identique côté étudiant : sans gate détecté, il n'y a de toute façon rien à choisir dans l'interface.
+- Si `hasSpoolData` est `true` : `gateAssignments` doit contenir une entrée pour **chaque** tool attendu (mono : une seule entrée `tool: null` ; multi-outils : une entrée par `expectedTools[].tool`) — aucune assignation partielle n'est acceptée, sinon 400 (`"Une bobine doit être assignée à chaque tool détecté"`). Chaque `gate` assigné doit être un entier 0-3 désignant un slot existant et non vide, sinon 400 (`"Sélection de bobine requise pour chaque tool"` ou `"Ce slot est vide, choisissez-en un autre"`)
 
 **Conditions re-vérifiées à la confirmation** (l'analyse a pu dater) : le `PendingPrintUpload` doit encore exister (410 si expiré via TTL ou déjà confirmé — re-uploader), le requérant doit être l'auteur de l'analyse (403 sinon), la whitelist doit toujours autoriser l'email (403 sinon), l'imprimante doit toujours être `idle` (409 sinon). Un rejet sur whitelist/statut imprimante crée un `PrintJob` `rejected` de traçabilité (mêmes `rejectionReason`/messages que ci-dessous) ; un 410 (analyse expirée) ne crée rien.
 
-**Effets en cas de succès** : le fichier est déplacé de `storage/pending-print-jobs/` vers `storage/print-jobs/`, un `PrintJob` est créé avec `selectedGate`, `slotSelectionOverridden`, `gcodeMode` et `slotMismatchWarnings` (copié depuis `mismatches` de l'analyse), l'imprimante est verrouillée atomiquement (`findOneAndUpdate` conditionné sur `status: 'idle'` → `printing`, `currentJob` posé), et le `PendingPrintUpload` est supprimé. Si ce verrou échoue (deux confirmations concurrentes sur la même imprimante), le job déjà créé repasse en `rejected` / `printer_busy` plutôt que de rester `queued` sans imprimante réellement réservée.
+**Effets en cas de succès** : le fichier est déplacé de `storage/pending-print-jobs/` vers `storage/print-jobs/`, un `PrintJob` est créé avec `gateAssignments`, `slotMismatches`, `slotSelectionOverridden` et `gcodeMode`, l'imprimante est verrouillée atomiquement (`findOneAndUpdate` conditionné sur `status: 'idle'` → `printing`, `currentJob` posé), et le `PendingPrintUpload` est supprimé. Si ce verrou échoue (deux confirmations concurrentes sur la même imprimante), le job déjà créé repasse en `rejected` / `printer_busy` plutôt que de rester `queued` sans imprimante réellement réservée.
+
+`slotMismatches` (`server/src/utils/spoolAnalysis.js::computeConfirmedSlotMismatches`) est recalculé côté serveur à la confirmation, en comparant `PendingPrintUpload.expectedTools` à l'état réel des gates assignés — persisté même si l'étudiant a choisi de soumettre malgré l'avertissement affiché côté client (`computeGateMismatch`), pour qu'un admin puisse retrouver après coup qu'un mismatch avait été signalé à la soumission (badge "Bobine non conforme" sur `/admin/print`). Vide (`[]`) si aucune métadonnée slicer n'était disponible pour comparer, ou si la sélection a été outrepassée (`overrideNoSpoolData`).
 
 **Réponse (201)** : `{ "success": true, "data": <PrintJob> }`.
 
@@ -282,12 +303,19 @@ Sinon, tente de passer le job `currentJob` de `queued` à `sent` de façon atomi
     "jobId": "...",
     "fileName": "piece.gcode",
     "downloadUrl": "/api/print/agent/jobs/<id>/file",
-    "selectedGate": 0
+    "gateAssignments": [{ "tool": null, "gate": 0 }]
   }
 }
 ```
 
-`selectedGate` vaut la valeur posée à la confirmation (`POST /jobs/:pendingUploadId/confirm`) — un entier 0-3 en mode `single`, `null` en mode `multi-material` ou si la sélection a été outrepassée (`slotSelectionOverridden`). Verrouillé à la confirmation, jamais revalidé au dispatch.
+`gateAssignments` est une copie telle quelle de `PrintJob.gateAssignments`, posé à la confirmation (`POST /jobs/:pendingUploadId/confirm`) et jamais revalidé au dispatch : `[]` si la sélection a été outrepassée (`slotSelectionOverridden`, aucune donnée bobine disponible), une entrée `{ tool: null, gate }` pour un fichier mono (zéro `Tx`), une entrée par tool distinct détecté (`{ tool: "T0", gate }`, `{ tool: "T2", gate }`, ...) pour un fichier multi-outils.
+
+`printer-agent` (voir `agent/main.py::_resolve_gate_assignments`) traduit ce tableau en l'un de ces mécanismes de dispatch, tous exécutés **avant** le téléchargement du fichier et le démarrage de l'impression :
+- **Mono** (une entrée `tool: null`) : le gate est injecté en tête du fichier `.gcode` sous forme d'une commande `Tn` brute (`_inject_gate_selection`) — le même canal que celui utilisé nativement par un gcode multi-couleur pour changer de bobine.
+- **Multi-outils** (au moins une entrée à `tool` non-null) : l'agent construit la table tool→gate complète et l'envoie à Moonraker via `MMU_TTG_MAP` (`moonraker.set_ttg_map`) avant le téléchargement — le fichier gcode lui-même n'est pas modifié, ses commandes `Tx` déjà présentes se résolvent ensuite via cette table au print-time.
+- **Vide/absent** (`overrideNoSpoolData`, ou un vieux hub qui n'envoie pas encore ce champ) : rien n'est injecté ni assigné, l'agent n'a aucune donnée pour le faire.
+
+Dans les trois cas, l'agent réinitialise systématiquement `ttg_map` à l'identité (`MMU_TTG_MAP` via Moonraker) juste avant dispatch — y compris quand `gateAssignments` est vide/absent. Cette table est un état **persistant** du firmware (jamais reset automatiquement par l'imprimante) : sans ce reset systématique, un mapping non-identité laissé par un job multi-outils précédent ferait résoudre silencieusement vers la mauvaise bobine aussi bien la commande `Tn` injectée (cas mono) que les commandes `Tx` déjà présentes dans un fichier soumis via override (aucune commande envoyée par le hub pour ce cas ne pouvait auparavant déclencher ce reset).
 
 ### `GET /jobs/:id/file`
 

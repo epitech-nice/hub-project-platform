@@ -519,20 +519,18 @@ export default function AdminPrintPage() {
                         {' — '}
                         {new Date(job.submittedAt).toLocaleString('fr-FR')}
                       </p>
-                      {job.gcodeMode === 'single' && (
+                      {job.gcodeMode && (
                         <p className="text-xs text-text-muted">
                           {job.slotSelectionOverridden
                             ? 'Bobine : non spécifiée (soumis sans données bobines)'
-                            : job.selectedGate !== null && job.selectedGate !== undefined
-                            ? `Bobine : ${GATE_LABELS[job.selectedGate] || `Slot ${job.selectedGate + 1}`}`
+                            : job.gateAssignments?.length > 0
+                            ? `Bobine${job.gateAssignments.length > 1 ? 's' : ''} : ${job.gateAssignments
+                                .map(
+                                  (a) =>
+                                    `${a.tool ? `${a.tool}→` : ''}${GATE_LABELS[a.gate] ?? `Slot ${a.gate + 1}`}`
+                                )
+                                .join(', ')}`
                             : null}
-                        </p>
-                      )}
-                      {job.slotMismatchWarnings?.length > 0 && (
-                        <p className="text-xs text-danger">
-                          {job.slotMismatchWarnings.length} avertissement
-                          {job.slotMismatchWarnings.length > 1 ? 's' : ''} matière/couleur signalé
-                          {job.slotMismatchWarnings.length > 1 ? 's' : ''} à la soumission
                         </p>
                       )}
                     </div>
@@ -540,6 +538,22 @@ export default function AdminPrintPage() {
                       <Badge variant={JOB_STATUS_BADGE_VARIANTS[job.status] || 'neutral'} size="sm">
                         {JOB_STATUS_LABELS[job.status] || job.status}
                       </Badge>
+                      {job.slotMismatches?.length > 0 && (
+                        <Badge
+                          variant="changes"
+                          size="sm"
+                          title={job.slotMismatches
+                            .map(
+                              (m) =>
+                                `${m.tool ? `${m.tool}: ` : ''}attendu ${m.expectedMaterial || '?'}${
+                                  m.expectedColor ? ` (${m.expectedColor})` : ''
+                                } — chargé ${m.actualMaterial || 'vide'}`
+                            )
+                            .join(' / ')}
+                        >
+                          Bobine non conforme
+                        </Badge>
+                      )}
                       {job.rejectionReason && (
                         <span className="text-xs text-text-muted">
                           ({REJECTION_REASON_LABELS[job.rejectionReason] || job.rejectionReason})

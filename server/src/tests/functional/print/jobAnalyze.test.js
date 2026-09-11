@@ -66,13 +66,13 @@ describe('POST /api/print/jobs/analyze', () => {
     expect(pending.student.email).toBe(student.email);
   });
 
-  it('detects multi-material mode, extracts expected tools, and computes mismatches', async () => {
+  it('detects multi-material mode and extracts expected tools', async () => {
     const student = await createUser({ email: 'ok@epitech.eu' });
     await whitelistEmail(student.email);
     const { printer } = await createPrinter({
       spoolSlots: [
-        { gate: 0, material: 'PLA', color: 'FF6A14FF', empty: false }, // matche T0 exactement (PLA, #FF6A14)
-        { gate: 2, material: 'PLA', color: 'F40031FF', empty: false }, // matière attendue: PETG -> mismatch
+        { gate: 0, material: 'PLA', color: 'FF6A14FF', empty: false },
+        { gate: 2, material: 'PLA', color: 'F40031FF', empty: false },
       ],
       spoolSlotsUpdatedAt: new Date(),
     });
@@ -89,8 +89,7 @@ describe('POST /api/print/jobs/analyze', () => {
       { tool: 'T0', material: 'PLA', color: '#FF6A14' },
       { tool: 'T2', material: 'PETG', color: '#F40031' },
     ]);
-    expect(res.body.data.mismatches).toHaveLength(1);
-    expect(res.body.data.mismatches[0].tool).toBe('T2');
+    expect(res.body.data.mismatches).toBeUndefined();
   });
 
   it('rejects a non-.gcode file', async () => {

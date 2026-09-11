@@ -10,12 +10,21 @@ const PrintAuthorization = require('../../../models/PrintAuthorization');
 const { PRINTER_STATUSES } = require('../../../utils/constants');
 
 const MONO_GCODE = 'G28\nG1 X10 Y10\nM104 S200\n';
-const MULTI_GCODE = [
+const MULTI_GCODE_ONE_TOOL = [
   '; filament_colour = #FF6A14;#FED141;#F40031;#212721',
   '; filament_type = PLA;PLA;PETG;PLA',
   'G28',
   'T0',
   'G1 X10',
+].join('\n');
+const MULTI_GCODE_TWO_TOOLS = [
+  '; filament_colour = #FF6A14;#FED141;#F40031;#212721',
+  '; filament_type = PLA;PLA;PETG;PLA',
+  'G28',
+  'T0',
+  'G1 X10',
+  'T2',
+  'G1 X20',
 ].join('\n');
 
 const analyze = (student, printer, gcode = MONO_GCODE, filename = 'part.gcode') =>
@@ -53,11 +62,11 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
     const res = await request(app)
       .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
       .set(authHeader(intruder))
-      .send({ selectedGate: 0 });
+      .send({ gateAssignments: [{ tool: null, gate: 0 }] });
     expect(res.status).toBe(403);
   });
 
-  it('creates a queued PrintJob with the selected gate and locks the printer (mono-material)', async () => {
+  it('creates a queued PrintJob with the mono gate assignment and locks the printer', async () => {
     const student = await createUser({ email: 'ok@epitech.eu' });
     await whitelistEmail(student.email);
     const { printer } = await createPrinter({
@@ -72,11 +81,11 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
     const res = await request(app)
       .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
       .set(authHeader(student))
-      .send({ selectedGate: 0 });
+      .send({ gateAssignments: [{ tool: null, gate: 0 }] });
 
     expect(res.status).toBe(201);
     expect(res.body.data.status).toBe('queued');
-    expect(res.body.data.selectedGate).toBe(0);
+    expect(res.body.data.gateAssignments).toEqual([{ tool: null, gate: 0 }]);
     expect(res.body.data.gcodeMode).toBe('single');
     expect(fs.existsSync(res.body.data.filePath)).toBe(true);
 
@@ -87,7 +96,7 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
     expect(await PendingPrintUpload.findById(analyzeRes.body.data.pendingUploadId)).toBeNull();
   });
 
-  it('rejects a mono-material confirm without selectedGate when spool data exists', async () => {
+  it('rejects a confirm with no gateAssignments when spool data exists', async () => {
     const student = await createUser({ email: 'ok@epitech.eu' });
     await whitelistEmail(student.email);
     const { printer } = await createPrinter({
@@ -115,7 +124,7 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
     const res = await request(app)
       .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
       .set(authHeader(student))
-      .send({ selectedGate: 1 });
+      .send({ gateAssignments: [{ tool: null, gate: 1 }] });
     expect(res.status).toBe(400);
   });
 
@@ -136,28 +145,151 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
       .set(authHeader(student))
       .send({ overrideNoSpoolData: true });
     expect(overridden.status).toBe(201);
-    expect(overridden.body.data.selectedGate).toBeNull();
+    expect(overridden.body.data.gateAssignments).toEqual([]);
     expect(overridden.body.data.slotSelectionOverridden).toBe(true);
   });
 
-  it('confirms a multi-material upload without requiring selectedGate, carrying over mismatches', async () => {
+  it('blocks confirm when spoolSlotsUpdatedAt is set but spoolSlots is empty, unless overridden', async () => {
+    // Couvre le finding #3 de la revue finale : une imprimante dont l'agent a bien répondu mais
+    // ne détecte aucun gate (num_gates: 0 côté Moonraker) doit être traitée comme "pas de donnée
+    // utilisable", exactement comme spoolSlotsUpdatedAt jamais posé — sinon le frontend n'a rien
+    // à proposer à l'étudiant et le bouton de confirmation reste bloqué sans échappatoire.
+    const student = await createUser({ email: 'ok@epitech.eu' });
+    await whitelistEmail(student.email);
+    const { printer } = await createPrinter({ spoolSlots: [], spoolSlotsUpdatedAt: new Date() });
+    const analyzeRes = await analyze(student, printer);
+
+    const blocked = await request(app)
+      .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
+      .set(authHeader(student))
+      .send({});
+    expect(blocked.status).toBe(400);
+
+    const overridden = await request(app)
+      .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
+      .set(authHeader(student))
+      .send({ overrideNoSpoolData: true });
+    expect(overridden.status).toBe(201);
+    expect(overridden.body.data.gateAssignments).toEqual([]);
+    expect(overridden.body.data.slotSelectionOverridden).toBe(true);
+  });
+
+  it('confirms a single-tool multi-material upload with one gate assignment', async () => {
     const student = await createUser({ email: 'ok@epitech.eu' });
     await whitelistEmail(student.email);
     const { printer } = await createPrinter({
       spoolSlots: [{ gate: 0, material: 'PETG', color: '000000FF', empty: false }],
       spoolSlotsUpdatedAt: new Date(),
     });
-    const analyzeRes = await analyze(student, printer, MULTI_GCODE);
-    expect(analyzeRes.body.data.mismatches).toHaveLength(1); // T0 attend PLA, slot 0 a du PETG
+    const analyzeRes = await analyze(student, printer, MULTI_GCODE_ONE_TOOL);
 
     const res = await request(app)
       .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
       .set(authHeader(student))
-      .send({});
+      .send({ gateAssignments: [{ tool: 'T0', gate: 0 }] });
 
     expect(res.status).toBe(201);
-    expect(res.body.data.selectedGate).toBeNull();
-    expect(res.body.data.slotMismatchWarnings).toHaveLength(1);
+    expect(res.body.data.gateAssignments).toEqual([{ tool: 'T0', gate: 0 }]);
+  });
+
+  it('requires an assignment for every detected tool in a multi-tool file', async () => {
+    const student = await createUser({ email: 'ok@epitech.eu' });
+    await whitelistEmail(student.email);
+    const { printer } = await createPrinter({
+      spoolSlots: [
+        { gate: 0, material: 'PLA', color: 'FF6A14FF', empty: false },
+        { gate: 2, material: 'PETG', color: 'F40031FF', empty: false },
+      ],
+      spoolSlotsUpdatedAt: new Date(),
+    });
+    const analyzeRes = await analyze(student, printer, MULTI_GCODE_TWO_TOOLS);
+
+    const partial = await request(app)
+      .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
+      .set(authHeader(student))
+      .send({ gateAssignments: [{ tool: 'T0', gate: 0 }] });
+    expect(partial.status).toBe(400);
+
+    const complete = await request(app)
+      .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
+      .set(authHeader(student))
+      .send({
+        gateAssignments: [
+          { tool: 'T0', gate: 0 },
+          { tool: 'T2', gate: 2 },
+        ],
+      });
+    expect(complete.status).toBe(201);
+    expect(complete.body.data.gateAssignments).toEqual([
+      { tool: 'T0', gate: 0 },
+      { tool: 'T2', gate: 2 },
+    ]);
+  });
+
+  it('returns 400 (not 500) when gateAssignments contains a non-object entry', async () => {
+    const student = await createUser({ email: 'ok@epitech.eu' });
+    await whitelistEmail(student.email);
+    const { printer } = await createPrinter({
+      spoolSlots: [{ gate: 0, material: 'PLA', color: '212721FF', empty: false }],
+      spoolSlotsUpdatedAt: new Date(),
+    });
+    const analyzeRes = await analyze(student, printer);
+
+    const res = await request(app)
+      .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
+      .set(authHeader(student))
+      .send({ gateAssignments: [null] });
+    expect(res.status).toBe(400);
+  });
+
+  it('persists no slotMismatches when the assigned gate matches the slicer expectations', async () => {
+    const student = await createUser({ email: 'ok@epitech.eu' });
+    await whitelistEmail(student.email);
+    // MULTI_GCODE_ONE_TOOL attend PLA/#FF6A14 pour T0 — gate chargé en conséquence.
+    const { printer } = await createPrinter({
+      spoolSlots: [{ gate: 0, material: 'PLA', color: 'FF6A14FF', empty: false }],
+      spoolSlotsUpdatedAt: new Date(),
+    });
+    const analyzeRes = await analyze(student, printer, MULTI_GCODE_ONE_TOOL);
+
+    const res = await request(app)
+      .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
+      .set(authHeader(student))
+      .send({ gateAssignments: [{ tool: 'T0', gate: 0 }] });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.slotMismatches).toEqual([]);
+  });
+
+  it('persists slotMismatches on the created PrintJob when the assigned gate does not match', async () => {
+    const student = await createUser({ email: 'ok@epitech.eu' });
+    await whitelistEmail(student.email);
+    // MULTI_GCODE_ONE_TOOL attend PLA/#FF6A14 pour T0 — on assigne un gate chargé en PETG noir.
+    const { printer } = await createPrinter({
+      spoolSlots: [{ gate: 0, material: 'PETG', color: '000000FF', empty: false }],
+      spoolSlotsUpdatedAt: new Date(),
+    });
+    const analyzeRes = await analyze(student, printer, MULTI_GCODE_ONE_TOOL);
+
+    const res = await request(app)
+      .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
+      .set(authHeader(student))
+      .send({ gateAssignments: [{ tool: 'T0', gate: 0 }] });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.slotMismatches).toEqual([
+      {
+        tool: 'T0',
+        gate: 0,
+        expectedMaterial: 'PLA',
+        expectedColor: '#FF6A14',
+        actualMaterial: 'PETG',
+        actualColor: '000000FF',
+      },
+    ]);
+
+    const stored = await PrintJob.findById(res.body.data._id);
+    expect(stored.slotMismatches).toHaveLength(1);
   });
 
   it('creates a rejected PrintJob when the printer is busy at confirm time', async () => {
@@ -169,13 +301,12 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
     });
     const analyzeRes = await analyze(student, printer);
 
-    // L'imprimante devient occupée entre l'analyse et la confirmation.
     await Printer.findByIdAndUpdate(printer._id, { status: PRINTER_STATUSES.PRINTING });
 
     const res = await request(app)
       .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
       .set(authHeader(student))
-      .send({ selectedGate: 0 });
+      .send({ gateAssignments: [{ tool: null, gate: 0 }] });
 
     expect(res.status).toBe(409);
     const jobs = await PrintJob.find({ 'student.email': student.email });
@@ -193,13 +324,12 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
     });
     const analyzeRes = await analyze(student, printer);
 
-    // L'autorisation est révoquée entre l'analyse et la confirmation.
     await PrintAuthorization.findOneAndUpdate({ email: student.email }, { authorized: false });
 
     const res = await request(app)
       .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
       .set(authHeader(student))
-      .send({ selectedGate: 0 });
+      .send({ gateAssignments: [{ tool: null, gate: 0 }] });
 
     expect(res.status).toBe(403);
     const jobs = await PrintJob.find({ 'student.email': student.email });
@@ -220,8 +350,6 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
       spoolSlotsUpdatedAt: new Date(),
     });
 
-    // Les deux analyses réussissent (aucun verrou posé par /analyze) — seule la confirmation
-    // pose le verrou atomique, donc les deux pending uploads coexistent avant la course.
     const analyzeResA = await analyze(studentA, printer, MONO_GCODE, 'a.gcode');
     const analyzeResB = await analyze(studentB, printer, MONO_GCODE, 'b.gcode');
 
@@ -229,7 +357,7 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
       request(app)
         .post(`/api/print/jobs/${pendingUploadId}/confirm`)
         .set(authHeader(student))
-        .send({ selectedGate: 0 });
+        .send({ gateAssignments: [{ tool: null, gate: 0 }] });
 
     const [resA, resB] = await Promise.all([
       confirm(studentA, analyzeResA.body.data.pendingUploadId),
@@ -251,8 +379,6 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
     const rejectedJob = jobs.find((j) => j.status === 'rejected');
     expect(rejectedJob.rejectionReason).toBe('printer_busy');
 
-    // Les deux PendingPrintUpload sont supprimés (gagnant : chemin de succès ; perdant : verrou
-    // atomique échoué après création du job, même traitement que le gagnant côté nettoyage).
     expect(await PendingPrintUpload.findById(analyzeResA.body.data.pendingUploadId)).toBeNull();
     expect(await PendingPrintUpload.findById(analyzeResB.body.data.pendingUploadId)).toBeNull();
   });

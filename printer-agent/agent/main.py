@@ -4,6 +4,7 @@ import json
 import logging
 import logging.handlers
 import os
+import re
 import shutil
 import sys
 import time
@@ -57,24 +58,69 @@ def _has_enough_disk_space(download_dir):
         return True  # la vérification elle-même échouant ne doit pas bloquer le dispatch
 
 
-def _validate_selected_gate(gate):
-    """Revalide selectedGate reçu du hub : un entier dans [MIN_ACE_GATE, MAX_ACE_GATE]. Même
-    posture que file_name plus haut — ne jamais faire confiance à ce payload JSON avant de
-    l'interpoler dans un fichier gcode exécuté par une vraie imprimante (borne alignée sur
-    confirmJob côté hub, Task 4, qui restreint déjà selectedGate à un Number 0-3 avant
-    persistance ; cette validation est une deuxième ligne de défense côté agent)."""
+def _validate_gate(gate):
+    """Valide un gate physique reçu du hub (via gateAssignments) : un entier dans
+    [MIN_ACE_GATE, MAX_ACE_GATE]. Ne jamais faire confiance à ce payload JSON avant de
+    l'interpoler dans un fichier gcode ou une commande Moonraker exécutée par une vraie
+    imprimante (borne alignée sur confirmJob côté hub, qui restreint déjà chaque gate assigné à
+    un Number 0-3 avant persistance ; cette validation est une deuxième ligne de défense côté
+    agent)."""
     if isinstance(gate, bool) or not isinstance(gate, int):
-        raise ValueError(f"selectedGate doit être un entier, reçu: {gate!r}")
+        raise ValueError(f"gate doit être un entier, reçu: {gate!r}")
     if not (MIN_ACE_GATE <= gate <= MAX_ACE_GATE):
-        raise ValueError(f"selectedGate hors plage [{MIN_ACE_GATE}-{MAX_ACE_GATE}]: {gate!r}")
+        raise ValueError(f"gate hors plage [{MIN_ACE_GATE}-{MAX_ACE_GATE}]: {gate!r}")
     return gate
+
+
+def _validate_tool_index(tool):
+    """Valide qu'un tool de gateAssignments est bien une chaîne 'T0'-'T3' — même posture que
+    _validate_gate : ne jamais faire confiance à ce payload JSON avant de construire la table
+    ttg_map envoyée à Moonraker."""
+    if not isinstance(tool, str) or not re.fullmatch(r"T[0-3]", tool):
+        raise ValueError(f"tool invalide dans gateAssignments: {tool!r}")
+    return int(tool[1:])
+
+
+def _resolve_gate_assignments(gate_assignments):
+    """Traduit gateAssignments (reçu du hub, voir spec 2026-09-10) en soit un gate unique à
+    injecter en tête de fichier (Tn, cas mono-matériau : une seule entrée à tool=null), soit une
+    table complète tool→gate pour MMU_TTG_MAP (cas multi-couleur : au moins une entrée à tool
+    non-null). Retourne (single_gate, ttg_map).
+
+    Une liste vide/absente (soumis sans données bobines via overrideNoSpoolData, ou un vieux hub
+    qui n'envoie pas encore ce champ) retourne (None, ttg_map identité) : aucun Tn n'est injecté,
+    mais le ttg_map est quand même remis à l'identité avant dispatch — sinon les commandes Tx déjà
+    présentes dans le fichier gcode (slicer) se résoudraient via un ttg_map potentiellement laissé
+    non-identité par un job multi-outils précédent (état PERSISTENT côté firmware, jamais reset
+    automatiquement par l'imprimante), imprimant silencieusement la mauvaise bobine.
+
+    Cas mono (tool=null) : même raisonnement — la commande Tn injectée en tête de fichier par
+    _inject_gate_selection est un index logique résolu au print-time via le ttg_map courant du
+    firmware, d'où le même reset à l'identité avant injection — voir finding #1 de la revue finale
+    de branche."""
+    if not gate_assignments:
+        return None, list(range(MAX_ACE_GATE + 1))
+
+    has_null_tool = any(a.get("tool") is None for a in gate_assignments)
+    if has_null_tool:
+        if len(gate_assignments) != 1:
+            raise ValueError(f"gateAssignments avec tool=null doit contenir une seule entrée: {gate_assignments!r}")
+        gate = _validate_gate(gate_assignments[0].get("gate"))
+        return gate, list(range(MAX_ACE_GATE + 1))
+
+    ttg_map = list(range(MAX_ACE_GATE + 1))
+    for assignment in gate_assignments:
+        tool_index = _validate_tool_index(assignment.get("tool"))
+        gate = _validate_gate(assignment.get("gate"))
+        ttg_map[tool_index] = gate
+    return None, ttg_map
 
 
 def _inject_gate_selection(file_path, gate):
     """Préfixe le fichier gcode d'une commande Tn — c'est le même canal que celui utilisé
     nativement par un gcode multi-couleur pour changer de bobine côté ACE (jamais les commandes
     manuelles MMU_SELECT/MMU_LOAD, réservées au panneau Fluidd — voir spec 2026-09-09)."""
-    gate = _validate_selected_gate(gate)
+    gate = _validate_gate(gate)
     with open(file_path, "r") as f:
         original_content = f.read()
     with open(file_path, "w") as f:
@@ -97,23 +143,22 @@ def _try_dispatch(hub, moonraker, state, download_dir, logger):
     # os.path.basename : le hub renvoie fileName tel que soumis par l'étudiant (originalname
     # multer, non assaini côté hub) ; ne jamais faire confiance à ce payload comme chemin local.
     file_name = os.path.basename(job["fileName"]) or f"{job_id}.gcode"
-    selected_gate = job.get("selectedGate")
+    gate_assignments = job.get("gateAssignments") or []
     logger.info("Nouveau job détecté: %s (%s)", job_id, file_name)
 
-    if selected_gate is not None:
+    try:
+        single_gate, ttg_map = _resolve_gate_assignments(gate_assignments)
+    except ValueError as exc:
+        logger.error("gateAssignments invalide reçu du hub pour le job %s: %s", job_id, exc)
         try:
-            selected_gate = _validate_selected_gate(selected_gate)
-        except ValueError as exc:
-            logger.error("selectedGate invalide reçu du hub pour le job %s: %s", job_id, exc)
-            try:
-                hub.update_job_status(job_id, "failed", error_message=str(exc)[:500])
-            except HubClientError as report_exc:
-                logger.error(
-                    "Échec du signalement de selectedGate invalide pour le job %s: %s",
-                    job_id,
-                    report_exc,
-                )
-            return state
+            hub.update_job_status(job_id, "failed", error_message=str(exc)[:500])
+        except HubClientError as report_exc:
+            logger.error(
+                "Échec du signalement de gateAssignments invalide pour le job %s: %s",
+                job_id,
+                report_exc,
+            )
+        return state
 
     if not _has_enough_disk_space(download_dir):
         logger.error("Espace disque insuffisant pour télécharger le job %s, abandon.", job_id)
@@ -127,9 +172,11 @@ def _try_dispatch(hub, moonraker, state, download_dir, logger):
 
     dest_path = os.path.join(download_dir, file_name)
     try:
+        if ttg_map is not None:
+            moonraker.set_ttg_map(ttg_map)
         hub.download_job_file(job_id, dest_path)
-        if selected_gate is not None:
-            _inject_gate_selection(dest_path, selected_gate)
+        if single_gate is not None:
+            _inject_gate_selection(dest_path, single_gate)
         moonraker.upload_and_start_print(dest_path, file_name)
     except Exception as exc:
         logger.error("Échec du dispatch du job %s: %s", job_id, exc, exc_info=True)

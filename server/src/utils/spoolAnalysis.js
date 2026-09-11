@@ -5,6 +5,8 @@
 // Règle de détection (voir spec 2026-09-09) : présence d'AU MOINS une commande Tx → mode
 // multi-material, quel que soit le nombre de Tx distincts. Aucune Tx → mode single.
 
+const { normalizeColor } = require('./colorNormalize');
+
 const TOOL_LINE_REGEX = /^[ \t]*T([0-3])[ \t]*(;.*)?$/gm;
 const FILAMENT_COLOUR_REGEX = /^;\s*filament_colour\s*=\s*(.+)$/m;
 const FILAMENT_TYPE_REGEX = /^;\s*filament_type\s*=\s*(.+)$/m;
@@ -37,42 +39,39 @@ function parseGcodeSpoolInfo(gcodeText) {
   return { mode: 'multi-material', expectedTools };
 }
 
-// Normalise un hex couleur venant de deux sources au format différent (slicer: "#RRGGBB",
-// Moonraker/ACE: "RRGGBBAA" sans '#') vers une forme comparable : 6 caractères hex, minuscules,
-// sans '#', sans canal alpha.
-function normalizeColor(hex) {
-  if (!hex) return null;
-  return hex.replace('#', '').toLowerCase().slice(0, 6);
-}
-
-function computeSlotMismatches(expectedTools, spoolSlots) {
+// Recalcule, au moment de la confirmation, les écarts matière/couleur entre ce que le slicer
+// attendait pour chaque tool et ce qui était réellement chargé dans le gate assigné par
+// l'étudiant — et les retourne pour être persistés sur PrintJob.slotMismatches. Le front affiche
+// déjà cet avertissement de façon non-bloquante (voir computeGateMismatch côté client) mais rien
+// n'était conservé côté serveur : un admin enquêtant après coup sur une impression ratée n'avait
+// aucune trace qu'un mismatch avait été signalé à la soumission.
+function computeConfirmedSlotMismatches(expectedTools, spoolSlots, gateAssignments) {
   const mismatches = [];
 
-  for (const expected of expectedTools) {
-    if (!expected.material && !expected.color) continue; // rien à comparer, pas un mismatch
+  for (const { tool, gate } of gateAssignments) {
+    const expected = expectedTools.find((t) => t.tool === tool);
+    if (!expected || (!expected.material && !expected.color)) continue;
 
-    const gate = Number(expected.tool.slice(1));
-    const actual = spoolSlots.find((slot) => slot.gate === gate);
-
+    const slot = spoolSlots.find((s) => s.gate === gate);
+    const isEmpty = !slot || slot.empty;
     const materialMismatch =
-      !!expected.material && (!actual || (actual.material || '').toLowerCase() !== expected.material.toLowerCase());
+      !!expected.material && (!slot || (slot.material || '').toLowerCase() !== expected.material.toLowerCase());
     const colorMismatch =
-      !!expected.color && (!actual || normalizeColor(actual.color) !== normalizeColor(expected.color));
-    const isEmpty = !actual || actual.empty;
+      !!expected.color && (!slot || normalizeColor(slot.color) !== normalizeColor(expected.color));
 
-    if (isEmpty || materialMismatch || colorMismatch) {
-      mismatches.push({
-        tool: expected.tool,
-        expectedMaterial: expected.material,
-        expectedColor: expected.color,
-        actualGate: gate,
-        actualMaterial: actual && !actual.empty ? actual.material || null : null,
-        actualColor: actual && !actual.empty ? actual.color || null : null,
-      });
-    }
+    if (!isEmpty && !materialMismatch && !colorMismatch) continue;
+
+    mismatches.push({
+      tool,
+      gate,
+      expectedMaterial: expected.material || null,
+      expectedColor: expected.color || null,
+      actualMaterial: slot && !slot.empty ? slot.material || null : null,
+      actualColor: slot && !slot.empty ? slot.color || null : null,
+    });
   }
 
   return mismatches;
 }
 
-module.exports = { parseGcodeSpoolInfo, computeSlotMismatches };
+module.exports = { parseGcodeSpoolInfo, computeConfirmedSlotMismatches };

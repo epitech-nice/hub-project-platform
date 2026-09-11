@@ -55,7 +55,7 @@ describe('PrintJob model', () => {
     expect(job.cancelledBy.email).toBeNull();
   });
 
-  it('defaults the spool-selection fields to null/false/empty', async () => {
+  it('defaults the spool-selection fields to false/null/empty', async () => {
     const printer = await Printer.create({ name: 'P1', model: 'kobra3', apiKeyHash: 'x'.repeat(64) });
     const job = await PrintJob.create({
       student: { email: 's@epitech.eu', name: 'Student' },
@@ -63,27 +63,41 @@ describe('PrintJob model', () => {
       fileName: 'part.gcode',
       filePath: '/x',
     });
-    expect(job.selectedGate).toBeNull();
+    expect(job.gateAssignments).toEqual([]);
     expect(job.slotSelectionOverridden).toBe(false);
     expect(job.gcodeMode).toBeNull();
-    expect(job.slotMismatchWarnings).toEqual([]);
   });
 
-  it('accepts a populated selectedGate and slotMismatchWarnings', async () => {
+  it('accepts a populated gateAssignments array', async () => {
     const printer = await Printer.create({ name: 'P1', model: 'kobra3', apiKeyHash: 'x'.repeat(64) });
     const job = await PrintJob.create({
       student: { email: 's@epitech.eu', name: 'Student' },
       printer: printer._id,
       fileName: 'part.gcode',
       filePath: '/x',
-      selectedGate: 2,
-      gcodeMode: PRINT_JOB_GCODE_MODES.SINGLE,
-      slotMismatchWarnings: [
-        { tool: 'T0', expectedMaterial: 'PETG', expectedColor: 'F40031', actualGate: 0, actualMaterial: 'PLA', actualColor: '212721' },
+      gcodeMode: PRINT_JOB_GCODE_MODES.MULTI_MATERIAL,
+      gateAssignments: [
+        { tool: 'T0', gate: 2 },
+        { tool: 'T2', gate: 1 },
       ],
     });
-    expect(job.selectedGate).toBe(2);
-    expect(job.gcodeMode).toBe('single');
-    expect(job.slotMismatchWarnings).toHaveLength(1);
+    expect(job.gcodeMode).toBe('multi-material');
+    expect(job.gateAssignments).toHaveLength(2);
+    expect(job.gateAssignments[0].tool).toBe('T0');
+    expect(job.gateAssignments[0].gate).toBe(2);
+  });
+
+  it('accepts a null tool in gateAssignments for the zero-Tx case', async () => {
+    const printer = await Printer.create({ name: 'P1', model: 'kobra3', apiKeyHash: 'x'.repeat(64) });
+    const job = await PrintJob.create({
+      student: { email: 's@epitech.eu', name: 'Student' },
+      printer: printer._id,
+      fileName: 'part.gcode',
+      filePath: '/x',
+      gcodeMode: PRINT_JOB_GCODE_MODES.SINGLE,
+      gateAssignments: [{ tool: null, gate: 3 }],
+    });
+    expect(job.gateAssignments[0].tool).toBeNull();
+    expect(job.gateAssignments[0].gate).toBe(3);
   });
 });

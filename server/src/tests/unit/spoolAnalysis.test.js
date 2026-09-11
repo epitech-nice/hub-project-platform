@@ -1,4 +1,4 @@
-const { parseGcodeSpoolInfo, computeSlotMismatches } = require('../../utils/spoolAnalysis');
+const { parseGcodeSpoolInfo, computeConfirmedSlotMismatches } = require('../../utils/spoolAnalysis');
 
 describe('parseGcodeSpoolInfo', () => {
   it('returns mode single when no Tx line is present', () => {
@@ -43,51 +43,31 @@ describe('parseGcodeSpoolInfo', () => {
   });
 });
 
-describe('computeSlotMismatches', () => {
-  const spoolSlots = [
-    { gate: 0, material: 'PLA', color: '212721FF', empty: false },
-    { gate: 1, material: '', color: '', empty: true },
-    { gate: 2, material: 'PLA', color: 'F40031FF', empty: false },
-    { gate: 3, material: 'PLA', color: 'FED141FF', empty: false },
-  ];
+describe('computeConfirmedSlotMismatches', () => {
+  const expectedTools = [{ tool: 'T0', material: 'PLA', color: '#FF6A14' }];
 
-  it('returns no mismatch when material and color match (case/format-insensitive)', () => {
-    const expectedTools = [{ tool: 'T0', material: 'pla', color: '#212721' }];
-    expect(computeSlotMismatches(expectedTools, spoolSlots)).toEqual([]);
+  it('returns no mismatch when material and color match, ignoring color format differences', () => {
+    const slots = [{ gate: 0, material: 'PLA', color: 'FF6A14FF', empty: false }];
+    expect(computeConfirmedSlotMismatches(expectedTools, slots, [{ tool: 'T0', gate: 0 }])).toEqual([]);
   });
 
-  it('flags a material mismatch', () => {
-    const expectedTools = [{ tool: 'T2', material: 'PETG', color: '#F40031' }];
-    const result = computeSlotMismatches(expectedTools, spoolSlots);
-    expect(result).toEqual([
-      { tool: 'T2', expectedMaterial: 'PETG', expectedColor: '#F40031', actualGate: 2, actualMaterial: 'PLA', actualColor: 'F40031FF' },
+  it('reports a mismatch when the assigned slot has a different material', () => {
+    const slots = [{ gate: 0, material: 'PETG', color: 'FF6A14FF', empty: false }];
+    expect(computeConfirmedSlotMismatches(expectedTools, slots, [{ tool: 'T0', gate: 0 }])).toEqual([
+      { tool: 'T0', gate: 0, expectedMaterial: 'PLA', expectedColor: '#FF6A14', actualMaterial: 'PETG', actualColor: 'FF6A14FF' },
     ]);
   });
 
-  it('flags a color mismatch even when material matches', () => {
-    const expectedTools = [{ tool: 'T3', material: 'PLA', color: '#000000' }];
-    const result = computeSlotMismatches(expectedTools, spoolSlots);
-    expect(result).toHaveLength(1);
-    expect(result[0].tool).toBe('T3');
-  });
-
-  it('flags a gate that is empty', () => {
-    const expectedTools = [{ tool: 'T1', material: 'PLA', color: '#212721' }];
-    const result = computeSlotMismatches(expectedTools, spoolSlots);
-    expect(result).toHaveLength(1);
-    expect(result[0].actualMaterial).toBeNull();
-  });
-
-  it('flags a gate with no known material/color as unable to verify, without crashing', () => {
-    const expectedTools = [{ tool: 'T0', material: null, color: null }];
-    expect(computeSlotMismatches(expectedTools, spoolSlots)).toEqual([]);
-  });
-
-  it('flags a tool referencing a gate not present in spoolSlots', () => {
-    const expectedTools = [{ tool: 'T2', material: 'PLA', color: '#212721' }];
-    const result = computeSlotMismatches(expectedTools, []);
-    expect(result).toEqual([
-      { tool: 'T2', expectedMaterial: 'PLA', expectedColor: '#212721', actualGate: 2, actualMaterial: null, actualColor: null },
+  it('reports a mismatch when the assigned slot is empty', () => {
+    const slots = [{ gate: 0, material: '', color: '', empty: true }];
+    expect(computeConfirmedSlotMismatches(expectedTools, slots, [{ tool: 'T0', gate: 0 }])).toEqual([
+      { tool: 'T0', gate: 0, expectedMaterial: 'PLA', expectedColor: '#FF6A14', actualMaterial: null, actualColor: null },
     ]);
+  });
+
+  it('skips a tool with no slicer metadata to compare against', () => {
+    const slots = [{ gate: 0, material: 'PETG', color: 'AABBCCFF', empty: false }];
+    const noMetadataTool = [{ tool: 'T0', material: null, color: null }];
+    expect(computeConfirmedSlotMismatches(noMetadataTool, slots, [{ tool: 'T0', gate: 0 }])).toEqual([]);
   });
 });

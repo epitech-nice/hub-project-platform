@@ -242,12 +242,33 @@ Base de données : **MongoDB** via **Mongoose**.
     gate: Number,                // Requis
     material: String,            // Défaut ''
     color: String,                // Défaut '' — format Moonraker "RRGGBBAA" (sans '#')
-    empty: Boolean                // Défaut true
+    empty: Boolean,               // Défaut true
+
+    // Déclaration manuelle (bobines sans puce RFID, voir PUT /printers/:id/spool-slots/:gate/manual
+    // dans docs/api-print.md) :
+    source: String,               // Enum 'auto' | 'manual', défaut 'auto'
+    manualSetBy: {                // Défaut { email: null, name: null }
+      email: String,
+      name: String
+    },
+    manualSetAt: Date,            // Défaut null
+    autoMaterialAtSet: String,    // Défaut null — snapshot de `material` au moment de la déclaration
+    autoColorAtSet: String,       // Défaut null — snapshot de `color` au moment de la déclaration
+    autoEmptyAtSet: Boolean        // Défaut null — snapshot de `empty` au moment de la déclaration
   }],
   spoolSlotsUpdatedAt: Date,    // Défaut null — null = aucune donnée bobine jamais reçue pour
                                  // cette imprimante ; posé (même avec spoolSlots: []) dès le
                                  // premier rapport de l'agent, ce sont deux états distincts
                                  // (voir docs/api-print.md, POST /jobs/:pendingUploadId/confirm)
+
+  // Note — détection de dérive sur une déclaration manuelle (`source: 'manual'`) : l'API
+  // Moonraker n'expose aucun signal direct "ceci vient d'une lecture RFID". Une déclaration
+  // manuelle est donc préservée d'un tick de l'agent à l'autre tant que la valeur auto-rapportée
+  // (material/color/empty) reste identique à ce qu'elle était au moment de la déclaration
+  // (autoMaterialAtSet/autoColorAtSet/autoEmptyAtSet). Dès que l'agent rapporte une valeur
+  // différente pour ce gate, c'est traité comme une nouvelle détection faisant autorité : la
+  // déclaration manuelle est effacée et la valeur auto fraîche prend le relais (`source: 'auto'`).
+  // Une heuristique, pas une certitude — voir `server/src/utils/spoolSlotMerge.js`.
 
   clearanceHistory: [{         // Historique des libérations de plateau
     method: String,            // Enum CLEARANCE_METHODS : 'qr' | 'admin_override'
@@ -321,23 +342,32 @@ Base de données : **MongoDB** via **Mongoose**.
     role: String
   },
 
-  selectedGate: Number,          // Défaut null — gate ACE choisi par l'étudiant (mode 'single'
-                                  // avec données bobines disponibles) ; null si mode 'multi-material',
-                                  // si override sans données bobines, ou si soumis via le flux
-                                  // historique POST /api/print/jobs
+  gateAssignments: [{             // Défaut [] — une entrée par tool détecté dans le gcode à
+                                   // l'analyse, assignée à la confirmation (POST
+                                   // /jobs/:pendingUploadId/confirm) ; [] si override sans
+                                   // données bobines (overrideNoSpoolData)
+    tool: String,                  // Défaut null — null pour un fichier mono (zéro Tx, une seule
+                                    // entrée dans le tableau) ; "T0"/"T1"/... pour un fichier
+                                    // multi-outils (une entrée par tool distinct détecté)
+    gate: Number                   // Requis — gate ACE assigné à ce tool
+  }],
   slotSelectionOverridden: Boolean, // Défaut false — true si soumis via overrideNoSpoolData
                                      // (aucune donnée bobine disponible pour l'imprimante)
+  slotMismatches: [{              // Défaut [] — écarts matière/couleur recalculés côté serveur à
+                                   // la confirmation (computeConfirmedSlotMismatches), persistés
+                                   // même si l'étudiant a soumis malgré l'avertissement affiché
+                                   // côté client — pour qu'un admin puisse voir après coup qu'un
+                                   // mismatch avait été signalé
+    tool: String,                  // Défaut null — même convention que gateAssignments[].tool
+    gate: Number,                  // Requis
+    expectedMaterial: String,      // Défaut null — attendu par le slicer pour ce tool
+    expectedColor: String,         // Défaut null
+    actualMaterial: String,        // Défaut null — chargé dans le gate assigné (null si vide)
+    actualColor: String            // Défaut null
+  }],
   gcodeMode: String,              // Enum PRINT_JOB_GCODE_MODES | null (défaut null) :
                                    // 'single' | 'multi-material' — null pour le flux historique
                                    // POST /api/print/jobs (pas d'analyse de sélection de bobine)
-  slotMismatchWarnings: [{        // Copié depuis PendingPrintUpload.mismatches à la confirmation
-    tool: String,                 // ex: "T0" — toujours [] en mode 'single' ou flux historique
-    expectedMaterial: String,
-    expectedColor: String,
-    actualGate: Number,
-    actualMaterial: String,
-    actualColor: String
-  }],
 
   submittedAt: Date,            // Défaut : maintenant
   startedAt: Date,              // Défaut null
@@ -371,14 +401,6 @@ Base de données : **MongoDB** via **Mongoose**.
     tool: String,               // commentaires filament_type/filament_colour du slicer)
     material: String,
     color: String
-  }],
-  mismatches: [{                // Calculé à l'analyse, copié vers PrintJob.slotMismatchWarnings
-    tool: String,                // à la confirmation — toujours [] en mode 'single'
-    expectedMaterial: String,
-    expectedColor: String,
-    actualGate: Number,
-    actualMaterial: String,
-    actualColor: String
   }],
 
   createdAt: Date               // Défaut : maintenant
