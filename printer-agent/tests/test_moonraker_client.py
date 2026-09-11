@@ -1,4 +1,5 @@
 from unittest.mock import patch
+import time
 import urllib.parse
 
 import pytest
@@ -95,16 +96,17 @@ def test_upload_and_start_print_enriches_failure_with_gcode_store_error(tmp_path
             f"{BASE_URL}/server/files/upload",
             json={"action": "create_file", "item": {"path": "print.gcode", "root": "gcodes"}, "print_started": False},
         )
+        now = time.time()
         m.get(
             f"{BASE_URL}/server/gcode_store",
             json={
                 "result": {
                     "gcode_store": [
-                        {"message": 'SDCARD_PRINT_FILE FILENAME="print.gcode"', "time": 1.0, "type": "command"},
+                        {"message": 'SDCARD_PRINT_FILE FILENAME="print.gcode"', "time": now - 1, "type": "command"},
                         {
                             "message": "error: typ = WebRequestError, code = 10011703, "
                             "message = unknown filament in extruder",
-                            "time": 2.0,
+                            "time": now,
                             "type": "response",
                         },
                     ]
@@ -113,6 +115,40 @@ def test_upload_and_start_print_enriches_failure_with_gcode_store_error(tmp_path
         )
         with pytest.raises(MoonrakerClientError, match="unknown filament in extruder"):
             client.upload_and_start_print(str(gcode_path), "print.gcode")
+
+
+def test_upload_and_start_print_ignores_gcode_store_error_older_than_correlation_window(tmp_path):
+    # Couvre le finding de revue : si Klipper n'a rien échoté du tout pour CETTE tentative
+    # (déjà en shutdown/occupé), la dernière erreur du store peut être une erreur ancienne sans
+    # rapport (commande manuelle d'un opérateur, précédent appel MMU_TTG_MAP...) — ne pas
+    # l'attribuer à tort à l'échec courant.
+    client = make_client()
+    gcode_path = tmp_path / "print.gcode"
+    gcode_path.write_text("G28\n")
+
+    with requests_mock.Mocker() as m:
+        m.post(
+            f"{BASE_URL}/server/files/upload",
+            json={"action": "create_file", "item": {"path": "print.gcode", "root": "gcodes"}, "print_started": False},
+        )
+        m.get(
+            f"{BASE_URL}/server/gcode_store",
+            json={
+                "result": {
+                    "gcode_store": [
+                        {
+                            "message": "error: typ = WebRequestError, code = 10011703, "
+                            "message = some unrelated earlier error",
+                            "time": time.time() - 300,
+                            "type": "response",
+                        },
+                    ]
+                }
+            },
+        )
+        with pytest.raises(MoonrakerClientError) as exc_info:
+            client.upload_and_start_print(str(gcode_path), "print.gcode")
+        assert "unrelated earlier error" not in str(exc_info.value)
 
 
 def test_upload_and_start_print_ignores_unrelated_gcode_store_entries(tmp_path):
