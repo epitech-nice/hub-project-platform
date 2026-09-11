@@ -46,9 +46,34 @@ class MoonrakerClient:
             raise MoonrakerClientError(f"Réponse Moonraker inattendue à l'upload: {exc}") from exc
 
         if not print_started:
-            raise MoonrakerClientError(
-                "Moonraker a accepté le fichier mais n'a pas démarré l'impression (print_started=false)"
-            )
+            detail = self._get_recent_gcode_error()
+            message = "Moonraker a accepté le fichier mais n'a pas démarré l'impression (print_started=false)"
+            if detail:
+                message += f" — {detail}"
+            raise MoonrakerClientError(message)
+
+    def _get_recent_gcode_error(self):
+        """Best-effort : va chercher la vraie raison d'un échec de démarrage d'impression dans
+        server/gcode_store (journal des dernières commandes/réponses gcode Klipper), la seule
+        source qui l'expose. /server/files/upload avale l'exception réelle de start_print côté
+        Moonraker (file_manager.py::_finish_gcode_upload fait `except self.server.error: pass`)
+        et ne renvoie qu'un booléen print_started=false sans aucun détail — confirmé en direct
+        sur l'imprimante (2026-09-11, échec réel : "unknown filament in extruder" invisible dans
+        la réponse d'upload, présent uniquement dans gcode_store). Ne doit jamais lever : un échec
+        de cette recherche d'enrichissement ne doit pas masquer/remplacer l'erreur déjà en cours
+        de levée par l'appelant, on retombe simplement sur le message générique.
+        """
+        url = f"{self.base_url}/server/gcode_store"
+        try:
+            response = requests.get(url, params={"count": 5}, timeout=self.timeout)
+            entries = response.json()["result"]["gcode_store"]
+            for entry in reversed(entries):
+                message = entry.get("message") or ""
+                if entry.get("type") == "response" and "error" in message.lower():
+                    return message
+        except Exception:
+            pass
+        return None
 
     def get_print_stats(self):
         url = f"{self.base_url}/printer/objects/query"
