@@ -1,9 +1,11 @@
 const path = require('path');
+const Printer = require('../../models/Printer');
 const PrintJob = require('../../models/PrintJob');
 const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
 const { PRINTER_STATUSES, PRINTER_STATUS_SOURCES, PRINT_JOB_STATUSES } = require('../../utils/constants');
 const { mergeSpoolSlots } = require('../../utils/spoolSlotMerge');
+const { withOptimisticRetry } = require('../../utils/optimisticRetry');
 
 const VALID_STATUS_UPDATES = ['printing', 'completed', 'failed', 'cancelled'];
 
@@ -34,9 +36,17 @@ exports.reportSpoolStatus = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('gates (tableau) requis', 400));
   }
 
-  req.printer.spoolSlots = mergeSpoolSlots(req.printer.spoolSlots, gates);
-  req.printer.spoolSlotsUpdatedAt = new Date();
-  await req.printer.save();
+  // Relit puis réessaie sur VersionError plutôt que d'écrire directement sur req.printer (posé
+  // par authenticatePrinter en tout début de requête) — une déclaration manuelle concurrente
+  // (PUT .../spool-slots/:gate/manual) peut avoir sauvegardé le document entre-temps.
+  await withOptimisticRetry(
+    () => Printer.findById(req.printer._id),
+    async (printer) => {
+      printer.spoolSlots = mergeSpoolSlots(printer.spoolSlots, gates);
+      printer.spoolSlotsUpdatedAt = new Date();
+      await printer.save();
+    }
+  );
 
   res.status(200).json({ success: true });
 });

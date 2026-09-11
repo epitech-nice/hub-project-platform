@@ -4,7 +4,7 @@ const PrintJob = require('../../models/PrintJob');
 const PrintAuthorization = require('../../models/PrintAuthorization');
 const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
-const { parseGcodeSpoolInfo } = require('../../utils/spoolAnalysis');
+const { parseGcodeSpoolInfo, computeConfirmedSlotMismatches } = require('../../utils/spoolAnalysis');
 const PendingPrintUpload = require('../../models/PendingPrintUpload');
 const {
   PRINTER_STATUSES,
@@ -222,6 +222,7 @@ exports.confirmJob = asyncHandler(async (req, res, next) => {
   }
 
   let gateAssignments = [];
+  let slotMismatches = [];
   let slotSelectionOverridden = false;
   const hasSpoolData = !!printer.spoolSlotsUpdatedAt && printer.spoolSlots.length > 0;
 
@@ -241,6 +242,11 @@ exports.confirmJob = asyncHandler(async (req, res, next) => {
     const expectedToolKeys =
       pending.gcodeMode === PRINT_JOB_GCODE_MODES.SINGLE ? [null] : pending.expectedTools.map((t) => t.tool);
     const provided = Array.isArray(req.body.gateAssignments) ? req.body.gateAssignments : [];
+    // Rejette tout élément non-objet (ex: `[null]`) avant d'accéder à `.tool` dessus plus bas —
+    // sinon ça plante en TypeError non catchée, remontée en 500 brut plutôt qu'en 400.
+    if (provided.some((a) => typeof a !== 'object' || a === null)) {
+      return next(new ErrorResponse('Une bobine doit être assignée à chaque tool détecté', 400));
+    }
 
     const everyToolCovered = expectedToolKeys.every((tool) => provided.some((a) => a.tool === tool));
     if (provided.length !== expectedToolKeys.length || !everyToolCovered) {
@@ -259,6 +265,7 @@ exports.confirmJob = asyncHandler(async (req, res, next) => {
     }
 
     gateAssignments = provided.map((a) => ({ tool: a.tool, gate: a.gate }));
+    slotMismatches = computeConfirmedSlotMismatches(pending.expectedTools, printer.spoolSlots, gateAssignments);
   }
 
   // Déplace le fichier de son emplacement temporaire (pending-print-jobs/) vers l'emplacement
@@ -277,6 +284,7 @@ exports.confirmJob = asyncHandler(async (req, res, next) => {
     fileName: pending.fileName,
     filePath: finalPath,
     gateAssignments,
+    slotMismatches,
     slotSelectionOverridden,
     gcodeMode: pending.gcodeMode,
     history: [{ status: PRINT_JOB_STATUSES.QUEUED, date: new Date(), detail: 'Soumission acceptée' }],

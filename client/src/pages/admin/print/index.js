@@ -538,6 +538,22 @@ export default function AdminPrintPage() {
                       <Badge variant={JOB_STATUS_BADGE_VARIANTS[job.status] || 'neutral'} size="sm">
                         {JOB_STATUS_LABELS[job.status] || job.status}
                       </Badge>
+                      {job.slotMismatches?.length > 0 && (
+                        <Badge
+                          variant="changes"
+                          size="sm"
+                          title={job.slotMismatches
+                            .map(
+                              (m) =>
+                                `${m.tool ? `${m.tool}: ` : ''}attendu ${m.expectedMaterial || '?'}${
+                                  m.expectedColor ? ` (${m.expectedColor})` : ''
+                                } — chargé ${m.actualMaterial || 'vide'}`
+                            )
+                            .join(' / ')}
+                        >
+                          Bobine non conforme
+                        </Badge>
+                      )}
                       {job.rejectionReason && (
                         <span className="text-xs text-text-muted">
                           ({REJECTION_REASON_LABELS[job.rejectionReason] || job.rejectionReason})

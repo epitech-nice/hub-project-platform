@@ -353,6 +353,18 @@ Base de données : **MongoDB** via **Mongoose**.
   }],
   slotSelectionOverridden: Boolean, // Défaut false — true si soumis via overrideNoSpoolData
                                      // (aucune donnée bobine disponible pour l'imprimante)
+  slotMismatches: [{              // Défaut [] — écarts matière/couleur recalculés côté serveur à
+                                   // la confirmation (computeConfirmedSlotMismatches), persistés
+                                   // même si l'étudiant a soumis malgré l'avertissement affiché
+                                   // côté client — pour qu'un admin puisse voir après coup qu'un
+                                   // mismatch avait été signalé
+    tool: String,                  // Défaut null — même convention que gateAssignments[].tool
+    gate: Number,                  // Requis
+    expectedMaterial: String,      // Défaut null — attendu par le slicer pour ce tool
+    expectedColor: String,         // Défaut null
+    actualMaterial: String,        // Défaut null — chargé dans le gate assigné (null si vide)
+    actualColor: String            // Défaut null
+  }],
   gcodeMode: String,              // Enum PRINT_JOB_GCODE_MODES | null (défaut null) :
                                    // 'single' | 'multi-material' — null pour le flux historique
                                    // POST /api/print/jobs (pas d'analyse de sélection de bobine)

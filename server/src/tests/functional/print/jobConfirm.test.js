@@ -226,6 +226,72 @@ describe('POST /api/print/jobs/:pendingUploadId/confirm', () => {
     ]);
   });
 
+  it('returns 400 (not 500) when gateAssignments contains a non-object entry', async () => {
+    const student = await createUser({ email: 'ok@epitech.eu' });
+    await whitelistEmail(student.email);
+    const { printer } = await createPrinter({
+      spoolSlots: [{ gate: 0, material: 'PLA', color: '212721FF', empty: false }],
+      spoolSlotsUpdatedAt: new Date(),
+    });
+    const analyzeRes = await analyze(student, printer);
+
+    const res = await request(app)
+      .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
+      .set(authHeader(student))
+      .send({ gateAssignments: [null] });
+    expect(res.status).toBe(400);
+  });
+
+  it('persists no slotMismatches when the assigned gate matches the slicer expectations', async () => {
+    const student = await createUser({ email: 'ok@epitech.eu' });
+    await whitelistEmail(student.email);
+    // MULTI_GCODE_ONE_TOOL attend PLA/#FF6A14 pour T0 — gate chargé en conséquence.
+    const { printer } = await createPrinter({
+      spoolSlots: [{ gate: 0, material: 'PLA', color: 'FF6A14FF', empty: false }],
+      spoolSlotsUpdatedAt: new Date(),
+    });
+    const analyzeRes = await analyze(student, printer, MULTI_GCODE_ONE_TOOL);
+
+    const res = await request(app)
+      .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
+      .set(authHeader(student))
+      .send({ gateAssignments: [{ tool: 'T0', gate: 0 }] });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.slotMismatches).toEqual([]);
+  });
+
+  it('persists slotMismatches on the created PrintJob when the assigned gate does not match', async () => {
+    const student = await createUser({ email: 'ok@epitech.eu' });
+    await whitelistEmail(student.email);
+    // MULTI_GCODE_ONE_TOOL attend PLA/#FF6A14 pour T0 — on assigne un gate chargé en PETG noir.
+    const { printer } = await createPrinter({
+      spoolSlots: [{ gate: 0, material: 'PETG', color: '000000FF', empty: false }],
+      spoolSlotsUpdatedAt: new Date(),
+    });
+    const analyzeRes = await analyze(student, printer, MULTI_GCODE_ONE_TOOL);
+
+    const res = await request(app)
+      .post(`/api/print/jobs/${analyzeRes.body.data.pendingUploadId}/confirm`)
+      .set(authHeader(student))
+      .send({ gateAssignments: [{ tool: 'T0', gate: 0 }] });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.slotMismatches).toEqual([
+      {
+        tool: 'T0',
+        gate: 0,
+        expectedMaterial: 'PLA',
+        expectedColor: '#FF6A14',
+        actualMaterial: 'PETG',
+        actualColor: '000000FF',
+      },
+    ]);
+
+    const stored = await PrintJob.findById(res.body.data._id);
+    expect(stored.slotMismatches).toHaveLength(1);
+  });
+
   it('creates a rejected PrintJob when the printer is busy at confirm time', async () => {
     const student = await createUser({ email: 'ok@epitech.eu' });
     await whitelistEmail(student.email);

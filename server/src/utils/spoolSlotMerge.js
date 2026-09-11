@@ -16,8 +16,37 @@
 // `{ email: null, name: null }` (et non `null`) dans les branches "auto" ci-dessous, pour que ce
 // que produit cette fonction pure corresponde exactement à ce que Mongoose lit/écrit réellement
 // une fois assigné à un document `Printer` et rechargé.
+
+// Même normalisation que client/src/utils/spoolMatch.js#normalizeColor (slicer "#RRGGBB" vs
+// Moonraker/ACE "RRGGBBAA") — utilisée ici pour que le check de dérive d'une déclaration manuelle
+// ne soit pas trompé par un simple changement de casse/format entre deux rapports de la même
+// couleur physique.
+function normalizeColor(hex) {
+  if (!hex) return null;
+  return hex.replace('#', '').toLowerCase().slice(0, 6);
+}
+
+function toPlainSlot(existing) {
+  return {
+    gate: existing.gate,
+    material: existing.material,
+    color: existing.color,
+    empty: existing.empty,
+    source: existing.source,
+    manualSetBy: existing.manualSetBy
+      ? { email: existing.manualSetBy.email, name: existing.manualSetBy.name }
+      : { email: null, name: null },
+    manualSetAt: existing.manualSetAt,
+    autoMaterialAtSet: existing.autoMaterialAtSet,
+    autoColorAtSet: existing.autoColorAtSet,
+    autoEmptyAtSet: existing.autoEmptyAtSet,
+  };
+}
+
 function mergeSpoolSlots(existingSlots, reportedGates) {
-  return reportedGates.map((g) => {
+  const reportedByGate = new Set(reportedGates.map((g) => g.gate));
+
+  const merged = reportedGates.map((g) => {
     const reported = {
       gate: g.gate,
       material: g.material || '',
@@ -30,24 +59,11 @@ function mergeSpoolSlots(existingSlots, reportedGates) {
     if (existing && existing.source === 'manual') {
       const unchanged =
         reported.material === existing.autoMaterialAtSet &&
-        reported.color === existing.autoColorAtSet &&
+        normalizeColor(reported.color) === normalizeColor(existing.autoColorAtSet) &&
         reported.empty === existing.autoEmptyAtSet;
 
       if (unchanged) {
-        return {
-          gate: existing.gate,
-          material: existing.material,
-          color: existing.color,
-          empty: existing.empty,
-          source: existing.source,
-          manualSetBy: existing.manualSetBy
-            ? { email: existing.manualSetBy.email, name: existing.manualSetBy.name }
-            : { email: null, name: null },
-          manualSetAt: existing.manualSetAt,
-          autoMaterialAtSet: existing.autoMaterialAtSet,
-          autoColorAtSet: existing.autoColorAtSet,
-          autoEmptyAtSet: existing.autoEmptyAtSet,
-        };
+        return toPlainSlot(existing);
       }
     }
 
@@ -61,6 +77,14 @@ function mergeSpoolSlots(existingSlots, reportedGates) {
       autoEmptyAtSet: null,
     };
   });
+
+  // Un gate connu du Hub mais absent de CE rapport (glitch de requête MMU côté agent, ou
+  // num_gates mal rapporté un tick) doit être conservé tel quel plutôt que disparaître de
+  // Printer.spoolSlots — sinon une déclaration manuelle posée sur ce gate serait perdue au
+  // prochain tick qui omet simplement de le rapporter, sans que rien n'ait réellement changé.
+  const preserved = existingSlots.filter((s) => !reportedByGate.has(s.gate)).map(toPlainSlot);
+
+  return [...merged, ...preserved].sort((a, b) => a.gate - b.gate);
 }
 
 module.exports = { mergeSpoolSlots };

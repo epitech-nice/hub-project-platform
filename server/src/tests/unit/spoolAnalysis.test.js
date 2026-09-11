@@ -1,4 +1,4 @@
-const { parseGcodeSpoolInfo } = require('../../utils/spoolAnalysis');
+const { parseGcodeSpoolInfo, computeConfirmedSlotMismatches } = require('../../utils/spoolAnalysis');
 
 describe('parseGcodeSpoolInfo', () => {
   it('returns mode single when no Tx line is present', () => {
@@ -40,5 +40,34 @@ describe('parseGcodeSpoolInfo', () => {
     // Un gcode généré pour une autre config MMU pourrait référencer T4+ — hors périmètre ACE 4 slots.
     const gcode = 'G28\nT4\nG1 X10\n';
     expect(parseGcodeSpoolInfo(gcode)).toEqual({ mode: 'single', expectedTools: [] });
+  });
+});
+
+describe('computeConfirmedSlotMismatches', () => {
+  const expectedTools = [{ tool: 'T0', material: 'PLA', color: '#FF6A14' }];
+
+  it('returns no mismatch when material and color match, ignoring color format differences', () => {
+    const slots = [{ gate: 0, material: 'PLA', color: 'FF6A14FF', empty: false }];
+    expect(computeConfirmedSlotMismatches(expectedTools, slots, [{ tool: 'T0', gate: 0 }])).toEqual([]);
+  });
+
+  it('reports a mismatch when the assigned slot has a different material', () => {
+    const slots = [{ gate: 0, material: 'PETG', color: 'FF6A14FF', empty: false }];
+    expect(computeConfirmedSlotMismatches(expectedTools, slots, [{ tool: 'T0', gate: 0 }])).toEqual([
+      { tool: 'T0', gate: 0, expectedMaterial: 'PLA', expectedColor: '#FF6A14', actualMaterial: 'PETG', actualColor: 'FF6A14FF' },
+    ]);
+  });
+
+  it('reports a mismatch when the assigned slot is empty', () => {
+    const slots = [{ gate: 0, material: '', color: '', empty: true }];
+    expect(computeConfirmedSlotMismatches(expectedTools, slots, [{ tool: 'T0', gate: 0 }])).toEqual([
+      { tool: 'T0', gate: 0, expectedMaterial: 'PLA', expectedColor: '#FF6A14', actualMaterial: null, actualColor: null },
+    ]);
+  });
+
+  it('skips a tool with no slicer metadata to compare against', () => {
+    const slots = [{ gate: 0, material: 'PETG', color: 'AABBCCFF', empty: false }];
+    const noMetadataTool = [{ tool: 'T0', material: null, color: null }];
+    expect(computeConfirmedSlotMismatches(noMetadataTool, slots, [{ tool: 'T0', gate: 0 }])).toEqual([]);
   });
 });

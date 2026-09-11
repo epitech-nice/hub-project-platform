@@ -37,4 +37,46 @@ function parseGcodeSpoolInfo(gcodeText) {
   return { mode: 'multi-material', expectedTools };
 }
 
-module.exports = { parseGcodeSpoolInfo };
+// Même normalisation que client/src/utils/spoolMatch.js#normalizeColor (slicer "#RRGGBB" vs
+// Moonraker/ACE "RRGGBBAA") — dupliquée ici, pas de module partagé client/server dans ce repo.
+function normalizeColor(hex) {
+  if (!hex) return null;
+  return hex.replace('#', '').toLowerCase().slice(0, 6);
+}
+
+// Recalcule, au moment de la confirmation, les écarts matière/couleur entre ce que le slicer
+// attendait pour chaque tool et ce qui était réellement chargé dans le gate assigné par
+// l'étudiant — et les retourne pour être persistés sur PrintJob.slotMismatches. Le front affiche
+// déjà cet avertissement de façon non-bloquante (voir computeGateMismatch côté client) mais rien
+// n'était conservé côté serveur : un admin enquêtant après coup sur une impression ratée n'avait
+// aucune trace qu'un mismatch avait été signalé à la soumission.
+function computeConfirmedSlotMismatches(expectedTools, spoolSlots, gateAssignments) {
+  const mismatches = [];
+
+  for (const { tool, gate } of gateAssignments) {
+    const expected = expectedTools.find((t) => t.tool === tool);
+    if (!expected || (!expected.material && !expected.color)) continue;
+
+    const slot = spoolSlots.find((s) => s.gate === gate);
+    const isEmpty = !slot || slot.empty;
+    const materialMismatch =
+      !!expected.material && (!slot || (slot.material || '').toLowerCase() !== expected.material.toLowerCase());
+    const colorMismatch =
+      !!expected.color && (!slot || normalizeColor(slot.color) !== normalizeColor(expected.color));
+
+    if (!isEmpty && !materialMismatch && !colorMismatch) continue;
+
+    mismatches.push({
+      tool,
+      gate,
+      expectedMaterial: expected.material || null,
+      expectedColor: expected.color || null,
+      actualMaterial: slot && !slot.empty ? slot.material || null : null,
+      actualColor: slot && !slot.empty ? slot.color || null : null,
+    });
+  }
+
+  return mismatches;
+}
+
+module.exports = { parseGcodeSpoolInfo, computeConfirmedSlotMismatches };

@@ -36,6 +36,20 @@ const PrintJobSchema = new mongoose.Schema({
     default: [],
   },
   slotSelectionOverridden: { type: Boolean, default: false },
+  slotMismatches: {
+    type: [
+      {
+        _id: false,
+        tool: { type: String, default: null },
+        gate: { type: Number, required: true },
+        expectedMaterial: { type: String, default: null },
+        expectedColor: { type: String, default: null },
+        actualMaterial: { type: String, default: null },
+        actualColor: { type: String, default: null },
+      },
+    ],
+    default: [],
+  },
   gcodeMode: {
     type: String,
     enum: [...Object.values(PRINT_JOB_GCODE_MODES), null],
