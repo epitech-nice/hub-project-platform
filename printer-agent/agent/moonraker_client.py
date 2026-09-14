@@ -170,21 +170,30 @@ class MoonrakerClient:
 
         return gates
 
-    def set_ttg_map(self, mapping):
-        """Assigne la table tool→gate (MMU_TTG_MAP MAP=g0,g1,g2,g3) — appel séparé, envoyé
-        AVANT upload_and_start_print, jamais comme contenu du fichier gcode : le pré-chargement
-        automatique du firmware (patch_print_data/_auto_feed_at_print_start, voir spec
-        2026-09-10, section spike) consulte l'état courant de ttg_map au moment de l'appel qui
-        démarre l'impression, pas en lisant le gcode ligne par ligne — une commande MMU_TTG_MAP
-        injectée en tête de fichier arriverait trop tard."""
-        url = f"{self.base_url}/printer/gcode/script"
-        script = f"MMU_TTG_MAP MAP={','.join(str(g) for g in mapping)}"
+    def start_print(self, filename):
+        """Démarre l'impression d'un fichier déjà uploadé (POST /printer/print/start). En cas
+        d'échec, le corps de réponse contient directement le message réel de gklib dans
+        error.message (confirmé en direct sur l'imprimante le 2026-09-11, ex: "unknown
+        filament in extruder") — utilisé en priorité ; repli sur l'enrichissement gcode_store
+        (_get_recent_gcode_error) si absent ou de forme inattendue."""
+        url = f"{self.base_url}/printer/print/start"
         try:
-            response = requests.post(url, params={"script": script}, timeout=self.timeout)
+            response = requests.post(url, json={"filename": filename}, timeout=self.timeout)
         except requests.RequestException as exc:
-            raise MoonrakerClientError(f"Moonraker injoignable (MMU_TTG_MAP): {exc}") from exc
+            raise MoonrakerClientError(f"Moonraker injoignable (print/start): {exc}") from exc
 
-        if response.status_code >= 400:
-            raise MoonrakerClientError(
-                f"Erreur Moonraker (MMU_TTG_MAP, HTTP {response.status_code}): {response.text}"
-            )
+        if response.status_code < 400:
+            return
+
+        detail = self._extract_error_message(response) or self._get_recent_gcode_error()
+        message = f"Moonraker a refusé le démarrage de l'impression (HTTP {response.status_code})"
+        if detail:
+            message += f" — {detail}"
+        raise MoonrakerClientError(message)
+
+    @staticmethod
+    def _extract_error_message(response):
+        try:
+            return response.json()["error"]["message"]
+        except (ValueError, KeyError, TypeError):
+            return None

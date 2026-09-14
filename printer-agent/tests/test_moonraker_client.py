@@ -1,6 +1,5 @@
 from unittest.mock import patch
 import time
-import urllib.parse
 
 import pytest
 import requests
@@ -225,29 +224,68 @@ def test_get_mmu_status_raises_moonraker_error_when_num_gates_is_not_an_int():
             client.get_mmu_status()
 
 
-def test_set_ttg_map_sends_mmu_ttg_map_script():
+def test_start_print_success():
     client = make_client()
     with requests_mock.Mocker() as m:
-        m.post(f"{BASE_URL}/printer/gcode/script", json={"result": "ok"})
-        client.set_ttg_map([3, 1, 2, 3])
-    query = urllib.parse.parse_qs(urllib.parse.urlparse(m.last_request.url).query)
-    assert query["script"] == ["MMU_TTG_MAP MAP=3,1,2,3"]
+        m.post(f"{BASE_URL}/printer/print/start", json={"result": "ok"})
+        client.start_print("multi.gcode")
+    assert m.last_request.json() == {"filename": "multi.gcode"}
 
 
-def test_set_ttg_map_raises_on_network_error():
+def test_start_print_raises_with_direct_error_message_from_response_body():
+    # Confirmé en direct sur l'imprimante le 2026-09-11 : contrairement à l'ancien
+    # /server/files/upload?print=true (qui avalait l'exception réelle côté serveur),
+    # /printer/print/start expose le message gklib directement dans error.message du corps
+    # de réponse HTTP 400 — pas besoin de l'enrichissement gcode_store dans ce cas.
     client = make_client()
     with requests_mock.Mocker() as m:
-        m.post(f"{BASE_URL}/printer/gcode/script", exc=requests.exceptions.ConnectTimeout)
+        m.post(
+            f"{BASE_URL}/printer/print/start",
+            status_code=400,
+            json={"error": {"code": 400, "message": "unknown filament in extruder"}},
+        )
+        with pytest.raises(MoonrakerClientError, match="unknown filament in extruder"):
+            client.start_print("multi.gcode")
+
+
+def test_start_print_falls_back_to_gcode_store_when_response_has_no_error_message():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.post(f"{BASE_URL}/printer/print/start", status_code=400, json={"unexpected": "shape"})
+        now = time.time()
+        m.get(
+            f"{BASE_URL}/server/gcode_store",
+            json={
+                "result": {
+                    "gcode_store": [
+                        {
+                            "message": "error: typ = WebRequestError, code = 10011703, "
+                            "message = unknown filament in extruder",
+                            "time": now,
+                            "type": "response",
+                        },
+                    ]
+                }
+            },
+        )
+        with pytest.raises(MoonrakerClientError, match="unknown filament in extruder"):
+            client.start_print("multi.gcode")
+
+
+def test_start_print_raises_generic_message_when_no_enrichment_available():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.post(f"{BASE_URL}/printer/print/start", status_code=400, text="")
         with pytest.raises(MoonrakerClientError):
-            client.set_ttg_map([0, 1, 2, 3])
+            client.start_print("multi.gcode")
 
 
-def test_set_ttg_map_raises_on_http_error():
+def test_start_print_raises_on_network_error():
     client = make_client()
     with requests_mock.Mocker() as m:
-        m.post(f"{BASE_URL}/printer/gcode/script", status_code=500, text="internal error")
+        m.post(f"{BASE_URL}/printer/print/start", exc=requests.exceptions.ConnectTimeout)
         with pytest.raises(MoonrakerClientError):
-            client.set_ttg_map([0, 1, 2, 3])
+            client.start_print("multi.gcode")
 
 
 def test_upload_acm_uploads_json_sidecar_with_matching_basename(tmp_path):
