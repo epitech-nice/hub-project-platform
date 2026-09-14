@@ -60,18 +60,29 @@ const getTokenPayload = (req) => {
 };
 
 // 1. Limite globale par IP — backstop collectif (NAT école)
+// Relevé de 2000 à 30000 le 2026-09-14 : incident de prod, une classe entière
+// derrière une seule IP école (~15 étudiants chargeant tout + déposant autour
+// d'une deadline) épuisait ce quota collectif (213 x 429 en une journée,
+// confirmé sur les logs nginx). Avec une deadline imposée, aucun quota ne
+// doit pouvoir bloquer un dépôt légitime — ce backstop reste seulement pour
+// borner un vrai abus/bug, pas un usage normal en classe.
 const ipLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === "production" ? 2000 : 5000,
+  max: process.env.NODE_ENV === "production" ? 30000 : 5000,
   message: "Limite de requêtes collective atteinte pour cette IP, veuillez réessayer plus tard.",
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// 2. Limite par étudiant authentifié (150/15min)
+// 2. Limite par étudiant authentifié (1500/15min)
+// Relevé de 150 à 1500 le 2026-09-14, même incident que ci-dessus — voir
+// commentaire de ipLimiter. 1500/15min reste un garde-fou contre une vraie
+// boucle infinie bugguée côté client (voir historique useApi), tout en
+// laissant une marge large pour un usage légitime, même intensif en fin de
+// deadline.
 const userLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === "production" ? 150 : 2000,
+  max: process.env.NODE_ENV === "production" ? 1500 : 2000,
   message: "Vous avez dépassé votre limite de requêtes individuelle, veuillez réessayer plus tard.",
   standardHeaders: true,
   legacyHeaders: false,
@@ -87,10 +98,13 @@ const userLimiter = rateLimit({
   },
 });
 
-// 3. Limite par admin authentifié (600/15min)
+// 3. Limite par admin authentifié (2000/15min)
+// Relevé de 600 à 2000 le 2026-09-14 pour rester cohérent avec la hausse de
+// userLimiter — pas la cause de l'incident, mais pas de raison de laisser
+// l'admin plus contraint qu'un étudiant.
 const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === "production" ? 600 : 2000,
+  max: process.env.NODE_ENV === "production" ? 2000 : 2000,
   message: "Vous avez dépassé votre limite de requêtes administrateur, veuillez réessayer plus tard.",
   standardHeaders: true,
   legacyHeaders: false,
