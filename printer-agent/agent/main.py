@@ -177,7 +177,7 @@ def _try_dispatch(hub, moonraker, state, download_dir, logger):
     logger.info("Nouveau job détecté: %s (%s)", job_id, file_name)
 
     try:
-        single_gate, ttg_map = _resolve_gate_assignments(gate_assignments)
+        single_gate, tool_gate_pairs = _resolve_gate_assignments(gate_assignments)
     except ValueError as exc:
         logger.error("gateAssignments invalide reçu du hub pour le job %s: %s", job_id, exc)
         try:
@@ -202,12 +202,18 @@ def _try_dispatch(hub, moonraker, state, download_dir, logger):
 
     dest_path = os.path.join(download_dir, file_name)
     try:
-        if ttg_map is not None:
-            moonraker.set_ttg_map(ttg_map)
+        acm_mapping = None
+        if tool_gate_pairs is not None:
+            gates = moonraker.get_mmu_status()
+            acm_mapping = _build_acm_mapping(tool_gate_pairs, gates)
+
         hub.download_job_file(job_id, dest_path)
         if single_gate is not None:
             _inject_gate_selection(dest_path, single_gate)
-        moonraker.upload_and_start_print(dest_path, file_name)
+        moonraker.upload_file(dest_path, file_name)
+        if acm_mapping is not None:
+            moonraker.upload_acm(file_name, acm_mapping)
+        moonraker.start_print(file_name)
     except Exception as exc:
         logger.error("Échec du dispatch du job %s: %s", job_id, exc, exc_info=True)
         try:
