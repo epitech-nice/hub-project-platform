@@ -50,10 +50,20 @@ export const AuthProvider = ({ children }) => {
             setUser(response.data.data);
           } catch (error) {
             console.error('Erreur de chargement utilisateur:', error);
-            // Nettoyer en cas d'erreur
-            localStorage.removeItem('token');
-            setToken(null);
-            setUser(null);
+            // Ne déconnecter que sur un vrai rejet du token par le serveur (401/403).
+            // Bug de prod du 2026-09-14 : une classe entière derrière une seule IP
+            // école épuisait le rate limiter (429) au chargement, et CE catch
+            // effaçait alors un token pourtant valide — déconnectant des étudiants
+            // qui n'avaient rien fait de mal. Un 429/5xx/coupure réseau ne doit
+            // jamais invalider une session : on garde le token (et le `user`
+            // provisoire déjà posé par le décodage local ci-dessus) tel quel, la
+            // page se resynchronisera au prochain appel une fois la charge retombée.
+            const status = error.response?.status;
+            if (status === 401 || status === 403) {
+              localStorage.removeItem('token');
+              setToken(null);
+              setUser(null);
+            }
           }
         } else {
           console.log("Aucun token trouvé");
