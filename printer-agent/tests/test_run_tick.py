@@ -7,7 +7,7 @@ import pytest
 
 from agent.hub_client import HubClientError
 from agent.moonraker_client import MoonrakerClientError
-from agent.main import MAX_JOB_AGE_SECONDS, run_tick
+from agent.main import MAX_JOB_AGE_SECONDS, run_tick, _build_acm_mapping, _hex_to_rgb, _resolve_gate_assignments
 
 IDLE_STATE = {"job_id": None, "consecutive_moonraker_failures": 0, "job_started_at": None}
 
@@ -39,6 +39,58 @@ def in_progress_state(job_started_at=None):
         "consecutive_moonraker_failures": 0,
         "job_started_at": job_started_at or recent_iso(),
     }
+
+
+# --- _resolve_gate_assignments / _hex_to_rgb / _build_acm_mapping (unitaires) ---
+
+def test_resolve_gate_assignments_returns_none_none_when_empty():
+    assert _resolve_gate_assignments([]) == (None, None)
+
+
+def test_resolve_gate_assignments_returns_none_none_when_absent():
+    assert _resolve_gate_assignments(None) == (None, None)
+
+
+def test_resolve_gate_assignments_returns_single_gate_for_mono_tool():
+    assert _resolve_gate_assignments([{"tool": None, "gate": 2}]) == (2, None)
+
+
+def test_resolve_gate_assignments_returns_tool_gate_pairs_for_multi_tool():
+    result = _resolve_gate_assignments([{"tool": "T0", "gate": 3}, {"tool": "T2", "gate": 1}])
+    assert result == (None, [(0, 3), (2, 1)])
+
+
+def test_resolve_gate_assignments_raises_when_mono_has_multiple_entries():
+    with pytest.raises(ValueError):
+        _resolve_gate_assignments([{"tool": None, "gate": 1}, {"tool": None, "gate": 2}])
+
+
+def test_hex_to_rgb_converts_ignoring_alpha():
+    assert _hex_to_rgb("F40031FF") == [244, 0, 49]
+
+
+def test_hex_to_rgb_raises_on_invalid_input():
+    with pytest.raises(ValueError):
+        _hex_to_rgb("not-a-color")
+
+
+def test_build_acm_mapping_translates_gate_color_and_material():
+    gates = [
+        {"gate": 0, "material": "PLA", "color": "212721FF", "empty": False},
+        {"gate": 1, "material": "PETG", "color": "F40031FF", "empty": False},
+        {"gate": 3, "material": "PLA", "color": "FF6A14FF", "empty": False},
+    ]
+    mapping = _build_acm_mapping([(0, 3), (2, 1)], gates)
+    assert mapping == [
+        {"paint_index": 0, "ams_index": 3, "paint_color": [255, 106, 20], "ams_color": [255, 106, 20], "material_type": "PLA"},
+        {"paint_index": 2, "ams_index": 1, "paint_color": [244, 0, 49], "ams_color": [244, 0, 49], "material_type": "PETG"},
+    ]
+
+
+def test_build_acm_mapping_raises_when_assigned_gate_missing_from_moonraker_status():
+    gates = [{"gate": 0, "material": "PLA", "color": "212721FF", "empty": False}]
+    with pytest.raises(ValueError):
+        _build_acm_mapping([(0, 3)], gates)
 
 
 # --- Heartbeat (nouveau : appelé à chaque tick, avant tout le reste) ---

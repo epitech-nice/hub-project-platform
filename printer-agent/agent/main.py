@@ -82,38 +82,68 @@ def _validate_tool_index(tool):
 
 
 def _resolve_gate_assignments(gate_assignments):
-    """Traduit gateAssignments (reçu du hub, voir spec 2026-09-10) en soit un gate unique à
-    injecter en tête de fichier (Tn, cas mono-matériau : une seule entrée à tool=null), soit une
-    table complète tool→gate pour MMU_TTG_MAP (cas multi-couleur : au moins une entrée à tool
-    non-null). Retourne (single_gate, ttg_map).
+    """Traduit gateAssignments (reçu du hub) en soit un gate unique à injecter en tête de
+    fichier (Tn, cas mono-matériau : une seule entrée à tool=null), soit une liste de paires
+    (tool_index, gate) pour construire le sidecar .acm que gklib lit réellement (cas
+    multi-couleur : au moins une entrée à tool non-null) — voir spec 2026-09-11 (MMU_TTG_MAP
+    remplacé, confirmé sans effet réel sur gklib par des tests matériel réels). Retourne
+    (single_gate, tool_gate_pairs).
 
-    Une liste vide/absente (soumis sans données bobines via overrideNoSpoolData, ou un vieux hub
-    qui n'envoie pas encore ce champ) retourne (None, ttg_map identité) : aucun Tn n'est injecté,
-    mais le ttg_map est quand même remis à l'identité avant dispatch — sinon les commandes Tx déjà
-    présentes dans le fichier gcode (slicer) se résoudraient via un ttg_map potentiellement laissé
-    non-identité par un job multi-outils précédent (état PERSISTENT côté firmware, jamais reset
-    automatiquement par l'imprimante), imprimant silencieusement la mauvaise bobine.
-
-    Cas mono (tool=null) : même raisonnement — la commande Tn injectée en tête de fichier par
-    _inject_gate_selection est un index logique résolu au print-time via le ttg_map courant du
-    firmware, d'où le même reset à l'identité avant injection — voir finding #1 de la revue finale
-    de branche."""
+    Une liste vide/absente (overrideNoSpoolData, ou un vieux hub qui n'envoie pas encore ce
+    champ) retourne (None, None) : ni Tn injecté ni .acm écrit, le fichier garde le mapping du
+    slicer tel quel. Contrairement à l'ancien mécanisme ttg_map (état persistant côté firmware,
+    jamais reset automatiquement par l'imprimante), aucune réinitialisation n'est nécessaire
+    ici : le .acm est propre à chaque fichier, jamais réutilisé d'un job à l'autre."""
     if not gate_assignments:
-        return None, list(range(MAX_ACE_GATE + 1))
+        return None, None
 
     has_null_tool = any(a.get("tool") is None for a in gate_assignments)
     if has_null_tool:
         if len(gate_assignments) != 1:
             raise ValueError(f"gateAssignments avec tool=null doit contenir une seule entrée: {gate_assignments!r}")
         gate = _validate_gate(gate_assignments[0].get("gate"))
-        return gate, list(range(MAX_ACE_GATE + 1))
+        return gate, None
 
-    ttg_map = list(range(MAX_ACE_GATE + 1))
+    tool_gate_pairs = []
     for assignment in gate_assignments:
         tool_index = _validate_tool_index(assignment.get("tool"))
         gate = _validate_gate(assignment.get("gate"))
-        ttg_map[tool_index] = gate
-    return None, ttg_map
+        tool_gate_pairs.append((tool_index, gate))
+    return None, tool_gate_pairs
+
+
+def _hex_to_rgb(color_hex):
+    """Convertit une couleur au format Moonraker/ACE (RRGGBBAA, sans '#') en triplet [r, g, b]
+    — le format attendu par gklib dans le sidecar .acm (paint_color/ams_color). L'alpha (2
+    derniers caractères) est ignoré, toujours 'FF' en pratique côté ACE."""
+    try:
+        return [int(color_hex[i:i + 2], 16) for i in (0, 2, 4)]
+    except (TypeError, ValueError, IndexError):
+        raise ValueError(f"couleur de gate invalide: {color_hex!r}")
+
+
+def _build_acm_mapping(tool_gate_pairs, gates):
+    """Construit la liste ams_box_mapping (voir spec 2026-09-11) à partir des paires
+    (tool_index, gate) résolues par _resolve_gate_assignments et de l'état courant des gates
+    (moonraker.get_mmu_status()). Ne fait jamais confiance à un gate assigné par le hub avant de
+    vérifier qu'il existe bien dans l'état Moonraker courant — même posture que _validate_gate."""
+    gates_by_index = {g["gate"]: g for g in gates}
+    mapping = []
+    for tool_index, gate in tool_gate_pairs:
+        gate_info = gates_by_index.get(gate)
+        if gate_info is None:
+            raise ValueError(f"gate {gate} absent de l'état Moonraker (gates connus: {sorted(gates_by_index)})")
+        rgb = _hex_to_rgb(gate_info["color"])
+        mapping.append(
+            {
+                "paint_index": tool_index,
+                "ams_index": gate,
+                "paint_color": rgb,
+                "ams_color": rgb,
+                "material_type": gate_info["material"],
+            }
+        )
+    return mapping
 
 
 def _inject_gate_selection(file_path, gate):
