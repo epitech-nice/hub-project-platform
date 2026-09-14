@@ -93,6 +93,24 @@ def test_build_acm_mapping_raises_when_assigned_gate_missing_from_moonraker_stat
         _build_acm_mapping([(0, 3)], gates)
 
 
+def test_build_acm_mapping_raises_when_assigned_gate_is_empty():
+    gates = [{"gate": 0, "material": "PLA", "color": "212721FF", "empty": True}]
+    with pytest.raises(ValueError):
+        _build_acm_mapping([(0, 0)], gates)
+
+
+def test_build_acm_mapping_raises_when_assigned_gate_has_no_material():
+    gates = [{"gate": 0, "material": "", "color": "212721FF", "empty": False}]
+    with pytest.raises(ValueError):
+        _build_acm_mapping([(0, 0)], gates)
+
+
+def test_build_acm_mapping_raises_when_assigned_gate_has_no_color():
+    gates = [{"gate": 0, "material": "PLA", "color": "", "empty": False}]
+    with pytest.raises(ValueError):
+        _build_acm_mapping([(0, 0)], gates)
+
+
 # --- Heartbeat (nouveau : appelé à chaque tick, avant tout le reste) ---
 
 def test_heartbeat_called_on_dispatch_tick(tmp_path, logger):
@@ -448,7 +466,6 @@ def test_dispatch_fails_job_when_gate_assignment_out_of_range(tmp_path, logger):
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     hub.download_job_file.assert_not_called()
-    moonraker.upload_and_start_print.assert_not_called()
     hub.update_job_status.assert_called_once()
     args, kwargs = hub.update_job_status.call_args
     assert args[0] == "job-1"
@@ -469,7 +486,6 @@ def test_dispatch_fails_job_when_gate_assignment_gate_is_not_an_integer(tmp_path
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     hub.download_job_file.assert_not_called()
-    moonraker.upload_and_start_print.assert_not_called()
     hub.update_job_status.assert_called_once()
     args, kwargs = hub.update_job_status.call_args
     assert args[1] == "failed"
@@ -489,7 +505,6 @@ def test_dispatch_fails_job_when_tool_is_invalid_in_a_multi_tool_assignment(tmp_
 
     hub.download_job_file.assert_not_called()
     moonraker.upload_file.assert_not_called()
-    moonraker.upload_and_start_print.assert_not_called()
     hub.update_job_status.assert_called_once()
     args, kwargs = hub.update_job_status.call_args
     assert args[1] == "failed"

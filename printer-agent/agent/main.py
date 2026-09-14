@@ -91,9 +91,14 @@ def _resolve_gate_assignments(gate_assignments):
 
     Une liste vide/absente (overrideNoSpoolData, ou un vieux hub qui n'envoie pas encore ce
     champ) retourne (None, None) : ni Tn injecté ni .acm écrit, le fichier garde le mapping du
-    slicer tel quel. Contrairement à l'ancien mécanisme ttg_map (état persistant côté firmware,
-    jamais reset automatiquement par l'imprimante), aucune réinitialisation n'est nécessaire
-    ici : le .acm est propre à chaque fichier, jamais réutilisé d'un job à l'autre."""
+    slicer tel quel. Aucune réinitialisation n'est nécessaire ici, ni pour ce cas ni pour les
+    deux autres : set_ttg_map (seul code à avoir jamais écrit MMU_TTG_MAP dans le firmware) a
+    été supprimé entièrement dans cette branche (Task 3) — il n'existe donc plus aucun chemin
+    de code, mono ou multi-outils, capable de laisser le ttg_map firmware dans un état non-
+    identité. L'ancien reset ne protégeait que contre ce risque désormais structurellement
+    impossible ; il n'a jamais eu de rapport avec le fait que le .acm soit propre à chaque
+    fichier (vrai seulement côté multi-outils, non pertinent côté mono, qui n'écrit aucun
+    .acm)."""
     if not gate_assignments:
         return None, None
 
@@ -126,13 +131,20 @@ def _build_acm_mapping(tool_gate_pairs, gates):
     """Construit la liste ams_box_mapping (voir spec 2026-09-11) à partir des paires
     (tool_index, gate) résolues par _resolve_gate_assignments et de l'état courant des gates
     (moonraker.get_mmu_status()). Ne fait jamais confiance à un gate assigné par le hub avant de
-    vérifier qu'il existe bien dans l'état Moonraker courant — même posture que _validate_gate."""
+    vérifier qu'il existe bien dans l'état Moonraker courant, et qu'il est réellement utilisable
+    (non vide, matière et couleur déclarées) — même posture que _validate_gate. La bobine peut
+    avoir été retirée entre la confirmation côté hub et ce dispatch ; sans ce contrôle,
+    _hex_to_rgb("") lèverait une erreur peu claire sur une couleur invalide plutôt que de
+    signaler le vrai problème, et une matière vide finirait dans le sidecar .acm pour échouer
+    bien plus tard, de façon cryptique, côté gklib."""
     gates_by_index = {g["gate"]: g for g in gates}
     mapping = []
     for tool_index, gate in tool_gate_pairs:
         gate_info = gates_by_index.get(gate)
         if gate_info is None:
             raise ValueError(f"gate {gate} absent de l'état Moonraker (gates connus: {sorted(gates_by_index)})")
+        if gate_info["empty"] or not gate_info["material"] or not gate_info["color"]:
+            raise ValueError(f"gate {gate} vide ou sans bobine déclarée")
         rgb = _hex_to_rgb(gate_info["color"])
         mapping.append(
             {

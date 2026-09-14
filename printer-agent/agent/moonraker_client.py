@@ -1,7 +1,6 @@
 import json
-import os
-
 import logging
+import os
 import time
 
 import requests
@@ -40,6 +39,14 @@ class MoonrakerClient:
                 f"Moonraker a refusé l'upload de {filename} (HTTP {response.status_code}): {response.text}"
             )
 
+    # Timeout dédié à upload_acm : plus long que self.timeout (prévu pour de légers appels de
+    # statut) car cet upload suit immédiatement un upload_file potentiellement long sur ce CPU
+    # mono-cœur — réutiliser self.timeout risquerait le même genre de timeout prématuré que
+    # celui qui a motivé upload_timeout (voir __init__). Bien plus court qu'upload_timeout en
+    # revanche : le sidecar ne pèse que quelques centaines d'octets de JSON, pas besoin de
+    # tolérer plusieurs minutes avant d'échouer sur une connexion bloquée.
+    ACM_UPLOAD_TIMEOUT_SECONDS = 30
+
     def upload_acm(self, filename, mapping):
         """Construit et upload le sidecar <basename>.acm que gklib lit directement pour le
         mapping tool→gate d'un fichier multi-couleurs, en écrasant celui auto-généré par
@@ -53,7 +60,7 @@ class MoonrakerClient:
         try:
             files = {"file": (acm_filename, content, "application/json")}
             data = {"root": "gcodes", "print": "false"}
-            response = requests.post(url, files=files, data=data, timeout=self.timeout)
+            response = requests.post(url, files=files, data=data, timeout=self.ACM_UPLOAD_TIMEOUT_SECONDS)
         except requests.RequestException as exc:
             raise MoonrakerClientError(f"Échec de l'upload de {acm_filename} vers Moonraker: {exc}") from exc
 
@@ -67,13 +74,12 @@ class MoonrakerClient:
     RECENT_GCODE_ERROR_WINDOW_SECONDS = 30
 
     def _get_recent_gcode_error(self):
-        """Best-effort : va chercher la vraie raison d'un échec de démarrage d'impression dans
-        server/gcode_store (journal des dernières commandes/réponses gcode Klipper), la seule
-        source qui l'expose. /server/files/upload avale l'exception réelle de start_print côté
-        Moonraker (file_manager.py::_finish_gcode_upload fait `except self.server.error: pass`)
-        et ne renvoie qu'un booléen print_started=false sans aucun détail — confirmé en direct
-        sur l'imprimante (2026-09-11, échec réel : "unknown filament in extruder" invisible dans
-        la réponse d'upload, présent uniquement dans gcode_store).
+        """Best-effort : repli de start_print quand _extract_error_message ne trouve pas de
+        error.message exploitable dans la réponse de /printer/print/start (absent, ou forme de
+        réponse inattendue). Va chercher la vraie raison de l'échec dans server/gcode_store
+        (journal des dernières commandes/réponses gcode Klipper), la seule autre source qui
+        l'expose — confirmé en direct sur l'imprimante (2026-09-11, échec réel : "unknown
+        filament in extruder" retrouvé dans gcode_store).
 
         Ne retient une entrée que si elle date de moins de RECENT_GCODE_ERROR_WINDOW_SECONDS —
         sinon, si Klipper n'a rien échoté du tout pour CETTE tentative (déjà en shutdown/occupé,
