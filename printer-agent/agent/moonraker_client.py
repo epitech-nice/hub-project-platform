@@ -1,3 +1,6 @@
+import json
+import os
+
 import logging
 import time
 
@@ -35,6 +38,28 @@ class MoonrakerClient:
         if response.status_code >= 400:
             raise MoonrakerClientError(
                 f"Moonraker a refusé l'upload de {filename} (HTTP {response.status_code}): {response.text}"
+            )
+
+    def upload_acm(self, filename, mapping):
+        """Construit et upload le sidecar <basename>.acm que gklib lit directement pour le
+        mapping tool→gate d'un fichier multi-couleurs, en écrasant celui auto-généré par
+        Moonraker depuis les métadonnées slicer — voir spec 2026-09-11 (MMU_TTG_MAP confirmé
+        sans effet réel sur gklib par des tests matériel réels le 2026-09-11). mapping : liste
+        de dicts {paint_index, ams_index, paint_color: [r,g,b], ams_color: [r,g,b],
+        material_type}, produite par _build_acm_mapping (agent/main.py)."""
+        acm_filename = os.path.splitext(filename)[0] + ".acm"
+        content = json.dumps({"use_ams": True, "ams_box_mapping": mapping}).encode("utf-8")
+        url = f"{self.base_url}/server/files/upload"
+        try:
+            files = {"file": (acm_filename, content, "application/json")}
+            data = {"root": "gcodes", "print": "false"}
+            response = requests.post(url, files=files, data=data, timeout=self.timeout)
+        except requests.RequestException as exc:
+            raise MoonrakerClientError(f"Échec de l'upload de {acm_filename} vers Moonraker: {exc}") from exc
+
+        if response.status_code >= 400:
+            raise MoonrakerClientError(
+                f"Moonraker a refusé l'upload de {acm_filename} (HTTP {response.status_code}): {response.text}"
             )
 
     # Fenêtre de corrélation pour _get_recent_gcode_error : au-delà, une entrée est considérée

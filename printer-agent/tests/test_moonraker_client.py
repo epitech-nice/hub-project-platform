@@ -248,3 +248,39 @@ def test_set_ttg_map_raises_on_http_error():
         m.post(f"{BASE_URL}/printer/gcode/script", status_code=500, text="internal error")
         with pytest.raises(MoonrakerClientError):
             client.set_ttg_map([0, 1, 2, 3])
+
+
+def test_upload_acm_uploads_json_sidecar_with_matching_basename(tmp_path):
+    client = make_client()
+    mapping = [
+        {"paint_index": 0, "ams_index": 3, "paint_color": [225, 6, 0], "ams_color": [225, 6, 0], "material_type": "PLA"},
+        {"paint_index": 2, "ams_index": 1, "paint_color": [33, 39, 33], "ams_color": [33, 39, 33], "material_type": "PETG"},
+    ]
+
+    with requests_mock.Mocker() as m:
+        m.post(f"{BASE_URL}/server/files/upload", json={"action": "create_file"})
+        client.upload_acm("multi.gcode", mapping)
+
+    sent_body = m.last_request.text
+    # Le sidecar doit porter le même nom de base que le gcode, extension .acm — c'est
+    # exactement l'emplacement que gklib lit (voir spec 2026-09-11).
+    assert 'filename="multi.acm"' in sent_body
+    assert '"use_ams": true' in sent_body
+    assert '"paint_index": 0' in sent_body and '"ams_index": 3' in sent_body
+    assert '"paint_index": 2' in sent_body and '"ams_index": 1' in sent_body
+
+
+def test_upload_acm_raises_on_http_error():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.post(f"{BASE_URL}/server/files/upload", status_code=500, text="internal error")
+        with pytest.raises(MoonrakerClientError):
+            client.upload_acm("multi.gcode", [])
+
+
+def test_upload_acm_raises_on_network_error():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.post(f"{BASE_URL}/server/files/upload", exc=requests.exceptions.ConnectTimeout)
+        with pytest.raises(MoonrakerClientError):
+            client.upload_acm("multi.gcode", [])
