@@ -181,10 +181,18 @@ class MoonrakerClient:
         d'échec, le corps de réponse contient directement le message réel de gklib dans
         error.message (confirmé en direct sur l'imprimante le 2026-09-11, ex: "unknown
         filament in extruder") — utilisé en priorité ; repli sur l'enrichissement gcode_store
-        (_get_recent_gcode_error) si absent ou de forme inattendue."""
+        (_get_recent_gcode_error) si absent ou de forme inattendue.
+
+        Utilise upload_timeout (pas le timeout court des status checks) : bug réel en prod
+        (2026-09-16) — la requête ne répond qu'une fois la séquence physique de démarrage
+        terminée côté gklib (coupe filament + déroulement + chauffe buse/plateau + homing),
+        qui peut largement dépasser 10s (chauffe seule observée à plus d'1 minute). Un timeout
+        trop court fait lever un MoonrakerClientError et reporter le job 'failed' au hub alors
+        que l'impression démarre en réalité normalement — même classe de bug que celui déjà
+        documenté sur upload_timeout (voir son commentaire dans __init__)."""
         url = f"{self.base_url}/printer/print/start"
         try:
-            response = requests.post(url, json={"filename": filename}, timeout=self.timeout)
+            response = requests.post(url, json={"filename": filename}, timeout=self.upload_timeout)
         except requests.RequestException as exc:
             raise MoonrakerClientError(f"Moonraker injoignable (print/start): {exc}") from exc
 

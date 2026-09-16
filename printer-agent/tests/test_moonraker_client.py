@@ -232,6 +232,21 @@ def test_start_print_success():
     assert m.last_request.json() == {"filename": "multi.gcode"}
 
 
+def test_start_print_uses_a_longer_timeout_than_status_checks():
+    # Bug réel en prod (2026-09-16) : /printer/print/start ne répond qu'une fois la séquence
+    # physique de démarrage terminée côté gklib (coupe filament + déroulement + chauffe buse/
+    # plateau + homing) — observée à plus d'1 minute rien que pour la chauffe. Le timeout court
+    # de 10s (partagé avec les status checks) faisait lever un MoonrakerClientError et reporter
+    # le job 'failed' au hub alors que l'impression démarrait en réalité normalement.
+    client = make_client()
+    with patch("agent.moonraker_client.requests.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        client.start_print("multi.gcode")
+
+    _, kwargs = mock_post.call_args
+    assert kwargs["timeout"] > client.timeout
+
+
 def test_start_print_raises_with_direct_error_message_from_response_body():
     # Confirmé en direct sur l'imprimante le 2026-09-11 : contrairement à l'ancien
     # /server/files/upload?print=true (qui avalait l'exception réelle côté serveur),
