@@ -566,6 +566,32 @@ def test_dispatch_failure_on_start_print_reports_failed(tmp_path, logger):
     assert os.listdir(tmp_path) == []
 
 
+def test_dispatch_treats_moonraker_print_start_timeout_as_success(tmp_path, logger):
+    # Bug réel en prod (2026-09-16) : start_print() peut expirer côté Moonraker (mécanisme
+    # MQTT de kobra.py, 30s codées en dur) alors que gklib a en réalité bien démarré le
+    # dispatch physique en tâche de fond. Ce cas précis ne doit pas échouer le job — il doit
+    # basculer en suivi normal, exactement comme un dispatch réussi.
+    hub = make_hub()
+    hub.get_next_job.return_value = {"jobId": "job-1", "fileName": "a.gcode", "downloadUrl": "/x"}
+
+    def fake_download(job_id, dest_path):
+        with open(dest_path, "w") as f:
+            f.write("G28\n")
+
+    hub.download_job_file.side_effect = fake_download
+    moonraker = make_moonraker()
+    moonraker.start_print.side_effect = MoonrakerClientError(
+        "Moonraker a refusé le démarrage de l'impression (HTTP 400) — "
+        "Error while trying to print: Timeout while trying to print a.gcode"
+    )
+
+    result = run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    hub.update_job_status.assert_called_once_with("job-1", "printing")
+    assert result["job_id"] == "job-1"
+    assert os.listdir(tmp_path) == []
+
+
 def test_dispatch_failure_on_unexpected_exception_still_reports_failed(tmp_path, logger):
     # Couvre le Critical #2 de la revue finale : une exception qui n'est ni HubClientError
     # ni MoonrakerClientError (ex: OSError levé par open() avant même le download) ne doit

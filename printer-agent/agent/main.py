@@ -23,6 +23,15 @@ MAX_ACE_GATE = 3  # même borne que confirmJob côté hub (Task 4) : selectedGat
 ACTIVE_STATES = ("printing", "paused")
 TERMINAL_ERROR_STATES = ("error", "cancelled")
 PERMANENT_HUB_ERROR_CODES = (400, 403, 404)
+# Bug réel en prod (2026-09-16) : start_print() peut lever un MoonrakerClientError
+# contenant ce marqueur quand le mécanisme MQTT de kobra.py (Rinkhals) abandonne
+# d'attendre un rapport d'état après 30s codées en dur (non paramétrable via l'API
+# publique) — alors que gklib continue le dispatch physique (coupe/déroulement/
+# chauffe/homing, déjà observé à plus d'1min30 pour la seule chauffe) en tâche de
+# fond, indépendamment de cet abandon côté Moonraker. Traiter cette erreur précise
+# comme un échec de dispatch reporterait "failed" au hub pour une impression qui a
+# en réalité démarré normalement.
+MOONRAKER_PRINT_START_TIMEOUT_MARKER = "Timeout while trying to print"
 
 
 def run_tick(hub, moonraker, state, download_dir, logger):
@@ -225,7 +234,19 @@ def _try_dispatch(hub, moonraker, state, download_dir, logger):
         moonraker.upload_file(dest_path, file_name)
         if acm_mapping is not None:
             moonraker.upload_acm(file_name, acm_mapping)
-        moonraker.start_print(file_name)
+        try:
+            moonraker.start_print(file_name)
+        except MoonrakerClientError as exc:
+            if MOONRAKER_PRINT_START_TIMEOUT_MARKER not in str(exc):
+                raise
+            logger.warning(
+                "start_print a expiré côté Moonraker pour le job %s (%s) — le dispatch "
+                "physique peut malgré tout avoir réussi (gklib continue en tâche de fond). "
+                "On bascule en suivi normal plutôt que d'échouer le job à tort ; "
+                "_try_monitor confirmera ou infirmera sur les prochains ticks.",
+                job_id,
+                exc,
+            )
     except Exception as exc:
         logger.error("Échec du dispatch du job %s: %s", job_id, exc, exc_info=True)
         try:
