@@ -7,7 +7,7 @@ import pytest
 
 from agent.hub_client import HubClientError
 from agent.moonraker_client import MoonrakerClientError
-from agent.main import MAX_JOB_AGE_SECONDS, run_tick
+from agent.main import MAX_JOB_AGE_SECONDS, run_tick, _build_acm_mapping, _hex_to_rgb, _resolve_gate_assignments
 
 IDLE_STATE = {"job_id": None, "consecutive_moonraker_failures": 0, "job_started_at": None}
 
@@ -39,6 +39,76 @@ def in_progress_state(job_started_at=None):
         "consecutive_moonraker_failures": 0,
         "job_started_at": job_started_at or recent_iso(),
     }
+
+
+# --- _resolve_gate_assignments / _hex_to_rgb / _build_acm_mapping (unitaires) ---
+
+def test_resolve_gate_assignments_returns_none_none_when_empty():
+    assert _resolve_gate_assignments([]) == (None, None)
+
+
+def test_resolve_gate_assignments_returns_none_none_when_absent():
+    assert _resolve_gate_assignments(None) == (None, None)
+
+
+def test_resolve_gate_assignments_returns_single_gate_for_mono_tool():
+    assert _resolve_gate_assignments([{"tool": None, "gate": 2}]) == (2, None)
+
+
+def test_resolve_gate_assignments_returns_tool_gate_pairs_for_multi_tool():
+    result = _resolve_gate_assignments([{"tool": "T0", "gate": 3}, {"tool": "T2", "gate": 1}])
+    assert result == (None, [(0, 3), (2, 1)])
+
+
+def test_resolve_gate_assignments_raises_when_mono_has_multiple_entries():
+    with pytest.raises(ValueError):
+        _resolve_gate_assignments([{"tool": None, "gate": 1}, {"tool": None, "gate": 2}])
+
+
+def test_hex_to_rgb_converts_ignoring_alpha():
+    assert _hex_to_rgb("F40031FF") == [244, 0, 49]
+
+
+def test_hex_to_rgb_raises_on_invalid_input():
+    with pytest.raises(ValueError):
+        _hex_to_rgb("not-a-color")
+
+
+def test_build_acm_mapping_translates_gate_color_and_material():
+    gates = [
+        {"gate": 0, "material": "PLA", "color": "212721FF", "empty": False},
+        {"gate": 1, "material": "PETG", "color": "F40031FF", "empty": False},
+        {"gate": 3, "material": "PLA", "color": "FF6A14FF", "empty": False},
+    ]
+    mapping = _build_acm_mapping([(0, 3), (2, 1)], gates)
+    assert mapping == [
+        {"paint_index": 0, "ams_index": 3, "paint_color": [255, 106, 20], "ams_color": [255, 106, 20], "material_type": "PLA"},
+        {"paint_index": 2, "ams_index": 1, "paint_color": [244, 0, 49], "ams_color": [244, 0, 49], "material_type": "PETG"},
+    ]
+
+
+def test_build_acm_mapping_raises_when_assigned_gate_missing_from_moonraker_status():
+    gates = [{"gate": 0, "material": "PLA", "color": "212721FF", "empty": False}]
+    with pytest.raises(ValueError):
+        _build_acm_mapping([(0, 3)], gates)
+
+
+def test_build_acm_mapping_raises_when_assigned_gate_is_empty():
+    gates = [{"gate": 0, "material": "PLA", "color": "212721FF", "empty": True}]
+    with pytest.raises(ValueError):
+        _build_acm_mapping([(0, 0)], gates)
+
+
+def test_build_acm_mapping_raises_when_assigned_gate_has_no_material():
+    gates = [{"gate": 0, "material": "", "color": "212721FF", "empty": False}]
+    with pytest.raises(ValueError):
+        _build_acm_mapping([(0, 0)], gates)
+
+
+def test_build_acm_mapping_raises_when_assigned_gate_has_no_color():
+    gates = [{"gate": 0, "material": "PLA", "color": "", "empty": False}]
+    with pytest.raises(ValueError):
+        _build_acm_mapping([(0, 0)], gates)
 
 
 # --- Heartbeat (nouveau : appelé à chaque tick, avant tout le reste) ---
@@ -136,7 +206,7 @@ def test_no_job_available_returns_state_unchanged(tmp_path, logger):
     result = run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     assert result == IDLE_STATE
-    moonraker.upload_and_start_print.assert_not_called()
+    moonraker.start_print.assert_not_called()
 
 
 def test_hub_unreachable_during_next_job_returns_state_unchanged(tmp_path, logger):
@@ -162,7 +232,8 @@ def test_successful_dispatch_reports_printing_and_saves_job_id(tmp_path, logger)
 
     result = run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
-    moonraker.upload_and_start_print.assert_called_once()
+    moonraker.upload_file.assert_called_once()
+    moonraker.start_print.assert_called_once_with("a.gcode")
     hub.update_job_status.assert_called_once_with("job-1", "printing")
     assert result["job_id"] == "job-1"
     assert result["consecutive_moonraker_failures"] == 0
@@ -197,10 +268,6 @@ def test_dispatch_sanitizes_filename_from_hub_payload(tmp_path, logger):
 
 
 def test_dispatch_injects_gate_selection_for_a_mono_gate_assignment(tmp_path, logger):
-    # Couvre le finding #1 de la revue finale : le dispatch mono doit AUSSI reset le ttg_map à
-    # l'identité avant d'injecter Tn, sinon un ttg_map laissé non-identité par un job multi-outils
-    # précédent ferait résoudre ce Tn vers le mauvais gate physique (état PERSISTENT côté
-    # firmware, jamais reset automatiquement par l'imprimante).
     hub = make_hub()
     hub.get_next_job.return_value = {
         "jobId": "job-1",
@@ -209,19 +276,12 @@ def test_dispatch_injects_gate_selection_for_a_mono_gate_assignment(tmp_path, lo
         "gateAssignments": [{"tool": None, "gate": 2}],
     }
 
-    call_order = []
-
-    def fake_set_ttg_map(mapping):
-        call_order.append(("set_ttg_map", mapping))
-
     def fake_download(job_id, dest_path):
-        call_order.append(("download", None))
         with open(dest_path, "w") as f:
             f.write("G28\nG1 X10\n")
 
-    moonraker = make_moonraker()
-    moonraker.set_ttg_map.side_effect = fake_set_ttg_map
     hub.download_job_file.side_effect = fake_download
+    moonraker = make_moonraker()
 
     captured = {}
 
@@ -229,20 +289,20 @@ def test_dispatch_injects_gate_selection_for_a_mono_gate_assignment(tmp_path, lo
         with open(file_path, "r") as f:
             captured["content"] = f.read()
 
-    moonraker.upload_and_start_print.side_effect = fake_upload
+    moonraker.upload_file.side_effect = fake_upload
 
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     assert captured["content"] == "T2\nG28\nG1 X10\n"
-    moonraker.set_ttg_map.assert_called_once_with([0, 1, 2, 3])
-    assert call_order[0] == ("set_ttg_map", [0, 1, 2, 3])
-    assert call_order[1] == ("download", None)
+    # Cas mono : aucun .acm à écrire, le mécanisme Tn suffit (inchangé, voir spec 2026-09-11).
+    moonraker.upload_acm.assert_not_called()
+    moonraker.start_print.assert_called_once_with("a.gcode")
 
 
-def test_dispatch_resets_ttg_map_but_injects_nothing_when_gate_assignments_absent(tmp_path, logger):
-    # Un vieux hub qui n'envoie pas encore ce champ ne doit pas laisser un ttg_map non-identité
-    # hérité d'un job multi-outils précédent résoudre silencieusement les Tx embarquées dans ce
-    # fichier vers la mauvaise bobine (voir finding de la 2e revue finale de branche, PR #17).
+def test_dispatch_uploads_gcode_and_starts_print_without_acm_when_gate_assignments_absent(tmp_path, logger):
+    # Un vieux hub qui n'envoie pas encore ce champ : le fichier garde le mapping du slicer tel
+    # quel, aucun .acm écrit (voir spec 2026-09-11 — contrairement à l'ancien ttg_map, il n'y a
+    # plus d'état firmware persistant à réinitialiser dans ce cas).
     hub = make_hub()
     hub.get_next_job.return_value = {"jobId": "job-1", "fileName": "a.gcode", "downloadUrl": "/x"}
 
@@ -259,16 +319,17 @@ def test_dispatch_resets_ttg_map_but_injects_nothing_when_gate_assignments_absen
         with open(file_path, "r") as f:
             captured["content"] = f.read()
 
-    moonraker.upload_and_start_print.side_effect = fake_upload
+    moonraker.upload_file.side_effect = fake_upload
 
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     assert captured["content"] == "G28\nG1 X10\n"
-    moonraker.set_ttg_map.assert_called_once_with([0, 1, 2, 3])
+    moonraker.upload_acm.assert_not_called()
+    moonraker.start_print.assert_called_once_with("a.gcode")
 
 
-def test_dispatch_resets_ttg_map_but_injects_nothing_when_gate_assignments_empty(tmp_path, logger):
-    # Cas overrideNoSpoolData : mêmes conséquences qu'un hub sans le champ, même correctif.
+def test_dispatch_uploads_gcode_and_starts_print_without_acm_when_gate_assignments_empty(tmp_path, logger):
+    # Cas overrideNoSpoolData : mêmes conséquences qu'un hub sans le champ.
     hub = make_hub()
     hub.get_next_job.return_value = {
         "jobId": "job-1",
@@ -290,15 +351,16 @@ def test_dispatch_resets_ttg_map_but_injects_nothing_when_gate_assignments_empty
         with open(file_path, "r") as f:
             captured["content"] = f.read()
 
-    moonraker.upload_and_start_print.side_effect = fake_upload
+    moonraker.upload_file.side_effect = fake_upload
 
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     assert captured["content"] == "G28\n"
-    moonraker.set_ttg_map.assert_called_once_with([0, 1, 2, 3])
+    moonraker.upload_acm.assert_not_called()
+    moonraker.start_print.assert_called_once_with("a.gcode")
 
 
-def test_dispatch_calls_set_ttg_map_before_download_and_upload_for_multi_tool_assignment(tmp_path, logger):
+def test_dispatch_uploads_acm_before_start_print_for_multi_tool_assignment(tmp_path, logger):
     hub = make_hub()
     hub.get_next_job.return_value = {
         "jobId": "job-1",
@@ -309,32 +371,86 @@ def test_dispatch_calls_set_ttg_map_before_download_and_upload_for_multi_tool_as
 
     call_order = []
 
-    def fake_set_ttg_map(mapping):
-        call_order.append(("set_ttg_map", mapping))
-
     def fake_download(job_id, dest_path):
-        call_order.append(("download", None))
+        call_order.append("download")
         with open(dest_path, "w") as f:
             f.write("G28\nT0\nG1 X10\nT2\nG1 X20\n")
 
-    captured = {}
+    def fake_upload_file(file_path, filename):
+        call_order.append("upload_file")
 
-    def fake_upload(file_path, filename):
-        call_order.append(("upload", None))
-        with open(file_path, "r") as f:
-            captured["content"] = f.read()
+    def fake_upload_acm(filename, mapping):
+        call_order.append("upload_acm")
+        call_order.append(mapping)
 
-    moonraker = make_moonraker()
-    moonraker.set_ttg_map.side_effect = fake_set_ttg_map
+    def fake_start_print(filename):
+        call_order.append("start_print")
+
     hub.download_job_file.side_effect = fake_download
-    moonraker.upload_and_start_print.side_effect = fake_upload
+    moonraker = make_moonraker()
+    moonraker.get_mmu_status.return_value = [
+        {"gate": 1, "material": "PETG", "color": "212721FF", "empty": False},
+        {"gate": 3, "material": "PLA", "color": "F40031FF", "empty": False},
+    ]
+    moonraker.upload_file.side_effect = fake_upload_file
+    moonraker.upload_acm.side_effect = fake_upload_acm
+    moonraker.start_print.side_effect = fake_start_print
 
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
-    # ttg_map par défaut [0,1,2,3] ; T0 (index 0) -> gate 3, T2 (index 2) -> gate 1 : [3,1,1,3]
-    assert call_order[0] == ("set_ttg_map", [3, 1, 1, 3])
-    assert [c[0] for c in call_order[1:]] == ["download", "upload"]
-    assert captured["content"] == "G28\nT0\nG1 X10\nT2\nG1 X20\n"
+    assert call_order[0] == "download"
+    assert call_order[1] == "upload_file"
+    assert call_order[2] == "upload_acm"
+    mapping = call_order[3]
+    assert mapping == [
+        {"paint_index": 0, "ams_index": 3, "paint_color": [244, 0, 49], "ams_color": [244, 0, 49], "material_type": "PLA"},
+        {"paint_index": 2, "ams_index": 1, "paint_color": [33, 39, 33], "ams_color": [33, 39, 33], "material_type": "PETG"},
+    ]
+    assert call_order[4] == "start_print"
+
+
+def test_dispatch_fails_job_and_never_starts_print_when_assigned_gate_missing_from_moonraker_status(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {
+        "jobId": "job-1",
+        "fileName": "a.gcode",
+        "downloadUrl": "/x",
+        "gateAssignments": [{"tool": "T0", "gate": 3}],
+    }
+    moonraker = make_moonraker()
+    moonraker.get_mmu_status.return_value = [{"gate": 0, "material": "PLA", "color": "212721FF", "empty": False}]
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    hub.download_job_file.assert_not_called()
+    moonraker.start_print.assert_not_called()
+    hub.update_job_status.assert_called_once()
+    args, kwargs = hub.update_job_status.call_args
+    assert args[1] == "failed"
+
+
+def test_dispatch_fails_job_and_never_starts_print_when_acm_upload_fails(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {
+        "jobId": "job-1",
+        "fileName": "a.gcode",
+        "downloadUrl": "/x",
+        "gateAssignments": [{"tool": "T0", "gate": 1}],
+    }
+
+    def fake_download(job_id, dest_path):
+        with open(dest_path, "w") as f:
+            f.write("G28\n")
+
+    hub.download_job_file.side_effect = fake_download
+    moonraker = make_moonraker()
+    moonraker.get_mmu_status.return_value = [{"gate": 1, "material": "PLA", "color": "212721FF", "empty": False}]
+    moonraker.upload_acm.side_effect = MoonrakerClientError("upload .acm refusé")
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    moonraker.start_print.assert_not_called()
+    hub.update_job_status.assert_called_once_with("job-1", "failed", error_message="upload .acm refusé")
 
 
 def test_dispatch_fails_job_when_gate_assignment_out_of_range(tmp_path, logger):
@@ -350,7 +466,6 @@ def test_dispatch_fails_job_when_gate_assignment_out_of_range(tmp_path, logger):
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     hub.download_job_file.assert_not_called()
-    moonraker.upload_and_start_print.assert_not_called()
     hub.update_job_status.assert_called_once()
     args, kwargs = hub.update_job_status.call_args
     assert args[0] == "job-1"
@@ -371,7 +486,6 @@ def test_dispatch_fails_job_when_gate_assignment_gate_is_not_an_integer(tmp_path
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     hub.download_job_file.assert_not_called()
-    moonraker.upload_and_start_print.assert_not_called()
     hub.update_job_status.assert_called_once()
     args, kwargs = hub.update_job_status.call_args
     assert args[1] == "failed"
@@ -390,8 +504,7 @@ def test_dispatch_fails_job_when_tool_is_invalid_in_a_multi_tool_assignment(tmp_
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     hub.download_job_file.assert_not_called()
-    moonraker.set_ttg_map.assert_not_called()
-    moonraker.upload_and_start_print.assert_not_called()
+    moonraker.upload_file.assert_not_called()
     hub.update_job_status.assert_called_once()
     args, kwargs = hub.update_job_status.call_args
     assert args[1] == "failed"
@@ -413,7 +526,7 @@ def test_dispatch_skipped_when_disk_space_too_low(tmp_path, logger):
     assert result == IDLE_STATE
 
 
-def test_dispatch_failure_on_moonraker_upload_reports_failed_immediately(tmp_path, logger):
+def test_dispatch_failure_on_gcode_upload_reports_failed_immediately(tmp_path, logger):
     hub = make_hub()
     hub.get_next_job.return_value = {"jobId": "job-1", "fileName": "a.gcode", "downloadUrl": "/x"}
 
@@ -423,11 +536,32 @@ def test_dispatch_failure_on_moonraker_upload_reports_failed_immediately(tmp_pat
 
     hub.download_job_file.side_effect = fake_download
     moonraker = make_moonraker()
-    moonraker.upload_and_start_print.side_effect = MoonrakerClientError("upload refusé")
+    moonraker.upload_file.side_effect = MoonrakerClientError("upload refusé")
 
     result = run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
 
     hub.update_job_status.assert_called_once_with("job-1", "failed", error_message="upload refusé")
+    assert result == IDLE_STATE
+    assert os.listdir(tmp_path) == []
+
+
+def test_dispatch_failure_on_start_print_reports_failed(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {"jobId": "job-1", "fileName": "a.gcode", "downloadUrl": "/x"}
+
+    def fake_download(job_id, dest_path):
+        with open(dest_path, "w") as f:
+            f.write("G28\n")
+
+    hub.download_job_file.side_effect = fake_download
+    moonraker = make_moonraker()
+    moonraker.start_print.side_effect = MoonrakerClientError("unknown filament in extruder")
+
+    result = run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    hub.update_job_status.assert_called_once_with(
+        "job-1", "failed", error_message="unknown filament in extruder"
+    )
     assert result == IDLE_STATE
     assert os.listdir(tmp_path) == []
 
@@ -457,7 +591,7 @@ def test_dispatch_failure_when_reporting_failed_also_fails_is_logged_not_raised(
 
     hub.download_job_file.side_effect = fake_download
     moonraker = make_moonraker()
-    moonraker.upload_and_start_print.side_effect = MoonrakerClientError("upload refusé")
+    moonraker.upload_file.side_effect = MoonrakerClientError("upload refusé")
     hub.update_job_status.side_effect = HubClientError("hub down")
 
     result = run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)

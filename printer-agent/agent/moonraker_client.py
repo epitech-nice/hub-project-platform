@@ -1,4 +1,6 @@
+import json
 import logging
+import os
 import time
 
 import requests
@@ -17,56 +19,67 @@ class MoonrakerClient:
         # gcode de 6h a fait timeout à l'upload en prod avec un timeout partagé de 10s.
         self.upload_timeout = upload_timeout
 
-    def upload_and_start_print(self, file_path, filename):
+    def upload_file(self, file_path, filename):
+        """Upload un fichier depuis le disque local vers Moonraker, sans démarrer l'impression
+        (print=false) — voir start_print(), appelé séparément après. Remplace l'ancien
+        upload_and_start_print (spec 2026-09-11, MMU_TTG_MAP remplacé par l'écriture directe du
+        sidecar .acm que gklib consulte réellement) : upload et démarrage sont désormais deux
+        appels distincts, pour pouvoir uploader le .acm corrigé entre les deux."""
         url = f"{self.base_url}/server/files/upload"
         try:
             with open(file_path, "rb") as f:
                 files = {"file": (filename, f, "text/plain")}
-                # root=gcodes : dossier standard Moonraker pour les fichiers imprimables.
-                # print=true : démarre l'impression immédiatement après l'upload, en un seul
-                # appel plutôt que upload + POST /printer/print/start séparé.
-                data = {"root": "gcodes", "print": "true"}
+                data = {"root": "gcodes", "print": "false"}
                 response = requests.post(url, files=files, data=data, timeout=self.upload_timeout)
         except (requests.RequestException, OSError) as exc:
-            raise MoonrakerClientError(f"Échec de l'upload vers Moonraker: {exc}") from exc
+            raise MoonrakerClientError(f"Échec de l'upload de {filename} vers Moonraker: {exc}") from exc
 
         if response.status_code >= 400:
             raise MoonrakerClientError(
-                f"Moonraker a refusé l'upload (HTTP {response.status_code}): {response.text}"
+                f"Moonraker a refusé l'upload de {filename} (HTTP {response.status_code}): {response.text}"
             )
 
-        try:
-            # Contrairement à printer/objects/query (result.status.*), la réponse réelle de
-            # /server/files/upload sur ce firmware Rinkhals/GoKlipper n'est PAS enveloppée dans
-            # "result" : {"action": ..., "item": {...}, "print_started": bool, "print_queued":
-            # bool} directement à la racine — vérifié par un upload de test (print=false) en
-            # direct sur l'imprimante. L'ancien code lisait ["result"]["print_started"], qui
-            # levait systématiquement un KeyError('result') : le job était rapporté "failed" au
-            # hub alors que l'impression démarrait réellement (le KeyError survient après l'appel
-            # HTTP, qui avait déjà réussi côté Moonraker).
-            print_started = response.json()["print_started"]
-        except (KeyError, ValueError, TypeError) as exc:
-            raise MoonrakerClientError(f"Réponse Moonraker inattendue à l'upload: {exc}") from exc
+    # Timeout dédié à upload_acm : plus long que self.timeout (prévu pour de légers appels de
+    # statut) car cet upload suit immédiatement un upload_file potentiellement long sur ce CPU
+    # mono-cœur — réutiliser self.timeout risquerait le même genre de timeout prématuré que
+    # celui qui a motivé upload_timeout (voir __init__). Bien plus court qu'upload_timeout en
+    # revanche : le sidecar ne pèse que quelques centaines d'octets de JSON, pas besoin de
+    # tolérer plusieurs minutes avant d'échouer sur une connexion bloquée.
+    ACM_UPLOAD_TIMEOUT_SECONDS = 30
 
-        if not print_started:
-            detail = self._get_recent_gcode_error()
-            message = "Moonraker a accepté le fichier mais n'a pas démarré l'impression (print_started=false)"
-            if detail:
-                message += f" — {detail}"
-            raise MoonrakerClientError(message)
+    def upload_acm(self, filename, mapping):
+        """Construit et upload le sidecar <basename>.acm que gklib lit directement pour le
+        mapping tool→gate d'un fichier multi-couleurs, en écrasant celui auto-généré par
+        Moonraker depuis les métadonnées slicer — voir spec 2026-09-11 (MMU_TTG_MAP confirmé
+        sans effet réel sur gklib par des tests matériel réels le 2026-09-11). mapping : liste
+        de dicts {paint_index, ams_index, paint_color: [r,g,b], ams_color: [r,g,b],
+        material_type}, produite par _build_acm_mapping (agent/main.py)."""
+        acm_filename = os.path.splitext(filename)[0] + ".acm"
+        content = json.dumps({"use_ams": True, "ams_box_mapping": mapping}).encode("utf-8")
+        url = f"{self.base_url}/server/files/upload"
+        try:
+            files = {"file": (acm_filename, content, "application/json")}
+            data = {"root": "gcodes", "print": "false"}
+            response = requests.post(url, files=files, data=data, timeout=self.ACM_UPLOAD_TIMEOUT_SECONDS)
+        except requests.RequestException as exc:
+            raise MoonrakerClientError(f"Échec de l'upload de {acm_filename} vers Moonraker: {exc}") from exc
+
+        if response.status_code >= 400:
+            raise MoonrakerClientError(
+                f"Moonraker a refusé l'upload de {acm_filename} (HTTP {response.status_code}): {response.text}"
+            )
 
     # Fenêtre de corrélation pour _get_recent_gcode_error : au-delà, une entrée est considérée
     # trop ancienne pour être liée à l'échec en cours (voir docstring de la méthode).
     RECENT_GCODE_ERROR_WINDOW_SECONDS = 30
 
     def _get_recent_gcode_error(self):
-        """Best-effort : va chercher la vraie raison d'un échec de démarrage d'impression dans
-        server/gcode_store (journal des dernières commandes/réponses gcode Klipper), la seule
-        source qui l'expose. /server/files/upload avale l'exception réelle de start_print côté
-        Moonraker (file_manager.py::_finish_gcode_upload fait `except self.server.error: pass`)
-        et ne renvoie qu'un booléen print_started=false sans aucun détail — confirmé en direct
-        sur l'imprimante (2026-09-11, échec réel : "unknown filament in extruder" invisible dans
-        la réponse d'upload, présent uniquement dans gcode_store).
+        """Best-effort : repli de start_print quand _extract_error_message ne trouve pas de
+        error.message exploitable dans la réponse de /printer/print/start (absent, ou forme de
+        réponse inattendue). Va chercher la vraie raison de l'échec dans server/gcode_store
+        (journal des dernières commandes/réponses gcode Klipper), la seule autre source qui
+        l'expose — confirmé en direct sur l'imprimante (2026-09-11, échec réel : "unknown
+        filament in extruder" retrouvé dans gcode_store).
 
         Ne retient une entrée que si elle date de moins de RECENT_GCODE_ERROR_WINDOW_SECONDS —
         sinon, si Klipper n'a rien échoté du tout pour CETTE tentative (déjà en shutdown/occupé,
@@ -163,21 +176,30 @@ class MoonrakerClient:
 
         return gates
 
-    def set_ttg_map(self, mapping):
-        """Assigne la table tool→gate (MMU_TTG_MAP MAP=g0,g1,g2,g3) — appel séparé, envoyé
-        AVANT upload_and_start_print, jamais comme contenu du fichier gcode : le pré-chargement
-        automatique du firmware (patch_print_data/_auto_feed_at_print_start, voir spec
-        2026-09-10, section spike) consulte l'état courant de ttg_map au moment de l'appel qui
-        démarre l'impression, pas en lisant le gcode ligne par ligne — une commande MMU_TTG_MAP
-        injectée en tête de fichier arriverait trop tard."""
-        url = f"{self.base_url}/printer/gcode/script"
-        script = f"MMU_TTG_MAP MAP={','.join(str(g) for g in mapping)}"
+    def start_print(self, filename):
+        """Démarre l'impression d'un fichier déjà uploadé (POST /printer/print/start). En cas
+        d'échec, le corps de réponse contient directement le message réel de gklib dans
+        error.message (confirmé en direct sur l'imprimante le 2026-09-11, ex: "unknown
+        filament in extruder") — utilisé en priorité ; repli sur l'enrichissement gcode_store
+        (_get_recent_gcode_error) si absent ou de forme inattendue."""
+        url = f"{self.base_url}/printer/print/start"
         try:
-            response = requests.post(url, params={"script": script}, timeout=self.timeout)
+            response = requests.post(url, json={"filename": filename}, timeout=self.timeout)
         except requests.RequestException as exc:
-            raise MoonrakerClientError(f"Moonraker injoignable (MMU_TTG_MAP): {exc}") from exc
+            raise MoonrakerClientError(f"Moonraker injoignable (print/start): {exc}") from exc
 
-        if response.status_code >= 400:
-            raise MoonrakerClientError(
-                f"Erreur Moonraker (MMU_TTG_MAP, HTTP {response.status_code}): {response.text}"
-            )
+        if response.status_code < 400:
+            return
+
+        detail = self._extract_error_message(response) or self._get_recent_gcode_error()
+        message = f"Moonraker a refusé le démarrage de l'impression (HTTP {response.status_code})"
+        if detail:
+            message += f" — {detail}"
+        raise MoonrakerClientError(message)
+
+    @staticmethod
+    def _extract_error_message(response):
+        try:
+            return response.json()["error"]["message"]
+        except (ValueError, KeyError, TypeError):
+            return None
