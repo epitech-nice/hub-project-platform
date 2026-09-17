@@ -69,6 +69,26 @@ class MoonrakerClient:
                 f"Moonraker a refusé l'upload de {acm_filename} (HTTP {response.status_code}): {response.text}"
             )
 
+    def set_ttg_map(self, mapping):
+        """Assigne la table tool→gate côté firmware (`MMU_TTG_MAP MAP=g0,g1,g2,g3`) — appel gcode
+        séparé, envoyé juste avant start_print(). Nécessaire en complément de upload_acm() : le
+        chemin de dispatch MQTT (kobra.py::mqtt_print_file, le chemin normal en usage réel avec
+        le mode LAN activé) construit son propre print_data sans jamais lire le sidecar .acm sur
+        disque — mmu_ace.py::patch_print_data y calcule le mapping tool→gate exclusivement depuis
+        self.ace.ttg_map (voir spec 2026-09-17). mapping : liste complète d'un gate par index de
+        tool (voir _build_ttg_map, agent/main.py), jamais une liste partielle."""
+        url = f"{self.base_url}/printer/gcode/script"
+        script = f"MMU_TTG_MAP MAP={','.join(str(g) for g in mapping)}"
+        try:
+            response = requests.post(url, params={"script": script}, timeout=self.timeout)
+        except requests.RequestException as exc:
+            raise MoonrakerClientError(f"Moonraker injoignable (MMU_TTG_MAP): {exc}") from exc
+
+        if response.status_code >= 400:
+            raise MoonrakerClientError(
+                f"Erreur Moonraker (MMU_TTG_MAP, HTTP {response.status_code}): {response.text}"
+            )
+
     # Fenêtre de corrélation pour _get_recent_gcode_error : au-delà, une entrée est considérée
     # trop ancienne pour être liée à l'échec en cours (voir docstring de la méthode).
     RECENT_GCODE_ERROR_WINDOW_SECONDS = 30
