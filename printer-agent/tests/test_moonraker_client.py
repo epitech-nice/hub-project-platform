@@ -1,5 +1,6 @@
 from unittest.mock import patch
 import time
+import urllib.parse
 
 import pytest
 import requests
@@ -337,3 +338,28 @@ def test_upload_acm_raises_on_network_error():
         m.post(f"{BASE_URL}/server/files/upload", exc=requests.exceptions.ConnectTimeout)
         with pytest.raises(MoonrakerClientError):
             client.upload_acm("multi.gcode", [])
+
+
+def test_set_ttg_map_sends_mmu_ttg_map_script():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.post(f"{BASE_URL}/printer/gcode/script", json={"result": "ok"})
+        client.set_ttg_map([3, 1, 2, 3])
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(m.last_request.url).query)
+    assert query["script"] == ["MMU_TTG_MAP MAP=3,1,2,3"]
+
+
+def test_set_ttg_map_raises_on_network_error():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.post(f"{BASE_URL}/printer/gcode/script", exc=requests.exceptions.ConnectTimeout)
+        with pytest.raises(MoonrakerClientError):
+            client.set_ttg_map([0, 1, 2, 3])
+
+
+def test_set_ttg_map_raises_on_http_error():
+    client = make_client()
+    with requests_mock.Mocker() as m:
+        m.post(f"{BASE_URL}/printer/gcode/script", status_code=500, text="internal error")
+        with pytest.raises(MoonrakerClientError):
+            client.set_ttg_map([0, 1, 2, 3])

@@ -93,21 +93,18 @@ def _validate_tool_index(tool):
 def _resolve_gate_assignments(gate_assignments):
     """Traduit gateAssignments (reçu du hub) en soit un gate unique à injecter en tête de
     fichier (Tn, cas mono-matériau : une seule entrée à tool=null), soit une liste de paires
-    (tool_index, gate) pour construire le sidecar .acm que gklib lit réellement (cas
-    multi-couleur : au moins une entrée à tool non-null) — voir spec 2026-09-11 (MMU_TTG_MAP
-    remplacé, confirmé sans effet réel sur gklib par des tests matériel réels). Retourne
+    (tool_index, gate) pour construire le sidecar .acm que gklib lit réellement sur le chemin
+    non-MQTT (cas multi-couleur : au moins une entrée à tool non-null). Retourne
     (single_gate, tool_gate_pairs).
 
     Une liste vide/absente (overrideNoSpoolData, ou un vieux hub qui n'envoie pas encore ce
     champ) retourne (None, None) : ni Tn injecté ni .acm écrit, le fichier garde le mapping du
-    slicer tel quel. Aucune réinitialisation n'est nécessaire ici, ni pour ce cas ni pour les
-    deux autres : set_ttg_map (seul code à avoir jamais écrit MMU_TTG_MAP dans le firmware) a
-    été supprimé entièrement dans cette branche (Task 3) — il n'existe donc plus aucun chemin
-    de code, mono ou multi-outils, capable de laisser le ttg_map firmware dans un état non-
-    identité. L'ancien reset ne protégeait que contre ce risque désormais structurellement
-    impossible ; il n'a jamais eu de rapport avec le fait que le .acm soit propre à chaque
-    fichier (vrai seulement côté multi-outils, non pertinent côté mono, qui n'écrit aucun
-    .acm)."""
+    slicer tel quel sur le chemin non-MQTT. Le firmware ttg_map (chemin MQTT, voir spec
+    2026-09-17) N'EST PAS réinitialisé ici : _try_dispatch appelle systématiquement
+    _build_ttg_map(tool_gate_pairs) + moonraker.set_ttg_map(...) pour les trois cas (mono,
+    multi-outils, vide), justement parce qu'un job multi-outils précédent peut laisser ce ttg_map
+    firmware dans un état non-identité — ce reset reste nécessaire, y compris pour le cas mono où
+    un ttg_map périmé ferait résoudre le Tn injecté ici vers le mauvais gate physique."""
     if not gate_assignments:
         return None, None
 
@@ -165,6 +162,25 @@ def _build_acm_mapping(tool_gate_pairs, gates):
             }
         )
     return mapping
+
+
+def _build_ttg_map(tool_gate_pairs):
+    """Construit la table complète tool→gate pour MMU_TTG_MAP (voir spec 2026-09-17) : un gate
+    par index de tool, longueur MAX_ACE_GATE + 1, initialisée à l'identité puis écrasée par
+    chaque paire de tool_gate_pairs (déjà validées par _build_acm_mapping, voir _try_dispatch).
+    tool_gate_pairs=None ou [] renvoie l'identité pure — c'est le cas mono et override vide, qui
+    doivent quand même réinitialiser un ttg_map potentiellement laissé non-identité par un job
+    multi-outils précédent (un ttg_map non-identité ferait aussi résoudre le Tn du cas mono vers
+    le mauvais gate physique). Un tool_index dupliqué dans tool_gate_pairs donnerait la priorité
+    à la dernière entrée (comme _build_acm_mapping, qui émettrait les deux) — structurellement
+    inatteignable aujourd'hui, le hub (confirmJob) rejette toute soumission dont les tools ne
+    couvrent pas exactement l'ensemble attendu sans doublon."""
+    ttg_map = list(range(MAX_ACE_GATE + 1))
+    if not tool_gate_pairs:
+        return ttg_map
+    for tool_index, gate in tool_gate_pairs:
+        ttg_map[tool_index] = gate
+    return ttg_map
 
 
 def _inject_gate_selection(file_path, gate):
@@ -234,6 +250,7 @@ def _try_dispatch(hub, moonraker, state, download_dir, logger):
         moonraker.upload_file(dest_path, file_name)
         if acm_mapping is not None:
             moonraker.upload_acm(file_name, acm_mapping)
+        moonraker.set_ttg_map(_build_ttg_map(tool_gate_pairs))
         try:
             moonraker.start_print(file_name)
         except MoonrakerClientError as exc:
