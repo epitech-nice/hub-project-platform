@@ -314,8 +314,8 @@ def test_dispatch_injects_gate_selection_for_a_mono_gate_assignment(tmp_path, lo
 
 def test_dispatch_uploads_gcode_and_starts_print_without_acm_when_gate_assignments_absent(tmp_path, logger):
     # Un vieux hub qui n'envoie pas encore ce champ : le fichier garde le mapping du slicer tel
-    # quel, aucun .acm écrit (voir spec 2026-09-11 — contrairement à l'ancien ttg_map, il n'y a
-    # plus d'état firmware persistant à réinitialiser dans ce cas).
+    # quel, aucun .acm écrit. Le firmware ttg_map EST réinitialisé (à l'identité) malgré tout,
+    # voir l'assertion set_ttg_map ci-dessous — spec 2026-09-17.
     hub = make_hub()
     hub.get_next_job.return_value = {"jobId": "job-1", "fileName": "a.gcode", "downloadUrl": "/x"}
 

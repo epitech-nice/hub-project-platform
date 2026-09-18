@@ -22,9 +22,10 @@ class MoonrakerClient:
     def upload_file(self, file_path, filename):
         """Upload un fichier depuis le disque local vers Moonraker, sans démarrer l'impression
         (print=false) — voir start_print(), appelé séparément après. Remplace l'ancien
-        upload_and_start_print (spec 2026-09-11, MMU_TTG_MAP remplacé par l'écriture directe du
-        sidecar .acm que gklib consulte réellement) : upload et démarrage sont désormais deux
-        appels distincts, pour pouvoir uploader le .acm corrigé entre les deux."""
+        upload_and_start_print (spec 2026-09-11, l'écriture directe du sidecar .acm que gklib
+        consulte réellement sur le chemin non-MQTT — voir set_ttg_map ci-dessous pour le chemin
+        MQTT, spec 2026-09-17) : upload et démarrage sont désormais deux appels distincts, pour
+        pouvoir uploader le .acm corrigé entre les deux."""
         url = f"{self.base_url}/server/files/upload"
         try:
             with open(file_path, "rb") as f:
@@ -49,11 +50,12 @@ class MoonrakerClient:
 
     def upload_acm(self, filename, mapping):
         """Construit et upload le sidecar <basename>.acm que gklib lit directement pour le
-        mapping tool→gate d'un fichier multi-couleurs, en écrasant celui auto-généré par
-        Moonraker depuis les métadonnées slicer — voir spec 2026-09-11 (MMU_TTG_MAP confirmé
-        sans effet réel sur gklib par des tests matériel réels le 2026-09-11). mapping : liste
-        de dicts {paint_index, ams_index, paint_color: [r,g,b], ams_color: [r,g,b],
-        material_type}, produite par _build_acm_mapping (agent/main.py)."""
+        mapping tool→gate d'un fichier multi-couleurs sur le chemin de dispatch non-MQTT, en
+        écrasant celui auto-généré par Moonraker depuis les métadonnées slicer — voir spec
+        2026-09-11. Sur le chemin MQTT (le chemin normal en usage réel), ce .acm n'est jamais lu :
+        voir set_ttg_map ci-dessous, spec 2026-09-17. mapping : liste de dicts {paint_index,
+        ams_index, paint_color: [r,g,b], ams_color: [r,g,b], material_type}, produite par
+        _build_acm_mapping (agent/main.py)."""
         acm_filename = os.path.splitext(filename)[0] + ".acm"
         content = json.dumps({"use_ams": True, "ams_box_mapping": mapping}).encode("utf-8")
         url = f"{self.base_url}/server/files/upload"
@@ -69,6 +71,15 @@ class MoonrakerClient:
                 f"Moonraker a refusé l'upload de {acm_filename} (HTTP {response.status_code}): {response.text}"
             )
 
+    # Timeout dédié à set_ttg_map : ce script gcode est mis en file d'attente par Klipper et ne
+    # répond qu'une fois exécuté — appelé juste après upload_file (et upload_acm), il hérite du
+    # même risque de backlog sur ce CPU mono-cœur que celui qui a motivé upload_timeout et
+    # ACM_UPLOAD_TIMEOUT_SECONDS (voir leurs commentaires ci-dessus) ; self.timeout (prévu pour
+    # de légers appels de statut) serait trop court. L'exécution elle-même est une simple
+    # écriture d'état en mémoire (update_ttg_map), pas besoin de plusieurs minutes : ce timeout
+    # couvre uniquement l'attente de file, pas un travail long comme upload_timeout.
+    TTG_MAP_TIMEOUT_SECONDS = 30
+
     def set_ttg_map(self, mapping):
         """Assigne la table tool→gate côté firmware (`MMU_TTG_MAP MAP=g0,g1,g2,g3`) — appel gcode
         séparé, envoyé juste avant start_print(). Nécessaire en complément de upload_acm() : le
@@ -80,7 +91,7 @@ class MoonrakerClient:
         url = f"{self.base_url}/printer/gcode/script"
         script = f"MMU_TTG_MAP MAP={','.join(str(g) for g in mapping)}"
         try:
-            response = requests.post(url, params={"script": script}, timeout=self.timeout)
+            response = requests.post(url, params={"script": script}, timeout=self.TTG_MAP_TIMEOUT_SECONDS)
         except requests.RequestException as exc:
             raise MoonrakerClientError(f"Moonraker injoignable (MMU_TTG_MAP): {exc}") from exc
 
