@@ -250,6 +250,7 @@ def _try_dispatch(hub, moonraker, state, download_dir, logger):
         moonraker.upload_file(dest_path, file_name)
         if acm_mapping is not None:
             moonraker.upload_acm(file_name, acm_mapping)
+        moonraker.set_ttg_map(_build_ttg_map(tool_gate_pairs))
         try:
             moonraker.start_print(file_name)
         except MoonrakerClientError as exc:

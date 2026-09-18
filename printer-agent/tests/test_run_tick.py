@@ -308,6 +308,7 @@ def test_dispatch_injects_gate_selection_for_a_mono_gate_assignment(tmp_path, lo
     assert captured["content"] == "T2\nG28\nG1 X10\n"
     # Cas mono : aucun .acm à écrire, le mécanisme Tn suffit (inchangé, voir spec 2026-09-11).
     moonraker.upload_acm.assert_not_called()
+    moonraker.set_ttg_map.assert_called_once_with([0, 1, 2, 3])
     moonraker.start_print.assert_called_once_with("a.gcode")
 
 
@@ -337,6 +338,7 @@ def test_dispatch_uploads_gcode_and_starts_print_without_acm_when_gate_assignmen
 
     assert captured["content"] == "G28\nG1 X10\n"
     moonraker.upload_acm.assert_not_called()
+    moonraker.set_ttg_map.assert_called_once_with([0, 1, 2, 3])
     moonraker.start_print.assert_called_once_with("a.gcode")
 
 
@@ -369,6 +371,7 @@ def test_dispatch_uploads_gcode_and_starts_print_without_acm_when_gate_assignmen
 
     assert captured["content"] == "G28\n"
     moonraker.upload_acm.assert_not_called()
+    moonraker.set_ttg_map.assert_called_once_with([0, 1, 2, 3])
     moonraker.start_print.assert_called_once_with("a.gcode")
 
 
@@ -395,6 +398,10 @@ def test_dispatch_uploads_acm_before_start_print_for_multi_tool_assignment(tmp_p
         call_order.append("upload_acm")
         call_order.append(mapping)
 
+    def fake_set_ttg_map(mapping):
+        call_order.append("set_ttg_map")
+        call_order.append(mapping)
+
     def fake_start_print(filename):
         call_order.append("start_print")
 
@@ -406,6 +413,7 @@ def test_dispatch_uploads_acm_before_start_print_for_multi_tool_assignment(tmp_p
     ]
     moonraker.upload_file.side_effect = fake_upload_file
     moonraker.upload_acm.side_effect = fake_upload_acm
+    moonraker.set_ttg_map.side_effect = fake_set_ttg_map
     moonraker.start_print.side_effect = fake_start_print
 
     run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
@@ -413,12 +421,14 @@ def test_dispatch_uploads_acm_before_start_print_for_multi_tool_assignment(tmp_p
     assert call_order[0] == "download"
     assert call_order[1] == "upload_file"
     assert call_order[2] == "upload_acm"
-    mapping = call_order[3]
-    assert mapping == [
+    acm_mapping = call_order[3]
+    assert acm_mapping == [
         {"paint_index": 0, "ams_index": 3, "paint_color": [244, 0, 49], "ams_color": [244, 0, 49], "material_type": "PLA"},
         {"paint_index": 2, "ams_index": 1, "paint_color": [33, 39, 33], "ams_color": [33, 39, 33], "material_type": "PETG"},
     ]
-    assert call_order[4] == "start_print"
+    assert call_order[4] == "set_ttg_map"
+    assert call_order[5] == [3, 1, 1, 3]
+    assert call_order[6] == "start_print"
 
 
 def test_dispatch_fails_job_and_never_starts_print_when_assigned_gate_missing_from_moonraker_status(tmp_path, logger):
@@ -463,6 +473,24 @@ def test_dispatch_fails_job_and_never_starts_print_when_acm_upload_fails(tmp_pat
 
     moonraker.start_print.assert_not_called()
     hub.update_job_status.assert_called_once_with("job-1", "failed", error_message="upload .acm refusé")
+
+
+def test_dispatch_fails_job_and_never_starts_print_when_set_ttg_map_fails(tmp_path, logger):
+    hub = make_hub()
+    hub.get_next_job.return_value = {"jobId": "job-1", "fileName": "a.gcode", "downloadUrl": "/x"}
+
+    def fake_download(job_id, dest_path):
+        with open(dest_path, "w") as f:
+            f.write("G28\n")
+
+    hub.download_job_file.side_effect = fake_download
+    moonraker = make_moonraker()
+    moonraker.set_ttg_map.side_effect = MoonrakerClientError("MMU_TTG_MAP refusé")
+
+    run_tick(hub, moonraker, IDLE_STATE, str(tmp_path), logger)
+
+    moonraker.start_print.assert_not_called()
+    hub.update_job_status.assert_called_once_with("job-1", "failed", error_message="MMU_TTG_MAP refusé")
 
 
 def test_dispatch_fails_job_when_gate_assignment_out_of_range(tmp_path, logger):
