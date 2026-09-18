@@ -167,6 +167,22 @@ def _build_acm_mapping(tool_gate_pairs, gates):
     return mapping
 
 
+def _build_ttg_map(tool_gate_pairs):
+    """Construit la table complète tool→gate pour MMU_TTG_MAP (voir spec 2026-09-17) : un gate
+    par index de tool, longueur MAX_ACE_GATE + 1, initialisée à l'identité puis écrasée par
+    chaque paire de tool_gate_pairs (déjà validées par _build_acm_mapping, voir _try_dispatch).
+    tool_gate_pairs=None ou [] renvoie l'identité pure — c'est le cas mono et override vide, qui
+    doivent quand même réinitialiser un ttg_map potentiellement laissé non-identité par un job
+    multi-outils précédent (un ttg_map non-identité ferait aussi résoudre le Tn du cas mono vers
+    le mauvais gate physique)."""
+    ttg_map = list(range(MAX_ACE_GATE + 1))
+    if not tool_gate_pairs:
+        return ttg_map
+    for tool_index, gate in tool_gate_pairs:
+        ttg_map[tool_index] = gate
+    return ttg_map
+
+
 def _inject_gate_selection(file_path, gate):
     """Préfixe le fichier gcode d'une commande Tn — c'est le même canal que celui utilisé
     nativement par un gcode multi-couleur pour changer de bobine côté ACE (jamais les commandes

@@ -7,7 +7,7 @@ import pytest
 
 from agent.hub_client import HubClientError
 from agent.moonraker_client import MoonrakerClientError
-from agent.main import MAX_JOB_AGE_SECONDS, run_tick, _build_acm_mapping, _hex_to_rgb, _resolve_gate_assignments
+from agent.main import MAX_JOB_AGE_SECONDS, run_tick, _build_acm_mapping, _build_ttg_map, _hex_to_rgb, _resolve_gate_assignments
 
 IDLE_STATE = {"job_id": None, "consecutive_moonraker_failures": 0, "job_started_at": None}
 
@@ -109,6 +109,18 @@ def test_build_acm_mapping_raises_when_assigned_gate_has_no_color():
     gates = [{"gate": 0, "material": "PLA", "color": "", "empty": False}]
     with pytest.raises(ValueError):
         _build_acm_mapping([(0, 0)], gates)
+
+
+def test_build_ttg_map_returns_identity_when_none():
+    assert _build_ttg_map(None) == [0, 1, 2, 3]
+
+
+def test_build_ttg_map_returns_identity_when_empty():
+    assert _build_ttg_map([]) == [0, 1, 2, 3]
+
+
+def test_build_ttg_map_overrides_assigned_tools_only():
+    assert _build_ttg_map([(0, 3), (2, 1)]) == [3, 1, 1, 3]
 
 
 # --- Heartbeat (nouveau : appelé à chaque tick, avant tout le reste) ---
