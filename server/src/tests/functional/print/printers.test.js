@@ -2,8 +2,9 @@ const request = require('supertest');
 const mongoose = require('mongoose');
 const app = require('../../../app');
 const Printer = require('../../../models/Printer');
+const PrintJob = require('../../../models/PrintJob');
 const { createUser, createAdmin, authHeader } = require('../../helpers/auth');
-const { PRINTER_STATUSES } = require('../../../utils/constants');
+const { PRINTER_STATUSES, PRINT_JOB_STATUSES } = require('../../../utils/constants');
 
 describe('GET /api/print/printers', () => {
   it('returns 401 with no auth', async () => {
@@ -130,6 +131,91 @@ describe('PATCH /api/print/printers/:id/disabled', () => {
 
     const reloaded = await Printer.findById(printer._id);
     expect(reloaded.currentJob).toBeNull();
+  });
+
+  it('requests async cancellation instead of orphaning a job that is actively printing', async () => {
+    const admin = await createAdmin();
+    const job = await PrintJob.create({
+      student: { email: 's@epitech.eu', name: 'S' },
+      printer: new mongoose.Types.ObjectId(),
+      fileName: 'a.gcode',
+      filePath: '/tmp/a.gcode',
+      status: PRINT_JOB_STATUSES.PRINTING,
+    });
+    const printer = await Printer.create({
+      name: 'P', model: 'kobra3', apiKeyHash: 'x'.repeat(64),
+      status: PRINTER_STATUSES.PRINTING, currentJob: job._id,
+    });
+
+    const res = await request(app)
+      .patch(`/api/print/printers/${printer._id}/disabled`)
+      .set(authHeader(admin))
+      .send({ disabled: true, note: 'Maintenance urgente' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe(PRINTER_STATUSES.DISABLED);
+
+    // currentJob doit rester posé : GET /agent/heartbeat et POST /agent/jobs/:id/status ne
+    // fonctionnent tous les deux qu'à travers req.printer.currentJob — le nuller couperait le
+    // seul canal par lequel l'agent apprend la demande d'annulation et peut rapporter un statut
+    // final, orphelinant le job pour de bon (voir revue 2026-09-21).
+    const reloadedPrinter = await Printer.findById(printer._id);
+    expect(reloadedPrinter.currentJob.toString()).toBe(job._id.toString());
+
+    const reloadedJob = await PrintJob.findById(job._id);
+    expect(reloadedJob.cancelRequestedAt).not.toBeNull();
+    expect(reloadedJob.status).toBe(PRINT_JOB_STATUSES.PRINTING);
+  });
+
+  it('refuses to re-enable a printer whose job is still pending cancellation', async () => {
+    const admin = await createAdmin();
+    const job = await PrintJob.create({
+      student: { email: 's@epitech.eu', name: 'S' },
+      printer: new mongoose.Types.ObjectId(),
+      fileName: 'a.gcode',
+      filePath: '/tmp/a.gcode',
+      status: PRINT_JOB_STATUSES.PRINTING,
+    });
+    const printer = await Printer.create({
+      name: 'P', model: 'kobra3', apiKeyHash: 'x'.repeat(64),
+      status: PRINTER_STATUSES.DISABLED, currentJob: job._id,
+    });
+
+    const res = await request(app)
+      .patch(`/api/print/printers/${printer._id}/disabled`)
+      .set(authHeader(admin))
+      .send({ disabled: false, note: 'Réparée' });
+
+    expect(res.status).toBe(409);
+    const reloaded = await Printer.findById(printer._id);
+    expect(reloaded.status).toBe(PRINTER_STATUSES.DISABLED);
+  });
+
+  it('cancels a still-queued job synchronously and frees the printer when disabling', async () => {
+    const admin = await createAdmin();
+    const job = await PrintJob.create({
+      student: { email: 's@epitech.eu', name: 'S' },
+      printer: new mongoose.Types.ObjectId(),
+      fileName: 'a.gcode',
+      filePath: '/tmp/a.gcode',
+      status: PRINT_JOB_STATUSES.QUEUED,
+    });
+    const printer = await Printer.create({
+      name: 'P', model: 'kobra3', apiKeyHash: 'x'.repeat(64),
+      status: PRINTER_STATUSES.PRINTING, currentJob: job._id,
+    });
+
+    const res = await request(app)
+      .patch(`/api/print/printers/${printer._id}/disabled`)
+      .set(authHeader(admin))
+      .send({ disabled: true, note: 'Maintenance' });
+
+    expect(res.status).toBe(200);
+    const reloadedPrinter = await Printer.findById(printer._id);
+    expect(reloadedPrinter.currentJob).toBeNull();
+
+    const reloadedJob = await PrintJob.findById(job._id);
+    expect(reloadedJob.status).toBe(PRINT_JOB_STATUSES.CANCELLED);
   });
 });
 

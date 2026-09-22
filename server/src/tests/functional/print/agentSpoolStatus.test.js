@@ -18,6 +18,38 @@ describe('POST /api/print/agent/spool-status', () => {
     expect(res.status).toBe(400);
   });
 
+  it('rejects a gates array containing a malformed entry instead of crashing', async () => {
+    const { printer, rawKey } = await createPrinter();
+    const res = await request(app)
+      .post('/api/print/agent/spool-status')
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ gates: [null] });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a gate index out of the 0-3 range', async () => {
+    const { printer, rawKey } = await createPrinter();
+    const res = await request(app)
+      .post('/api/print/agent/spool-status')
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ gates: [{ gate: 4, material: 'PLA', color: '212721FF', empty: false }] });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a gates array with a duplicate gate number', async () => {
+    const { printer, rawKey } = await createPrinter();
+    const res = await request(app)
+      .post('/api/print/agent/spool-status')
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({
+        gates: [
+          { gate: 0, material: 'PLA', color: '212721FF', empty: false },
+          { gate: 0, material: 'PETG', color: 'F40031FF', empty: false },
+        ],
+      });
+    expect(res.status).toBe(400);
+  });
+
   it('stores the reported gates and sets spoolSlotsUpdatedAt', async () => {
     const { printer, rawKey } = await createPrinter();
     const gates = [

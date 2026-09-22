@@ -51,7 +51,7 @@ describe('PUT /api/print/printers/:id/spool-slots/:gate/manual', () => {
 
   it('lets an admin declare a gate manually even when not whitelisted', async () => {
     const admin = await createAdmin();
-    const { printer } = await createPrinter({ spoolSlots: [{ gate: 0, material: '', color: '', empty: true }] });
+    const { printer } = await createPrinter({ spoolSlots: [{ gate: 0, material: '', color: '', empty: false }] });
 
     const res = await request(app)
       .put(`/api/print/printers/${printer._id}/spool-slots/0/manual`)
@@ -60,6 +60,24 @@ describe('PUT /api/print/printers/:id/spool-slots/:gate/manual', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.source).toBe('manual');
+  });
+
+  it('returns 409 when declaring a gate the printer currently reports as empty', async () => {
+    // L'imprimante ACE détecte physiquement la présence d'une bobine indépendamment du RFID
+    // (voir spec 2026-09-10) — une déclaration manuelle ne peut pas prétendre le contraire, ça
+    // bypasserait la validation de confirmJob pour n'importe quel autre étudiant.
+    const student = await createUser({ email: 'ok@epitech.eu' });
+    await whitelistEmail(student.email);
+    const { printer } = await createPrinter({ spoolSlots: [{ gate: 0, material: '', color: '', empty: true }] });
+
+    const res = await request(app)
+      .put(`/api/print/printers/${printer._id}/spool-slots/0/manual`)
+      .set(authHeader(student))
+      .send({ material: 'PLA', color: '#ffffff' });
+
+    expect(res.status).toBe(409);
+    const reloaded = await Printer.findById(printer._id);
+    expect(reloaded.spoolSlots[0].source).not.toBe('manual');
   });
 
   it('preserves the original drift-detection snapshot when correcting an existing manual declaration', async () => {
