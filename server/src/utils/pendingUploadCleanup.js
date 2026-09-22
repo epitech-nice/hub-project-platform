@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const PendingPrintUpload = require('../models/PendingPrintUpload');
+const { createIntervalTask } = require('./intervalTask');
 
 // Le TTL Mongo (900s / 15min, voir PendingPrintUpload.js) supprime le document en attente
 // directement dans mongod, sans que le code applicatif ne puisse jamais l'observer (pas de
@@ -42,19 +43,11 @@ const sweepOrphanedPendingUploads = async () => {
   }
 };
 
-let intervalHandle = null;
-
-const startPendingUploadCleanup = (intervalMs = DEFAULT_CLEANUP_INTERVAL_MS) => {
-  if (intervalHandle) return;
-  intervalHandle = setInterval(() => {
-    sweepOrphanedPendingUploads().catch((err) => console.error('[pendingUploadCleanup] erreur:', err.message));
-  }, intervalMs);
-};
-
-const stopPendingUploadCleanup = () => {
-  clearInterval(intervalHandle);
-  intervalHandle = null;
-};
+const { start: startPendingUploadCleanup, stop: stopPendingUploadCleanup } = createIntervalTask(
+  '[pendingUploadCleanup]',
+  sweepOrphanedPendingUploads,
+  DEFAULT_CLEANUP_INTERVAL_MS
+);
 
 module.exports = {
   sweepOrphanedPendingUploads,

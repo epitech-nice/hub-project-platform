@@ -13,11 +13,13 @@ exports.listWhitelist = asyncHandler(async (req, res) => {
 // GET /api/print/whitelist/me
 exports.getMyStatus = asyncHandler(async (req, res) => {
   const normalizedEmail = req.user.email.toLowerCase();
-  const entry = await PrintAuthorization.findOne({ email: normalizedEmail });
-  const pendingRequest = await PrintAccessRequest.findOne({
-    'student.email': normalizedEmail,
-    status: PRINT_ACCESS_REQUEST_STATUSES.PENDING,
-  });
+  const [entry, pendingRequest] = await Promise.all([
+    PrintAuthorization.findOne({ email: normalizedEmail }),
+    PrintAccessRequest.findOne({
+      'student.email': normalizedEmail,
+      status: PRINT_ACCESS_REQUEST_STATUSES.PENDING,
+    }),
+  ]);
 
   res.status(200).json({
     success: true,

@@ -257,4 +257,26 @@ describe('POST /api/print/agent/jobs/:id/status', () => {
       .send({ status: 'cancelled' });
     expect(second.status).toBe(409);
   });
+
+  it('leaves a printer disabled mid-print in disabled rather than awaiting_clearance', async () => {
+    // Un admin a désactivé l'imprimante pendant que ce job tournait (setDisabled, Fix 1) —
+    // currentJob reste posé pour que ce rapport final soit accepté, mais le job résolu ne doit
+    // pas repasser l'imprimante en awaiting_clearance : elle reste DISABLED jusqu'à ce que
+    // l'admin la réactive lui-même après vérification physique.
+    const { printer, rawKey } = await createPrinter();
+    const job = await submitAcceptedJob(printer);
+    await request(app).get('/api/print/agent/next-job').set(printerAuthHeader(printer._id, rawKey));
+    await Printer.findByIdAndUpdate(printer._id, { status: PRINTER_STATUSES.DISABLED });
+
+    const res = await request(app)
+      .post(`/api/print/agent/jobs/${job._id}/status`)
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ status: 'cancelled' });
+
+    expect(res.status).toBe(200);
+    const reloadedPrinter = await Printer.findById(printer._id);
+    expect(reloadedPrinter.status).toBe(PRINTER_STATUSES.DISABLED);
+    const reloadedJob = await PrintJob.findById(job._id);
+    expect(reloadedJob.status).toBe('cancelled');
+  });
 });

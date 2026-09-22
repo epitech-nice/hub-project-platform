@@ -109,8 +109,9 @@ exports.cancelJob = asyncHandler(async (req, res, next) => {
     }
 
     // Ne libère l'imprimante que si elle pointe encore réellement sur ce job — un admin a pu la
-    // désactiver entre-temps (setDisabled met currentJob à null sans toucher au job lui-même),
-    // auquel cas la repasser 'idle' ici annulerait silencieusement l'action de l'admin.
+    // désactiver entre-temps (setDisabled peut aussi annuler ce même job 'queued' et nuller
+    // currentJob de son côté, voir printerController.js), auquel cas la repasser 'idle' ici
+    // annulerait silencieusement l'action de l'admin.
     const printer = await Printer.findOne({ _id: job.printer, currentJob: job._id });
     if (printer) {
       printer.status = PRINTER_STATUSES.IDLE;
