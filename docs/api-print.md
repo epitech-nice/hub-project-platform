@@ -73,7 +73,20 @@ Invalide l'ancienne clé et en génère une nouvelle (même principe : seule la 
 { "disabled": true, "note": "Maintenance buse" }
 ```
 
-`disabled` (booléen) et `note` sont requis. Passe le statut à `disabled` (ou `idle` si `disabled: false`), vide `currentJob`, et ajoute une entrée dans `statusHistory` (`source: "admin_action"`).
+`disabled` (booléen) et `note` sont requis. Ajoute toujours une entrée dans `statusHistory` (`source: "admin_action"`) avec `note` en `detail`.
+
+**Désactivation (`disabled: true`)** — le comportement dépend du job en cours (`currentJob`) au moment de l'appel :
+- Job encore `queued` (jamais dispatché à l'agent) : annulé immédiatement (`status: "cancelled"`, même verrou atomique que `POST /jobs/:id/cancel`), `currentJob` vidé.
+- Job `sent`/`printing` (impression physiquement en cours) : **`currentJob` n'est pas vidé.** Une annulation asynchrone est demandée (`cancelRequestedAt`, même mécanisme que `POST /jobs/:id/cancel` sur un job en cours) — l'agent la découvre à son prochain `GET /agent/heartbeat` (`cancelRequested: true`, qui ne fonctionne qu'à travers `Printer.currentJob`) et rapporte un statut final via `POST /agent/jobs/:id/status`. Vider `currentJob` immédiatement orphelinerait ce job pour de bon.
+- Pas de job actif (jamais fixé, ou référence vers un job déjà terminal) : `currentJob` vidé, rien d'autre à faire.
+
+Dans tous les cas, `Printer.status` passe à `disabled`.
+
+**Réactivation (`disabled: false`)** — refusée avec **409** si `currentJob` pointe encore vers un job non-terminal (`queued`/`sent`/`printing` — c'est-à-dire une annulation encore en cours de confirmation par l'agent) : *"Une impression est encore en cours d'annulation sur cette imprimante, réessayez une fois le plateau libéré"*. Sinon, passe à `idle` et vide `currentJob`.
+
+**Après résolution d'un job pendant que l'imprimante est `disabled`** : `POST /agent/jobs/:id/status` (rapport final de l'agent) accepte toujours le rapport, mais l'imprimante **reste `disabled`** plutôt que de passer par `awaiting_clearance` comme dans le cas normal — la libération du plateau se fait alors hors ligne, quand l'admin réactive l'imprimante après vérification physique.
+
+**Job bloqué si l'agent ne répond plus** : si l'imprimante ne redonne jamais signe de vie après une désactivation en cours d'impression (éteinte pour de bon), `server/src/utils/printerScheduler.js` (staleness, ~4 min sans contact) résout quand même le job en `failed` pour ne pas bloquer indéfiniment la réactivation — sans jamais rebasculer le statut de l'imprimante hors de `disabled`.
 
 ### `GET /:id/qr`
 
@@ -97,7 +110,7 @@ Pour les bobines sans puce RFID (l'ACE/MMU ne peut alors pas détecter automatiq
 
 **Auth** : authentifié, et soit whitelisté (`PrintAuthorization.authorized: true`), soit admin (403 sinon) — même posture que la soumission d'un job, cohérente avec le fait que déclarer une bobine influence directement le prochain job imprimé sur cette imprimante.
 
-**Conditions** : imprimante trouvée (404 sinon), gate existant dans `Printer.spoolSlots` pour cette imprimante (404 sinon — `"Gate inconnu pour cette imprimante"`).
+**Conditions** : imprimante trouvée (404 sinon), gate existant dans `Printer.spoolSlots` pour cette imprimante (404 sinon — `"Gate inconnu pour cette imprimante"`). Pour une **déclaration initiale** (le slot n'est pas déjà `source: 'manual'`) : **409** si le dernier rapport de l'agent dit ce gate vide (`slot.empty === true`) — le capteur de présence physique de l'ACE est fiable indépendamment du RFID (seules matière/couleur nécessitent une puce), donc un étudiant whitelisté ne peut pas déclarer une bobine sur un gate que l'imprimante rapporte vide (empêche de faire échouer le job d'un autre étudiant en mentant sur l'état d'un gate). Cette vérification ne s'applique **pas** à la correction d'une déclaration manuelle déjà acceptée (aucun signal auto frais à comparer dans ce cas).
 
 **Effets** : pose `material`, `color`, `empty: false`, `source: 'manual'`, `manualSetBy` (`{ email, name }` de l'auteur) et `manualSetAt` sur le slot ciblé. Capture aussi la valeur auto-rapportée courante du slot (`autoMaterialAtSet`/`autoColorAtSet`/`autoEmptyAtSet`) comme référence pour la détection de dérive (voir `docs/models.md`, `Printer.spoolSlots`) — **sauf** si le slot était déjà `source: 'manual'`, auquel cas cette référence d'origine est préservée (une correction successive d'une déclaration manuelle ne déplace pas le point de comparaison utilisé pour détecter une future vraie lecture RFID).
 
@@ -356,7 +369,7 @@ Télécharge le fichier (`res.download`, `Content-Type: text/plain`). 404 si le 
 { "gates": [{ "gate": 0, "material": "PLA", "color": "212721FF", "empty": false }] }
 ```
 
-`gates` (tableau, requis — 400 sinon) remplace intégralement `Printer.spoolSlots` et pose `Printer.spoolSlotsUpdatedAt` à la date courante, y compris avec un tableau **vide** (`num_gates: 0` côté agent, imprimante sans ACE/MMU détecté ou MMU sans gate configuré) : `spoolSlotsUpdatedAt` posé + `spoolSlots: []` est donc un état valide, distinct de `spoolSlotsUpdatedAt: null` (jamais reçu) — voir `POST /jobs/:pendingUploadId/confirm` plus haut, qui distingue explicitement ces deux cas.
+`gates` (tableau, requis — 400 sinon). Chaque entrée est validée individuellement (`gate` entier 0-3, `material`/`color` chaînes bornées en longueur, `empty` booléen) ; une entrée invalide ou un numéro de gate en double est **ignorée et loguée côté serveur**, pas fatale au reste du rapport — un firmware qui se met à rapporter une forme inattendue ne doit pas geler `spoolSlotsUpdatedAt` en permanence. Les entrées valides fusionnent avec `Printer.spoolSlots` (un gate absent du rapport — glitch ponctuel, ou filtré comme invalide — est préservé tel quel, pas supprimé) et posent `Printer.spoolSlotsUpdatedAt` à la date courante — **sauf si aucune entrée n'était valide**, auquel cas `spoolSlotsUpdatedAt` n'est pas touché (rien n'a réellement été mis à jour). Un tableau **vide** en revanche (`num_gates: 0` côté agent, imprimante sans ACE/MMU détecté ou MMU sans gate configuré) est un rapport valide et pose bien `spoolSlotsUpdatedAt` (aucune entrée à valider, mais un rapport reçu) : `spoolSlotsUpdatedAt` posé + `spoolSlots: []` est donc un état valide, distinct de `spoolSlotsUpdatedAt: null` (jamais reçu) — voir `POST /jobs/:pendingUploadId/confirm` plus haut, qui distingue explicitement ces deux cas.
 
 **Réponse (200)** : `{ "success": true }`.
 
@@ -370,7 +383,9 @@ Statuts (`Printer.status`) : `idle` (état normal / disponible), `printing`, `aw
 
 Chaque changement de statut ajoute une entrée dans `statusHistory[]` (`status`, `source`, `detail`, auteur éventuel, `date`). `source` (`PRINTER_STATUS_SOURCES`) vaut `agent_report`, `admin_action` ou `heartbeat_timeout`.
 
-**Détection de coupure** : `server/src/utils/printerScheduler.js` tourne toutes les 30s (`checkStalePrinters`) et bascule en `offline` toute imprimante non `offline`/`disabled` dont `lastSeenAt` date de plus de 240s (~4x le tick de polling de l'agent, marge incluant le heartbeat pendant une impression en cours). Le statut précédent est conservé dans `lastKnownStatus`. Si l'imprimante était `printing`, son job courant est basculé `failed` automatiquement ("Perte de contact avec l'imprimante").
+**Détection de coupure** : `server/src/utils/printerScheduler.js` tourne toutes les 30s (`checkStalePrinters`) et bascule en `offline` toute imprimante non `offline`/`disabled` dont `lastSeenAt` date de plus de 240s (~4x le tick de polling de l'agent, marge incluant le heartbeat pendant une impression en cours). Le statut précédent est conservé dans `lastKnownStatus`. Si `Printer.currentJob` pointe vers un job encore `sent`/`printing`, il est basculé `failed` automatiquement ("Perte de contact avec l'imprimante").
+
+Une imprimante `disabled` avec un `currentJob` encore actif (voir `PATCH /:id/disabled` — annulation asynchrone en cours) reste elle aussi surveillée pour ce seul job : si l'agent ne répond plus, le job est basculé `failed` de la même façon, **mais le statut de l'imprimante n'est jamais rebasculé `offline`** — sans ça, un job resté bloqué sur une imprimante désactivée éteinte pour de bon empêcherait indéfiniment la réactivation. Une imprimante `disabled` sans job actif n'est plus jamais re-sélectionnée par ce mécanisme.
 
 **Limite connue — architecture 100% pull** : le Hub ne peut jamais savoir *pourquoi* une imprimante silencieuse (`offline`) l'est devenue — coupure réseau, coupure électrique, plantage du firmware/agent. Seuls `lastSeenAt` et le dernier statut connu (`lastKnownStatus`) sont observables ; aucun mécanisme ne permet de distinguer ces causes côté serveur.
 
@@ -384,7 +399,7 @@ Une annulation d'un job encore `queued` (jamais imprimé) ne passe **pas** par `
 
 Double validation avant de pouvoir relancer une impression après un job réellement imprimé :
 
-1. **Fin de job côté agent** : `POST /agent/jobs/:id/status` avec `status: "completed"`, `"failed"` ou `"cancelled"` fait passer l'imprimante en `awaiting_clearance`.
+1. **Fin de job côté agent** : `POST /agent/jobs/:id/status` avec `status: "completed"`, `"failed"` ou `"cancelled"` fait passer l'imprimante en `awaiting_clearance` — **sauf si elle est `disabled`** (job résolu pendant une désactivation en cours d'impression, voir `PATCH /:id/disabled`), auquel cas elle reste `disabled` : la libération du plateau se fait alors hors ligne, quand l'admin réactive l'imprimante après vérification physique.
 2. **Confirmation physique** : un QR code (`GET /printers/:id/qr`, affiché à côté de l'imprimante) pointe vers `{FRONTEND_URL}/print/printers/:id/confirm-clearance`. Le scanner authentifié appelle `POST /printers/:id/confirm-clearance`, qui vérifie que l'imprimante est bien `awaiting_clearance` (400 sinon), la repasse `idle`, vide `currentJob`, et logue l'entrée dans `clearanceHistory` (`method: "qr"`).
 
 Un admin peut court-circuiter l'étape 2 via `POST /printers/:id/confirm-clearance/override` (mêmes effets, `method: "admin_override"` dans `clearanceHistory`) — utile si le QR est physiquement inaccessible ou l'imprimante déplacée.
