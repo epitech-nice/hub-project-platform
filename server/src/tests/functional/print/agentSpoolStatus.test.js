@@ -83,6 +83,8 @@ describe('POST /api/print/agent/spool-status', () => {
     const reloaded = await Printer.findById(printer._id);
     expect(reloaded.spoolSlots).toHaveLength(1);
     expect(reloaded.spoolSlots[0].material).toBe('PLA');
+    // Rien n'a réellement été fusionné : pas de faux horodatage frais sur des données inchangées.
+    expect(reloaded.spoolSlotsUpdatedAt).toBeNull();
   });
 
   it('stores the reported gates and sets spoolSlotsUpdatedAt', async () => {

@@ -67,8 +67,14 @@ const markPrinterStale = async (printerId) => {
 const checkStalePrinters = async () => {
   const cutoff = new Date(Date.now() - OFFLINE_THRESHOLD_MS);
   const stalePrinters = await Printer.find({
-    status: { $nin: NEVER_STALE_STATUSES },
     lastSeenAt: { $ne: null, $lt: cutoff },
+    $or: [
+      { status: { $nin: [...NEVER_STALE_STATUSES, PRINTER_STATUSES.DISABLED] } },
+      // Une imprimante DISABLED n'est re-sélectionnée que tant qu'un job reste à résoudre —
+      // sinon elle matcherait ce filtre indéfiniment à chaque tick (lastSeenAt ne bouge plus
+      // une fois éteinte pour de bon) pour un no-op perpétuel (voir revue 2026-09-22).
+      { status: PRINTER_STATUSES.DISABLED, currentJob: { $ne: null } },
+    ],
   });
 
   for (const printer of stalePrinters) {

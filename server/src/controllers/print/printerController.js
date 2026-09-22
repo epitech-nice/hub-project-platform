@@ -112,7 +112,13 @@ exports.setDisabled = asyncHandler(async (req, res, next) => {
             printer.currentJob = null;
           } else {
             const refetchedJob = await PrintJob.findById(activeJob._id);
-            await requestAsyncCancellation(refetchedJob);
+            if (refetchedJob) {
+              await requestAsyncCancellation(refetchedJob);
+            } else {
+              // Job supprimé entre-temps (n'arrive dans aucun chemin de code actuel, mais on ne
+              // fait pas confiance à ce qu'un futur changement le garantisse) : rien à annuler.
+              printer.currentJob = null;
+            }
           }
         } else {
           // Pas de job actif (jamais fixé, ou référence périmée vers un job déjà terminal) :

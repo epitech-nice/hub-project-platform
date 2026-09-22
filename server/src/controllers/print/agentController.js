@@ -90,7 +90,12 @@ exports.reportSpoolStatus = asyncHandler(async (req, res, next) => {
     () => Printer.findById(req.printer._id),
     async (printer) => {
       printer.spoolSlots = mergeSpoolSlots(printer.spoolSlots, validGates);
-      printer.spoolSlotsUpdatedAt = new Date();
+      // Ne bouge spoolSlotsUpdatedAt que si au moins une entrée valide a réellement été fusionnée
+      // — sinon un rapport entièrement invalide afficherait côté Hub un horodatage tout frais sur
+      // des données qui n'ont pas bougé (voir revue 2026-09-22).
+      if (validGates.length > 0) {
+        printer.spoolSlotsUpdatedAt = new Date();
+      }
       await printer.save();
     }
   );
