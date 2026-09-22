@@ -80,6 +80,13 @@ const CLEARANCE_METHODS = {
   ADMIN_OVERRIDE: 'admin_override',
 };
 
+// Bornes partagées par les deux sources de spoolSlots[].material/color — la déclaration manuelle
+// (printerController.setManualSpoolSlot) et le rapport auto de l'agent (agentController.
+// reportSpoolStatus). MAX_SPOOL_COLOR_LENGTH couvre le format 8 hex sans '#' réellement rapporté
+// par l'agent (RRGGBBAA), plus large que le format 6 hex accepté à la déclaration manuelle.
+const MAX_SPOOL_MATERIAL_LENGTH = 64;
+const MAX_SPOOL_COLOR_LENGTH = 16;
+
 // Statuts d'un job d'impression
 const PRINT_JOB_STATUSES = {
   REJECTED: 'rejected',
@@ -123,6 +130,8 @@ module.exports = {
   PRINTER_STATUSES,
   PRINTER_STATUS_SOURCES,
   CLEARANCE_METHODS,
+  MAX_SPOOL_MATERIAL_LENGTH,
+  MAX_SPOOL_COLOR_LENGTH,
   PRINT_JOB_STATUSES,
   PRINT_REJECTION_REASONS,
   PRINT_JOB_GCODE_MODES,

@@ -50,7 +50,7 @@ describe('checkStalePrinters', () => {
     expect(reloadedJob.errorMessage).toMatch(/contact/i);
   });
 
-  it('never touches a disabled printer', async () => {
+  it('never rebounces a disabled printer to offline', async () => {
     const staleDate = new Date(Date.now() - OFFLINE_THRESHOLD_MS - 1000);
     const printer = await Printer.create({
       name: 'P', model: 'kobra3', apiKeyHash: 'x'.repeat(64),
@@ -59,6 +59,32 @@ describe('checkStalePrinters', () => {
     await checkStalePrinters();
     const reloaded = await Printer.findById(printer._id);
     expect(reloaded.status).toBe(PRINTER_STATUSES.DISABLED);
+  });
+
+  it('still auto-fails a stale job on a disabled printer, without changing the printer status', async () => {
+    // Régression pour le deadlock trouvé en revue 2026-09-22 : une imprimante désactivée en
+    // cours d'impression garde currentJob posé (voir printerController.setDisabled) pour
+    // permettre l'annulation asynchrone — si l'agent ne répond plus jamais, ce job doit quand
+    // même être résolu, sinon currentJob reste bloqué et setDisabled(false) refuse pour
+    // toujours, sans aucune échappatoire côté API.
+    const staleDate = new Date(Date.now() - OFFLINE_THRESHOLD_MS - 1000);
+    const printer = await Printer.create({
+      name: 'P', model: 'kobra3', apiKeyHash: 'x'.repeat(64),
+      status: PRINTER_STATUSES.DISABLED, lastSeenAt: staleDate,
+    });
+    const job = await PrintJob.create({
+      student: { email: 's@epitech.eu', name: 'S' }, printer: printer._id,
+      fileName: 'a.gcode', filePath: '/a', status: 'printing',
+    });
+    printer.currentJob = job._id;
+    await printer.save();
+
+    await checkStalePrinters();
+
+    const reloadedPrinter = await Printer.findById(printer._id);
+    expect(reloadedPrinter.status).toBe(PRINTER_STATUSES.DISABLED);
+    const reloadedJob = await PrintJob.findById(job._id);
+    expect(reloadedJob.status).toBe('failed');
   });
 
   it('processes every stale printer in one tick, even several at once', async () => {

@@ -80,6 +80,38 @@ describe('PUT /api/print/printers/:id/spool-slots/:gate/manual', () => {
     expect(reloaded.spoolSlots[0].source).not.toBe('manual');
   });
 
+  it('does not re-check emptiness when correcting an already-manual declaration', async () => {
+    // Comportement documenté (pas un bug) : la vérification "l'imprimante confirme le vide ?" ne
+    // s'applique qu'à une DÉCLARATION INITIALE (source encore 'auto'). Corriger une déclaration
+    // manuelle déjà acceptée ne re-vérifie pas — aucun signal auto frais à comparer dans ce cas,
+    // voir le commentaire de setManualSpoolSlot (printerController.js).
+    const student = await createUser({ email: 'ok@epitech.eu' });
+    await whitelistEmail(student.email);
+    const { printer } = await createPrinter({
+      spoolSlots: [{ gate: 0, material: 'PLA', color: '212721FF', empty: false }],
+    });
+
+    const first = await request(app)
+      .put(`/api/print/printers/${printer._id}/spool-slots/0/manual`)
+      .set(authHeader(student))
+      .send({ material: 'Blanc générique', color: '#ffffff' });
+    expect(first.status).toBe(200);
+
+    // Simule un slot manuel dont le champ empty a été forcé à true par un autre chemin — n'arrive
+    // pas naturellement (setManualSpoolSlot force toujours empty=false), mais pin le comportement
+    // attendu si jamais un futur changement de mergeSpoolSlots le rendait possible.
+    await Printer.updateOne({ _id: printer._id, 'spoolSlots.gate': 0 }, { $set: { 'spoolSlots.$.empty': true } });
+
+    const res = await request(app)
+      .put(`/api/print/printers/${printer._id}/spool-slots/0/manual`)
+      .set(authHeader(student))
+      .send({ material: 'Blanc mat', color: '#f5f5f5' });
+
+    expect(res.status).toBe(200);
+    const reloaded = await Printer.findById(printer._id);
+    expect(reloaded.spoolSlots[0].material).toBe('Blanc mat');
+  });
+
   it('preserves the original drift-detection snapshot when correcting an existing manual declaration', async () => {
     const student = await createUser({ email: 'ok@epitech.eu' });
     await whitelistEmail(student.email);

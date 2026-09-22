@@ -3,18 +3,26 @@ const Printer = require('../../models/Printer');
 const PrintJob = require('../../models/PrintJob');
 const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
-const { PRINTER_STATUSES, PRINTER_STATUS_SOURCES, PRINT_JOB_STATUSES } = require('../../utils/constants');
+const {
+  PRINTER_STATUSES,
+  PRINTER_STATUS_SOURCES,
+  PRINT_JOB_STATUSES,
+  MAX_SPOOL_MATERIAL_LENGTH,
+  MAX_SPOOL_COLOR_LENGTH,
+} = require('../../utils/constants');
 const { mergeSpoolSlots } = require('../../utils/spoolSlotMerge');
 const { withOptimisticRetry } = require('../../utils/optimisticRetry');
 
 const VALID_STATUS_UPDATES = ['printing', 'completed', 'failed', 'cancelled'];
-const MAX_MATERIAL_LENGTH = 64;
 
 // Valide la forme d'un rapport de gate avant de le laisser atteindre mergeSpoolSlots — celle-ci
 // ne fait aucune vérification (crash sur une entrée malformée) et ne dé-duplique pas les gates
 // répétés (la dernière entrée écrase silencieusement les précédentes côté lookup). Même borne
 // [0, 3] que confirmJob (jobController.js) pour un gate assigné par le hub — cette feature
-// suppose partout une unique unité ACE à 4 gates (voir spec 2026-09-10).
+// suppose partout une unique unité ACE à 4 gates (voir spec 2026-09-10). Pas de regex sur color :
+// le format réel rapporté par l'agent (RRGGBBAA, 8 hex sans '#') diffère de celui qu'accepte la
+// déclaration manuelle (RRGGBB, 6 hex, voir printerController.js) — un simple plafond de longueur
+// borne la valeur sans imposer un format qu'on ne peut pas garantir stable côté firmware.
 const isValidGateReport = (g) =>
   g &&
   typeof g === 'object' &&
@@ -22,8 +30,8 @@ const isValidGateReport = (g) =>
   Number.isInteger(g.gate) &&
   g.gate >= 0 &&
   g.gate <= 3 &&
-  (g.material === undefined || (typeof g.material === 'string' && g.material.length <= MAX_MATERIAL_LENGTH)) &&
-  (g.color === undefined || typeof g.color === 'string') &&
+  (g.material === undefined || (typeof g.material === 'string' && g.material.length <= MAX_SPOOL_MATERIAL_LENGTH)) &&
+  (g.color === undefined || (typeof g.color === 'string' && g.color.length <= MAX_SPOOL_COLOR_LENGTH)) &&
   (g.empty === undefined || typeof g.empty === 'boolean');
 
 const TERMINAL_JOB_STATUSES = [
@@ -52,12 +60,27 @@ exports.reportSpoolStatus = asyncHandler(async (req, res, next) => {
   if (!Array.isArray(gates)) {
     return next(new ErrorResponse('gates (tableau) requis', 400));
   }
-  if (!gates.every(isValidGateReport)) {
-    return next(new ErrorResponse('gates contient une entrée invalide (gate entier 0-3, material/color string, empty booléen)', 400));
-  }
-  const gateNumbers = gates.map((g) => g.gate);
-  if (new Set(gateNumbers).size !== gateNumbers.length) {
-    return next(new ErrorResponse('gates contient un numéro de gate en double', 400));
+
+  // Filtre plutôt que rejette tout le rapport sur une entrée invalide : un firmware qui se met à
+  // rapporter un num_gates hors de la borne 0-3 supposée aujourd'hui (bypass gate, 2e unité ACE)
+  // ne doit pas transformer chaque tick en 400 permanent (spoolSlotsUpdatedAt gelé, tous les
+  // étudiants poussés vers overrideNoSpoolData sans qu'aucun signal ne l'explique côté Hub) — un
+  // firmware/hardware qu'on n'a pas anticipé dégrade juste ce gate-là, pas toute la feature
+  // (voir revue 2026-09-22). Un gate manquant du rapport est de toute façon déjà préservé tel
+  // quel par mergeSpoolSlots.
+  const validGates = [];
+  const seenGateNumbers = new Set();
+  for (const g of gates) {
+    if (!isValidGateReport(g)) {
+      console.warn(`[agent ${req.printer._id}] entrée gates invalide ignorée: ${JSON.stringify(g)}`);
+      continue;
+    }
+    if (seenGateNumbers.has(g.gate)) {
+      console.warn(`[agent ${req.printer._id}] gate ${g.gate} rapporté en double, entrée supplémentaire ignorée`);
+      continue;
+    }
+    seenGateNumbers.add(g.gate);
+    validGates.push(g);
   }
 
   // Relit puis réessaie sur VersionError plutôt que d'écrire directement sur req.printer (posé
@@ -66,7 +89,7 @@ exports.reportSpoolStatus = asyncHandler(async (req, res, next) => {
   await withOptimisticRetry(
     () => Printer.findById(req.printer._id),
     async (printer) => {
-      printer.spoolSlots = mergeSpoolSlots(printer.spoolSlots, gates);
+      printer.spoolSlots = mergeSpoolSlots(printer.spoolSlots, validGates);
       printer.spoolSlotsUpdatedAt = new Date();
       await printer.save();
     }
@@ -179,7 +202,18 @@ exports.updateJobStatus = asyncHandler(async (req, res, next) => {
         // Une imprimante désactivée pendant l'impression (voir printerController.setDisabled)
         // reste DISABLED même une fois le job résolu — la libération de plateau se fera hors
         // ligne quand l'admin la réactivera, pas via le flux de clearance numérique habituel.
-        if (printer.status === PRINTER_STATUSES.DISABLED) return;
+        if (printer.status === PRINTER_STATUSES.DISABLED) {
+          // currentJob a été volontairement laissé posé par setDisabled pour que ce rapport soit
+          // accepté (voir plus haut) — maintenant que le job est résolu, le nuller ici évite de
+          // le laisser pendre : setDisabled(false) s'appuie déjà sur son absence de job non-
+          // terminal pour ré-autoriser la réactivation, donc ce n'est pas strictement nécessaire,
+          // mais un pointeur pendant sur un job déjà terminal n'a aucune raison de survivre.
+          if (printer.currentJob && printer.currentJob.toString() === updatedJob._id.toString()) {
+            printer.currentJob = null;
+            await printer.save();
+          }
+          return;
+        }
 
         printer.status = PRINTER_STATUSES.AWAITING_CLEARANCE;
         printer.statusHistory.push({

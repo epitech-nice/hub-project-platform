@@ -18,25 +18,41 @@ describe('POST /api/print/agent/spool-status', () => {
     expect(res.status).toBe(400);
   });
 
-  it('rejects a gates array containing a malformed entry instead of crashing', async () => {
+  it('ignores a malformed entry instead of crashing, and still stores the valid ones', async () => {
+    // Un rejet total sur une seule entrée invalide gèlerait spoolSlotsUpdatedAt pour de bon si
+    // le firmware se met un jour à rapporter une forme inattendue (voir revue 2026-09-22) —
+    // l'entrée invalide est donc juste ignorée (loguée côté serveur), pas fatale au reste.
     const { printer, rawKey } = await createPrinter();
     const res = await request(app)
       .post('/api/print/agent/spool-status')
       .set(printerAuthHeader(printer._id, rawKey))
-      .send({ gates: [null] });
-    expect(res.status).toBe(400);
+      .send({ gates: [null, { gate: 0, material: 'PLA', color: '212721FF', empty: false }] });
+
+    expect(res.status).toBe(200);
+    const reloaded = await Printer.findById(printer._id);
+    expect(reloaded.spoolSlots).toHaveLength(1);
+    expect(reloaded.spoolSlots[0].material).toBe('PLA');
   });
 
-  it('rejects a gate index out of the 0-3 range', async () => {
+  it('ignores a gate index out of the 0-3 range but keeps the rest of the report', async () => {
     const { printer, rawKey } = await createPrinter();
     const res = await request(app)
       .post('/api/print/agent/spool-status')
       .set(printerAuthHeader(printer._id, rawKey))
-      .send({ gates: [{ gate: 4, material: 'PLA', color: '212721FF', empty: false }] });
-    expect(res.status).toBe(400);
+      .send({
+        gates: [
+          { gate: 4, material: 'PLA', color: '212721FF', empty: false },
+          { gate: 1, material: 'PETG', color: 'F40031FF', empty: false },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    const reloaded = await Printer.findById(printer._id);
+    expect(reloaded.spoolSlots).toHaveLength(1);
+    expect(reloaded.spoolSlots[0].gate).toBe(1);
   });
 
-  it('rejects a gates array with a duplicate gate number', async () => {
+  it('keeps only the first entry when a gate number is reported twice', async () => {
     const { printer, rawKey } = await createPrinter();
     const res = await request(app)
       .post('/api/print/agent/spool-status')
@@ -47,7 +63,26 @@ describe('POST /api/print/agent/spool-status', () => {
           { gate: 0, material: 'PETG', color: 'F40031FF', empty: false },
         ],
       });
-    expect(res.status).toBe(400);
+
+    expect(res.status).toBe(200);
+    const reloaded = await Printer.findById(printer._id);
+    expect(reloaded.spoolSlots).toHaveLength(1);
+    expect(reloaded.spoolSlots[0].material).toBe('PLA');
+  });
+
+  it('returns 200 and preserves existing slots when every entry is invalid', async () => {
+    const { printer, rawKey } = await createPrinter({
+      spoolSlots: [{ gate: 0, material: 'PLA', color: '212721FF', empty: false }],
+    });
+    const res = await request(app)
+      .post('/api/print/agent/spool-status')
+      .set(printerAuthHeader(printer._id, rawKey))
+      .send({ gates: [{ gate: 99 }] });
+
+    expect(res.status).toBe(200);
+    const reloaded = await Printer.findById(printer._id);
+    expect(reloaded.spoolSlots).toHaveLength(1);
+    expect(reloaded.spoolSlots[0].material).toBe('PLA');
   });
 
   it('stores the reported gates and sets spoolSlotsUpdatedAt', async () => {

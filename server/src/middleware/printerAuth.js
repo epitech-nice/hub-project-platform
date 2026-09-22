@@ -14,20 +14,22 @@ exports.authenticatePrinter = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Authentification imprimante requise', 401));
   }
 
-  const found = await Printer.findById(printerId).catch(() => null);
-  if (!found || found.apiKeyHash !== hashApiKey(apiKey)) {
-    return next(new ErrorResponse('Clé API imprimante invalide', 401));
-  }
-
   // withOptimisticRetry (pas un simple save()) : cette requête peut arriver en même temps qu'un
   // autre écrivain du même document Printer (checkStalePrinters vient justement de marquer cette
   // imprimante OFFLINE, ou une déclaration manuelle est en cours) — un save() nu plantait alors
   // en VersionError non catché, 500 brut sur une requête agent pourtant légitime (heartbeat,
   // spool-status, next-job...), l'excluant du Hub jusqu'à ce qu'une requête suivante ne tombe
-  // pas sur la même course.
+  // pas sur la même course. L'authentification est vérifiée à l'intérieur de apply plutôt qu'en
+  // amont pour n'avoir qu'une seule lecture par tentative (pas de findById en double) et pour que
+  // la suppression de l'imprimante entre deux tentatives de retry redonne aussi 401 plutôt qu'un
+  // TypeError sur `printer` null.
   req.printer = await withOptimisticRetry(
-    () => Printer.findById(printerId),
+    () => Printer.findById(printerId).catch(() => null),
     async (printer) => {
+      if (!printer || printer.apiKeyHash !== hashApiKey(apiKey)) {
+        throw new ErrorResponse('Clé API imprimante invalide', 401);
+      }
+
       if (printer.status === PRINTER_STATUSES.OFFLINE) {
         let nextStatus = printer.lastKnownStatus || PRINTER_STATUSES.IDLE;
 

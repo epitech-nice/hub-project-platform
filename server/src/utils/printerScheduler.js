@@ -7,7 +7,15 @@ const { createIntervalTask } = require('./intervalTask');
 const OFFLINE_THRESHOLD_MS = 240 * 1000; // ~4x le tick de la boucle de l'agent (60s, --loop), incluant le heartbeat pendant le suivi d'impression
 const DEFAULT_CHECK_INTERVAL_MS = 30 * 1000;
 
-const NEVER_STALE_STATUSES = [PRINTER_STATUSES.OFFLINE, PRINTER_STATUSES.DISABLED];
+// DISABLED est volontairement absent de cette liste (contrairement à une version antérieure de
+// ce fix) : une imprimante désactivée pendant une impression garde currentJob posé (voir
+// setDisabled, printerController.js) pour permettre l'annulation asynchrone — si l'agent ne
+// revient jamais (éteinte pour de bon), ce job devait quand même pouvoir être résolu, sinon
+// currentJob reste bloqué et la réactivation (setDisabled(false)) refuse indéfiniment avec
+// aucune échappatoire côté API (deadlock trouvé en revue 2026-09-22). Une imprimante DISABLED
+// reste donc staleness-vérifiée pour résoudre un job bloqué, mais son statut/historique
+// n'est jamais réécrit (elle reste DISABLED, jamais rebasculée OFFLINE).
+const NEVER_STALE_STATUSES = [PRINTER_STATUSES.OFFLINE];
 
 const markPrinterStale = async (printerId) => {
   // withOptimisticRetry (pas un simple save()) : ce document Printer peut être écrit au même
@@ -18,25 +26,30 @@ const markPrinterStale = async (printerId) => {
   await withOptimisticRetry(
     () => Printer.findById(printerId),
     async (printer) => {
-      // Peut avoir changé de statut (reconnecté, désactivé...) entre la requête stalePrinters
-      // et cette écriture — ne re-marque offline que si c'est toujours pertinent.
+      // Peut avoir changé de statut (reconnecté...) entre la requête stalePrinters et cette
+      // écriture — ne re-marque offline que si c'est toujours pertinent.
       if (!printer || NEVER_STALE_STATUSES.includes(printer.status)) return;
 
-      const priorStatus = printer.status;
-      printer.lastKnownStatus = priorStatus;
-      printer.status = PRINTER_STATUSES.OFFLINE;
-      printer.statusHistory.push({
-        status: PRINTER_STATUSES.OFFLINE,
-        source: PRINTER_STATUS_SOURCES.HEARTBEAT_TIMEOUT,
-        detail: `Dernier statut connu avant coupure: ${priorStatus}`,
-        date: new Date(),
-      });
-      await printer.save();
+      const isDisabled = printer.status === PRINTER_STATUSES.DISABLED;
+      if (!isDisabled) {
+        const priorStatus = printer.status;
+        printer.lastKnownStatus = priorStatus;
+        printer.status = PRINTER_STATUSES.OFFLINE;
+        printer.statusHistory.push({
+          status: PRINTER_STATUSES.OFFLINE,
+          source: PRINTER_STATUS_SOURCES.HEARTBEAT_TIMEOUT,
+          detail: `Dernier statut connu avant coupure: ${priorStatus}`,
+          date: new Date(),
+        });
+        await printer.save();
+      }
 
-      if (priorStatus === PRINTER_STATUSES.PRINTING && printer.currentJob) {
-        // Conditionné sur un statut encore actif : ferme la course avec updateJobStatus, qui
-        // peut rapporter 'completed' au même instant (l'agent a fini juste avant la coupure de
-        // contact) — le rapport de l'agent, plus proche de la réalité physique, doit gagner.
+      if (printer.currentJob) {
+        // Conditionné sur un statut encore actif ('sent'/'printing', pas seulement pour le cas
+        // priorStatus === PRINTING ci-dessus — une imprimante DISABLED garde ce statut littéral,
+        // pas 'printing') : ferme la course avec updateJobStatus, qui peut rapporter 'completed'
+        // au même instant (l'agent a fini juste avant la coupure de contact) — le rapport de
+        // l'agent, plus proche de la réalité physique, doit gagner.
         await PrintJob.findOneAndUpdate(
           { _id: printer.currentJob, status: { $in: ['sent', 'printing'] } },
           {

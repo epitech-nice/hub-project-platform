@@ -5,12 +5,16 @@ const PrintAuthorization = require('../../models/PrintAuthorization');
 const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
 const { generateApiKey } = require('../../utils/apiKey');
-const { PRINTER_STATUSES, PRINTER_STATUS_SOURCES, PRINT_JOB_STATUSES, CLEARANCE_METHODS } = require('../../utils/constants');
+const {
+  PRINTER_STATUSES,
+  PRINTER_STATUS_SOURCES,
+  PRINT_JOB_STATUSES,
+  CLEARANCE_METHODS,
+  MAX_SPOOL_MATERIAL_LENGTH,
+} = require('../../utils/constants');
 const { withOptimisticRetry } = require('../../utils/optimisticRetry');
 
 const NON_TERMINAL_JOB_STATUSES = [PRINT_JOB_STATUSES.QUEUED, PRINT_JOB_STATUSES.SENT, PRINT_JOB_STATUSES.PRINTING];
-
-const MAX_MATERIAL_LENGTH = 64;
 // Accepte "#RRGGBB" comme "RRGGBB" — le format que <input type="color"> (GatePicker) envoie
 // réellement est sans '#', mais on tolère les deux plutôt que d'imposer un format côté client.
 const HEX_COLOR_REGEX = /^#?[0-9a-fA-F]{6}$/;
@@ -55,8 +59,7 @@ exports.setDisabled = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('disabled (booléen) et note sont requis', 400));
   }
 
-  let result;
-  await withOptimisticRetry(
+  const result = await withOptimisticRetry(
     () => Printer.findById(req.params.id),
     async (printer) => {
       if (!printer) throw new ErrorResponse('Imprimante non trouvée', 404);
@@ -64,30 +67,38 @@ exports.setDisabled = asyncHandler(async (req, res, next) => {
       const activeJob = printer.currentJob ? await PrintJob.findById(printer.currentJob) : null;
       const jobIsActive = activeJob && NON_TERMINAL_JOB_STATUSES.includes(activeJob.status);
 
+      // Annule un job encore 'sent'/'printing' par la même voie asynchrone que POST
+      // /jobs/:id/cancel (cancelRequestedAt, repris par l'agent à son prochain tick) plutôt que
+      // de nuller currentJob : GET /agent/heartbeat ne consulte cancelRequestedAt que via
+      // req.printer.currentJob, et updateJobStatus refuse tout rapport final dont l'id ne
+      // correspond plus au currentJob courant (409) — nuller orphelinerait le job pour de bon.
+      const requestAsyncCancellation = async (job) => {
+        if (!job.cancelRequestedAt) {
+          job.cancelRequestedAt = new Date();
+          job.cancelledBy = { email: req.user.email.toLowerCase(), role: req.user.role };
+          job.history.push({
+            status: job.status,
+            date: new Date(),
+            detail: `Annulation demandée (imprimante désactivée: ${note})`,
+          });
+          await job.save();
+        }
+        // currentJob reste posé tant que l'agent n'a pas confirmé — voir updateJobStatus, qui
+        // ne repasse plus une imprimante DISABLED en awaiting_clearance.
+      };
+
       if (disabled) {
         if (jobIsActive && [PRINT_JOB_STATUSES.SENT, PRINT_JOB_STATUSES.PRINTING].includes(activeJob.status)) {
-          // Une impression est physiquement en cours : nuller currentJob orphelinerait le job
-          // pour de bon — le heartbeat de l'agent (GET /agent/heartbeat) ne consulte
-          // cancelRequestedAt que via req.printer.currentJob, et updateJobStatus refuse tout
-          // rapport final dont l'id ne correspond plus au currentJob courant (409). On demande
-          // donc l'annulation par le même mécanisme que POST /jobs/:id/cancel (asynchrone,
-          // repris par l'agent à son prochain tick) plutôt que de couper le lien.
-          if (!activeJob.cancelRequestedAt) {
-            activeJob.cancelRequestedAt = new Date();
-            activeJob.cancelledBy = { email: req.user.email.toLowerCase(), role: req.user.role };
-            activeJob.history.push({
-              status: activeJob.status,
-              date: new Date(),
-              detail: `Annulation demandée (imprimante désactivée: ${note})`,
-            });
-            await activeJob.save();
-          }
-          // currentJob reste posé tant que l'agent n'a pas confirmé l'annulation — voir
-          // updateJobStatus, qui ne repasse plus une imprimante DISABLED en awaiting_clearance.
+          await requestAsyncCancellation(activeJob);
         } else if (jobIsActive) {
-          // Job encore 'queued', jamais dispatché : rien de physique en cours, sûr à libérer
-          // immédiatement (même verrou atomique que le chemin 'queued' de cancelJob).
-          await PrintJob.findOneAndUpdate(
+          // Job encore 'queued' au moment de la lecture ci-dessus : rien de physique en cours,
+          // sûr à libérer immédiatement (même verrou atomique que le chemin 'queued' de
+          // cancelJob) — SAUF si getNextJob a gagné la course entre-temps et l'a déjà fait
+          // passer à 'sent' : le findOneAndUpdate conditionné ne matche alors plus rien, et il
+          // faut basculer sur l'annulation asynchrone plutôt que de nuller currentJob (sinon
+          // même orphelinage que ci-dessus, sur un job que l'agent est en train de dispatcher —
+          // voir revue 2026-09-22).
+          const cancelledQueued = await PrintJob.findOneAndUpdate(
             { _id: activeJob._id, status: PRINT_JOB_STATUSES.QUEUED },
             {
               status: PRINT_JOB_STATUSES.CANCELLED,
@@ -97,7 +108,12 @@ exports.setDisabled = asyncHandler(async (req, res, next) => {
               },
             }
           );
-          printer.currentJob = null;
+          if (cancelledQueued) {
+            printer.currentJob = null;
+          } else {
+            const refetchedJob = await PrintJob.findById(activeJob._id);
+            await requestAsyncCancellation(refetchedJob);
+          }
         } else {
           // Pas de job actif (jamais fixé, ou référence périmée vers un job déjà terminal) :
           // rien à annuler, comportement inchangé.
@@ -124,7 +140,7 @@ exports.setDisabled = asyncHandler(async (req, res, next) => {
         date: new Date(),
       });
       await printer.save();
-      result = { status: printer.status };
+      return { status: printer.status };
     }
   );
 
@@ -147,8 +163,7 @@ exports.getQrCode = asyncHandler(async (req, res, next) => {
 });
 
 const confirmClearanceInternal = async (req, res, next, method) => {
-  let result;
-  await withOptimisticRetry(
+  const result = await withOptimisticRetry(
     () => Printer.findById(req.params.id),
     async (printer) => {
       if (!printer) throw new ErrorResponse('Imprimante non trouvée', 404);
@@ -166,7 +181,7 @@ const confirmClearanceInternal = async (req, res, next, method) => {
         date: new Date(),
       });
       await printer.save();
-      result = { status: printer.status };
+      return { status: printer.status };
     }
   );
 
@@ -186,8 +201,8 @@ exports.setManualSpoolSlot = asyncHandler(async (req, res, next) => {
   if (typeof material !== 'string' || typeof color !== 'string' || !material || !color) {
     return next(new ErrorResponse('material et color sont requis', 400));
   }
-  if (material.length > MAX_MATERIAL_LENGTH) {
-    return next(new ErrorResponse(`material ne peut pas dépasser ${MAX_MATERIAL_LENGTH} caractères`, 400));
+  if (material.length > MAX_SPOOL_MATERIAL_LENGTH) {
+    return next(new ErrorResponse(`material ne peut pas dépasser ${MAX_SPOOL_MATERIAL_LENGTH} caractères`, 400));
   }
   if (!HEX_COLOR_REGEX.test(color)) {
     return next(new ErrorResponse('color doit être une couleur hexadécimale valide (ex: #RRGGBB)', 400));
