@@ -235,7 +235,11 @@ Base de données : **MongoDB** via **Mongoose**.
   status: String,              // Enum PRINTER_STATUSES (défaut 'idle') :
                                 // 'idle' | 'printing' | 'awaiting_clearance' | 'offline' | 'error' | 'disabled'
   lastKnownStatus: String,     // Enum PRINTER_STATUSES (défaut 'idle') — dernier statut connu avant passage offline
-  currentJob: ObjectId,        // → PrintJob, null si aucun job en cours
+  currentJob: ObjectId,        // → PrintJob, null si aucun job en cours — peut rester posé même si
+                                // status === 'disabled' (job sent/printing en cours d'annulation
+                                // asynchrone au moment de la désactivation, voir PATCH /:id/disabled
+                                // dans docs/api-print.md) ; ré-activer refuse (409) tant qu'il pointe
+                                // vers un job non-terminal
   lastSeenAt: Date,            // Dernier heartbeat reçu de l'agent (défaut : maintenant)
 
   spoolSlots: [{                // État des bobines ACE/MMU, rapporté par l'agent (POST /agent/spool-status)
@@ -291,7 +295,7 @@ Base de données : **MongoDB** via **Mongoose**.
 }
 ```
 
-**Note** : `status` passe à `offline` via `heartbeat_timeout` lorsque l'agent ne renvoie plus de heartbeat dans le délai attendu ; `disabled` est un statut manuel (`admin_action`) qui empêche l'envoi de nouveaux jobs.
+**Note** : `status` passe à `offline` via `heartbeat_timeout` lorsque l'agent ne renvoie plus de heartbeat dans le délai attendu ; `disabled` est un statut manuel (`admin_action`) qui empêche l'envoi de nouveaux jobs. Une imprimante `disabled` n'est jamais rebasculée `offline` par le mécanisme de staleness, même si son `currentJob` (job en cours d'annulation) reste surveillé pour être résolu automatiquement en `failed` si l'agent ne répond plus — voir `server/src/utils/printerScheduler.js` et `docs/api-print.md`.
 
 ---
 

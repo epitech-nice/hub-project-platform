@@ -1,5 +1,6 @@
 const express = require('express');
 const request = require('supertest');
+const mongoose = require('mongoose');
 const Printer = require('../../models/Printer');
 const PrintJob = require('../../models/PrintJob');
 const { authenticatePrinter } = require('../../middleware/printerAuth');
@@ -29,6 +30,17 @@ describe('authenticatePrinter', () => {
       .get('/whoami')
       .set('x-printer-id', printer._id.toString())
       .set('x-api-key', 'wrong-key');
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a printer id that does not exist, instead of throwing', async () => {
+    // Exerce la garde `if (!printer || ...)` à l'intérieur du callback réessayable — une
+    // imprimante supprimée entre deux tentatives de retry doit redonner 401, pas un TypeError
+    // brut sur un printer null (voir revue 2026-09-22).
+    const res = await request(buildApp())
+      .get('/whoami')
+      .set('x-printer-id', new mongoose.Types.ObjectId().toString())
+      .set('x-api-key', 'anything');
     expect(res.status).toBe(401);
   });
 
