@@ -222,7 +222,7 @@ exports.listAdmin = asyncHandler(async (req, res) => {
 
   const [ideas, total] = await Promise.all([
     Idea.find(filter)
-      .sort({ updatedAt: -1, _id: -1 })
+      .sort({ lastActivityAt: -1, updatedAt: -1, _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit),
     Idea.countDocuments(filter),

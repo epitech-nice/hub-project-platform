@@ -159,6 +159,19 @@ describe('GET /api/ideas/admin', () => {
   });
 });
 
+describe('GET /api/ideas/admin : ordre', () => {
+  it('trie par derniere activite : masquer une idee ne la remonte pas', async () => {
+    const admin = await createAdmin();
+    const s = await createUser();
+    const older = await createIdea(s, { title: 'Ancienne', lastActivityAt: new Date('2026-01-01') });
+    const newer = await createIdea(s, { title: 'Recente', lastActivityAt: new Date('2026-02-01') });
+    const none = await createIdea(s, { title: 'Sans activite' });
+    await send('patch', admin, `/api/ideas/admin/${older._id}/hide`, { hidden: true });
+    const res = await get(admin, '/api/ideas/admin');
+    expect(res.body.data.map((r) => r._id)).toEqual([String(newer._id), String(older._id), String(none._id)]);
+  });
+});
+
 describe('PATCH /api/ideas/admin/:id/hide', () => {
   it('masque puis restitue dans le catalogue etudiant', async () => {
     const admin = await createAdmin();
