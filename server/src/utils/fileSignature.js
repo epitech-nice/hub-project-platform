@@ -44,8 +44,10 @@ const svgRootIndex = (text) => {
     } else if (text.substr(i, 9).toUpperCase() === '<!DOCTYPE') {
       const end = text.indexOf('>', i + 9);
       if (end === -1) return -1;
-      const bracket = text.indexOf('[', i + 9);
-      if (bracket !== -1 && bracket < end) return -1;
+      // `[` cherché uniquement dans ce DOCTYPE (jusqu'à son `>`) : chaque octet est visité une fois
+      for (let k = i + 9; k < end; k += 1) {
+        if (text.charCodeAt(k) === 0x5b) return -1;
+      }
       i = end + 1;
     } else {
       break;
@@ -57,19 +59,26 @@ const svgRootIndex = (text) => {
   return ok ? i : -1;
 };
 
-const NAMED_REFS = { colon: ':', tab: '\t', newline: '\n' };
+const PREDEFINED_ENTITIES = ['amp', 'lt', 'gt', 'quot', 'apos'];
 
-// Décode une seule fois (sans récursion) les références de caractères XML : &#106; &#x6a; &colon; &Tab; &NewLine;
-const decodeXmlRefs = (text) =>
-  text.replace(/&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|(colon|Tab|NewLine));/g, (m, dec, hex, name) => {
-    if (name) return NAMED_REFS[name.toLowerCase()];
-    const cp = dec ? parseInt(dec, 10) : parseInt(hex, 16);
-    return cp <= 0x10ffff ? String.fromCodePoint(cp) : '';
-  });
+// On ne décode rien : tout SVG contenant une référence numérique (&#...) ou une entité autre que
+// les cinq prédéfinies est refusé (faux positif accepté, ex. &#169;). Balayage linéaire,
+// anticipation bornée à 10 caractères jusqu'au `;`.
+const hasUnsafeReference = (text) => {
+  let pos = text.indexOf('&');
+  while (pos !== -1) {
+    if (text.charCodeAt(pos + 1) === 0x23) return true;
+    const semi = text.slice(pos + 1, pos + 11).indexOf(';');
+    if (semi === -1) return true;
+    if (!PREDEFINED_ENTITIES.includes(text.slice(pos + 1, pos + 1 + semi))) return true;
+    pos = text.indexOf('&', pos + 1);
+  }
+  return false;
+};
 
 const SAFE_DATA_IMAGE = '(?!image/(?:png|jpe?g|gif|webp);base64,)';
 
-// Motifs sur le texte décodé sans espaces ni caractères de contrôle (« java\tscript: » détecté)
+// Motifs sur le texte brut sans espaces ni caractères de contrôle (« java\tscript: » détecté)
 const SVG_DANGEROUS_SQUEEZED = [
   /<(?:[\w-]+:)?(?:script|iframe|embed|object|foreignobject)/i,
   /javascript:/i,
@@ -87,9 +96,10 @@ const SVG_HANDLER = /[\s/"']on\w+\s*=/i;
 const isSafeSvg = (text) => {
   const root = svgRootIndex(text);
   if (root === -1) return false;
-  const decoded = decodeXmlRefs(text.slice(root));
-  if (SVG_HANDLER.test(decoded)) return false;
-  const squeezed = decoded.replace(/[\u0000- \u007f-\u009f]+/g, '');
+  const body = text.slice(root);
+  if (hasUnsafeReference(body)) return false;
+  if (SVG_HANDLER.test(body)) return false;
+  const squeezed = body.replace(/[\u0000- \u007f-\u009f]+/g, '');
   return !SVG_DANGEROUS_SQUEEZED.some((re) => re.test(squeezed));
 };
 
