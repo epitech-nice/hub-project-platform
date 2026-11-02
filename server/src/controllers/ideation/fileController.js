@@ -8,6 +8,9 @@ const { storageDirFor, EXT_TYPE } = require('../../utils/fileSignature');
 const { isAcceptedMember, isCreator } = require('../../middleware/ideaAccess');
 const { toDetail } = require('./ideaController');
 
+// Plafond de versions par fichier (le volume partage le disque du VPS avec la base)
+const MAX_VERSIONS_PER_FILE = 50;
+
 const MIME = {
   png: 'image/png',
   jpeg: 'image/jpeg',
@@ -51,11 +54,22 @@ const uploadVersion = (kind) =>
 
       // Condition sur le numéro : deux dépôts simultanés ne produisent pas le même numéro
       const updated = await Idea.findOneAndUpdate(
-        { _id: ideaId, [`${kind}.versions.number`]: { $ne: number } },
+        {
+          _id: ideaId,
+          [`${kind}.versions.number`]: { $ne: number },
+          [`${kind}.versions.${MAX_VERSIONS_PER_FILE - 1}`]: { $exists: false },
+        },
         { $push: { [`${kind}.versions`]: version }, $set: { lastActivityAt: new Date() } },
         { new: true }
       );
-      if (!updated) throw new ErrorResponse('Un autre dépôt vient d\'avoir lieu, réessayez', 409);
+      if (!updated) {
+        const fresh = await Idea.findById(ideaId);
+        if (!fresh) throw new ErrorResponse('Idée introuvable', 404);
+        if (fresh[kind].versions.length >= MAX_VERSIONS_PER_FILE) {
+          throw new ErrorResponse(`Nombre maximum de versions atteint (${MAX_VERSIONS_PER_FILE}) pour ce fichier`, 400);
+        }
+        throw new ErrorResponse('Un autre dépôt vient d\'avoir lieu, réessayez', 409);
+      }
 
       res.json({ success: true, data: toDetail(updated, req.user) });
     } catch (err) {

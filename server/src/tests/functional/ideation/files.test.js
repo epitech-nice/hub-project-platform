@@ -331,3 +331,46 @@ describe('noms de fichiers d origine (accents, longueur)', () => {
     expect(res.body.data.deck.current.originalName).toBe('café.pdf');
   });
 });
+
+describe('plafond de versions par fichier', () => {
+  const versions = (u, n) =>
+    Array.from({ length: n }, (_, i) => ({
+      number: i + 1,
+      storedName: `v${i + 1}.pdf`,
+      originalName: `v${i + 1}.pdf`,
+      size: 10,
+      author: { userId: u._id, name: u.name },
+    }));
+  const post = (u, idea, kind, buf, name) =>
+    request(app).post(`/api/ideas/${idea._id}/${kind}`).set(authHeader(u)).attach('file', buf, name);
+
+  it('50 versions : la 51e est refusee (400), rien sur le disque, versions intactes', async () => {
+    const u = await createUser();
+    const idea = await createIdea(u, { deck: { versions: versions(u, 50) } });
+    track(idea);
+    const res = await post(u, idea, 'deck', PDF('z'), 'deck.pdf');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Nombre maximum de versions atteint (50) pour ce fichier');
+    expect(listDir(idea)).toEqual([]);
+    const fresh = await Idea.findById(idea._id);
+    expect(fresh.deck.versions).toHaveLength(50);
+  });
+
+  it('49 versions : une de plus est acceptee', async () => {
+    const u = await createUser();
+    const idea = await createIdea(u, { deck: { versions: versions(u, 49) } });
+    track(idea);
+    const res = await post(u, idea, 'deck', PDF('z'), 'deck.pdf');
+    expect(res.status).toBe(200);
+    expect(res.body.data.deck.current.number).toBe(50);
+  });
+
+  it('le logo a son propre compteur', async () => {
+    const u = await createUser();
+    const idea = await createIdea(u, { deck: { versions: versions(u, 50) } });
+    track(idea);
+    const res = await post(u, idea, 'logo', PNG, 'logo.png');
+    expect(res.status).toBe(200);
+    expect(res.body.data.logo.current.number).toBe(1);
+  });
+});
