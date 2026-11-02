@@ -33,6 +33,7 @@ router.get('/search', authenticateToken, searchLimiter, asyncHandler(async (req,
   const term = escapeRegex(q.trim());
   const users = await User.find({
     _id: { $ne: req.user._id },
+    role: 'student',
     $or: [
       { name: new RegExp(term, 'i') },
       // Partie locale seulement : le texte précède le "@" (le domaine n'est jamais cherché)

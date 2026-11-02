@@ -27,6 +27,15 @@ const put = (idea, as) =>
     .send({ title: 'Titre', description: 'Desc', hashtags: ['a', 'b', 'c'] });
 
 describe('GET /api/users/search', () => {
+  it('un compte admin n apparait pas, un etudiant oui', async () => {
+    const me = await createUser({ name: 'Moi' });
+    await createAdmin({ name: 'Staffie Zorro', email: 'staffie.zorro@epitech.eu' });
+    const st = await createUser({ name: 'Staffie Etudiant', email: 'staffie.etu@epitech.eu' });
+    const res = await request(app).get('/api/users/search?q=staffie').set(authHeader(me));
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((u) => u._id)).toEqual([String(st._id)]);
+  });
+
   it('2 caractères donne 400', async () => {
     const me = await createUser();
     const res = await request(app).get('/api/users/search?q=ab').set(authHeader(me));
@@ -163,6 +172,18 @@ describe('POST /api/ideas/:id/members', () => {
     expect(none.status).toBe(400);
     const obj = await request(app).post(`/api/ideas/${idea._id}/members`).set(authHeader(creator)).send({ userId: { $ne: null } });
     expect(obj.status).toBe(400);
+  });
+
+  it('inviter un admin est refuse comme un utilisateur inconnu', async () => {
+    const creator = await createUser();
+    const admin = await createAdmin();
+    const idea = await createIdea(creator);
+    const res = await invite(idea, creator, admin._id);
+    const unknown = await invite(idea, creator, '507f1f77bcf86cd799439011');
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual(unknown.body);
+    const fresh = await Idea.findById(idea._id);
+    expect(fresh.members).toHaveLength(1);
   });
 
   it('groupe de 6 (acceptés et en attente) refuse la 7e avec le message exact', async () => {

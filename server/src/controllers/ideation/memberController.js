@@ -20,7 +20,8 @@ const parseUserId = (raw) => {
 // POST /api/ideas/:id/members : invite un étudiant (créateur seul)
 exports.inviteMember = asyncHandler(async (req, res) => {
   const userId = parseUserId(req.body && req.body.userId);
-  const user = await User.findById(userId).select('name email');
+  // Étudiants seulement : un compte staff est traité comme un utilisateur inconnu
+  const user = await User.findOne({ _id: userId, role: 'student' }).select('name email');
   if (!user) throw new ErrorResponse('Utilisateur introuvable', 404);
 
   // Atomique : la taille et l'absence de doublon sont vérifiées dans le filtre de l'écriture
