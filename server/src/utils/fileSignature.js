@@ -126,4 +126,4 @@ const storageDirFor = (ideaId) => {
   return path.join(IDEA_STORAGE_ROOT, ideaId);
 };
 
-module.exports = { detectFileType, storageDirFor, IDEA_FILE_RULES, EXT_TYPE };
+module.exports = { detectFileType, storageDirFor, IDEA_STORAGE_ROOT, IDEA_FILE_RULES, EXT_TYPE };

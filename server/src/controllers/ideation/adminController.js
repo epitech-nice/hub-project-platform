@@ -7,7 +7,7 @@ const Idea = require('../../models/Idea');
 const IdeationSettings = require('../../models/IdeationSettings');
 const archiver = require('archiver');
 const { countWords, escapeRegex, sanitizeFileName } = require('../../utils/ideation');
-const { storageDirFor } = require('../../utils/fileSignature');
+const { storageDirFor, IDEA_STORAGE_ROOT } = require('../../utils/fileSignature');
 const { toDetail } = require('./ideaController');
 
 const TITLE_MAX = 80;
@@ -395,4 +395,87 @@ exports.updateLink = asyncHandler(async (req, res) => {
   );
   if (!updated) throw new ErrorResponse('Lien introuvable', 404);
   res.json({ success: true, data: toDetail(updated, req.user) });
+});
+
+// --- Purge de fin de saison ---
+
+// Compte les fichiers réguliers sous une cible, sans suivre les liens symboliques
+const countFilesIn = async (target) => {
+  const st = await fs.promises.lstat(target);
+  if (st.isSymbolicLink()) return 0;
+  if (st.isFile()) return 1;
+  if (!st.isDirectory()) return 0;
+  let total = 0;
+  for (const name of await fs.promises.readdir(target)) {
+    total += await countFilesIn(path.join(target, name));
+  }
+  return total;
+};
+
+// Étape 1 : supprime toutes les idées (groupes, liens et historiques inclus)
+const purgeIdeas = async () => {
+  const { deletedCount } = await Idea.deleteMany({});
+  return deletedCount;
+};
+
+// Étape 2 : vide le dossier de stockage sans supprimer la racine.
+// Seuls les enfants directs de la racine fixe sont supprimés (fs.rm ne suit pas les liens).
+// Un échec n'interrompt pas les autres suppressions.
+const purgeFiles = async () => {
+  await fs.promises.mkdir(IDEA_STORAGE_ROOT, { recursive: true });
+  const children = await fs.promises.readdir(IDEA_STORAGE_ROOT);
+  let files = 0;
+  let failed = 0;
+  for (const name of children) {
+    const target = path.join(IDEA_STORAGE_ROOT, name);
+    try {
+      files += await countFilesIn(target);
+    } catch (e) {
+      // Cible disparue entre-temps (purge concurrente) : rien à compter
+    }
+    try {
+      await fs.promises.rm(target, { recursive: true, force: true });
+    } catch (e) {
+      failed += 1;
+      console.error(`Purge idéation : suppression impossible (${e.code || e.message})`);
+    }
+  }
+  return { files, failed };
+};
+
+// Étape 3 : remet la date limite à vide
+const purgeSettings = async () => {
+  await IdeationSettings.getSingleton();
+  await IdeationSettings.findOneAndUpdate(
+    { key: 'singleton' },
+    { $set: { deadlineDate: null } },
+    { new: true, runValidators: true }
+  );
+};
+
+// Base d'abord, disque ensuite : si le disque échoue, la base est déjà purgée et le staff peut relancer
+const purgeSeason = async () => {
+  const ideas = await purgeIdeas();
+  await purgeSettings();
+  const { files, failed } = await purgeFiles();
+  return { ideas, files, failed };
+};
+
+// DELETE /api/ideas/admin/purge : { confirm: 'PURGER' } (saisie exacte, irréversible)
+exports.purge = asyncHandler(async (req, res) => {
+  const body = req.body || {};
+  if (body.confirm !== 'PURGER') {
+    throw new ErrorResponse('Confirmation requise : saisir exactement PURGER', 400);
+  }
+
+  const { ideas, files, failed } = await purgeSeason();
+  console.log(`Purge idéation : ${ideas} idée(s), ${files} fichier(s) supprimé(s), ${failed} échec(s)`);
+
+  if (failed > 0) {
+    throw new ErrorResponse(
+      `Purge partielle : la base est vidée mais ${failed} élément(s) du stockage n'ont pas pu être supprimés. Relancez la purge.`,
+      500
+    );
+  }
+  res.json({ success: true, data: { ideas, files } });
 });

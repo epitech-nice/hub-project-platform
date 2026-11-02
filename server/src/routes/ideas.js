@@ -29,6 +29,7 @@ router.get('/me', ideaController.getMine);
 router.get('/admin', isAdmin, adminController.listAdmin);
 router.get('/admin/export', isAdmin, adminController.exportDecks);
 router.put('/admin/deadline', isAdmin, adminController.setDeadline);
+router.delete('/admin/purge', isAdmin, adminController.purge);
 
 // Admin paramétré : suivi, masquage, suppression, modération
 router.patch('/admin/:id/hide', isAdmin, adminController.hideIdea);
