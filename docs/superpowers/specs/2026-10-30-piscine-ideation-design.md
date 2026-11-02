@@ -9,9 +9,9 @@ Remplacer les rendus par mail de la première semaine de la piscine idéation Te
 
 Le staff n'évalue pas les idées via le module : il vérifie que les étudiants travaillent, en regardant leur contenu. L'outil doit donc rendre visible qui a rendu quoi, et quand.
 
-Le module est saisonnier : la piscine a lieu en mars et se termine fin mars (mars 2027 pour cette première édition), soit environ un mois chaque année. Après la date limite, les étudiants disposent d'une à deux semaines pour récupérer leurs fichiers, puis le staff purge tout, y compris la liste de la promotion importée.
+Le module est saisonnier : une piscine d'idéation dure environ un mois. Après la date limite, les étudiants disposent d'une à deux semaines pour récupérer leurs fichiers, puis le staff purge tout, y compris la liste de la promotion importée.
 
-Calendrier : la spec d'Eric parle de « fin novembre 2026 » ; cette date est remplacée par la fin mars 2027. Il reste plusieurs mois avant l'ouverture, ce qui permet de livrer en deux lots et de tester sur des comptes réels avant la piscine.
+Calendrier (mis à jour le 2026-11-02) : le premier round d'idéation démarre le mardi 10 novembre 2026 (et non en mars 2027 comme prévu le 2026-10-30). La date limite exacte n'est pas encore fixée : la spec d'Eric parle de « fin novembre 2026 » ; elle se règle depuis l'interface staff, donc elle ne bloque pas le développement. Conséquence : le module doit être déployé et vérifié avant le 10 novembre ; les lots 1 et 2 (dépôt et staff) sont sur le chemin critique, le lot 3 (import CSV de la promotion) peut suivre de peu.
 
 ## Objectifs
 
@@ -45,7 +45,7 @@ Calendrier : la spec d'Eric parle de « fin novembre 2026 » ; cette date est re
 | Fichiers | Logo et deck téléversés et versionnés. Documents du jour 2 : liens uniquement |
 | Ajout de membre | Demande une confirmation de l'étudiant invité |
 | Modération | Le staff supprime tout (idée, groupe, fichiers, historique), sans trace |
-| Durée de vie | La piscine a lieu en mars (fin fin mars), puis 1 à 2 semaines de récupération, puis purge |
+| Durée de vie | Premier round le mardi 10 novembre 2026, environ un mois, puis 1 à 2 semaines de récupération, puis purge |
 | Recherche | Par nom de projet et par nom d'étudiant, pour le staff comme pour les étudiants |
 | Promotion | Import d'un CSV de la promotion Tech 3 par le staff. Seuls ces étudiants sont suivis pour la liste « sans projet » |
 | Visibilité | Idées et fichiers visibles par tous les utilisateurs connectés du hub, toutes promotions confondues (voulu) |
@@ -172,9 +172,9 @@ Action admin `DELETE /api/ideas/admin/purge` : supprime toutes les idées (donc 
 
 ## Questions ouvertes (pour le demandeur)
 
-Réglées : calendrier (mars 2027), import CSV de la promotion, visibilité de tous les utilisateurs.
+Réglées : début le mardi 10 novembre 2026, import CSV de la promotion, visibilité de tous les utilisateurs.
 
-1. **Dates exactes** : jour de début et jour de la date limite en mars 2027 (réglables ensuite dans l'interface, donc non bloquant pour développer).
+1. **Date limite exacte** du premier round (réglable ensuite dans l'interface, donc non bloquant pour développer ; elle doit être saisie avant l'ouverture, sinon les dépôts restent ouverts sans limite).
 2. **Date limite unique** pour la semaine 1 et le jour 2 ? Hypothèse de la spec, non confirmée.
 3. **Format du CSV** (à confirmer par le demandeur plus tard) : probablement nom, prénom et email. Le design repose sur la présence de l'email ; sans lui, l'import est refusé et il faudra choisir une autre clé. Non bloquant pour les lots 1 et 2, bloquant uniquement pour le lot 3.
 4. **Étudiants jamais connectés** : acceptez-vous qu'ils ne puissent pas être invités avant leur première connexion au hub ? Alternative : les inviter à partir de la liste CSV et créer le compte à leur première connexion (plus complexe, non retenue par défaut).
@@ -186,4 +186,4 @@ Réglées : calendrier (mars 2027), import CSV de la promotion, visibilité de t
 - **Lot 2** : vue staff (suivi, recherche), masquage, suppression, modération, export ZIP, purge.
 - **Lot 3** : import CSV de la promotion et onglet « Sans projet ». Séparé car il dépend de la réponse sur le format du fichier et n'est pas nécessaire au dépôt des idées.
 
-Avec une ouverture en mars 2027, les trois lots peuvent être livrés et testés avant la piscine.
+Avec une ouverture le 10 novembre 2026, les lots 1 et 2 passent avant tout (vérification sur un vrai build Docker et déploiement avant cette date) ; le lot 3 peut être livré dans la foulée sans bloquer l'ouverture.
