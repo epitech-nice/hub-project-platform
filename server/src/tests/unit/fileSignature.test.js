@@ -33,6 +33,41 @@ describe('detectFileType', () => {
   });
 });
 
+describe('detectFileType SVG durci', () => {
+  const legit = {
+    'avec BOM': '\uFEFF<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h10v10z"/></svg>',
+    'avec declaration XML': '<?xml version="1.0" encoding="UTF-8"?>\n<svg viewBox="0 0 10 10"><g><rect width="5" height="5"/></g></svg>',
+    'avec commentaires': '<!-- logo -->\n<svg xmlns="http://www.w3.org/2000/svg"><!-- x --><circle r="3"/></svg>',
+    'avec style': '<svg xmlns="http://www.w3.org/2000/svg"><style>.a{fill:red}</style><rect class="a" width="2" height="2"/></svg>',
+    'avec degrades et defs': '<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g"><stop offset="0" stop-color="#fff"/></linearGradient></defs><rect fill="url(#g)" width="4" height="4"/></svg>',
+    'avec DOCTYPE sans sous-ensemble': '<?xml version="1.0"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg xmlns="http://www.w3.org/2000/svg"></svg>',
+    'avec href interne': '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><defs><path id="p" d="M0 0"/></defs><use xlink:href="#p"/></svg>',
+  };
+  it.each(Object.entries(legit))('accepte un SVG legitime %s', (_n, svg) => {
+    expect(detectFileType(Buffer.from(svg))).toBe('svg');
+  });
+
+  const bad = {
+    'lien javascript:': '<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:alert(1)"><text>x</text></a></svg>',
+    'foreignObject iframe': '<svg><foreignObject><iframe src="javascript:alert(1)"></iframe></foreignObject></svg>',
+    'animate href': '<svg><a><animate attributeName="href" values="javascript:alert(1)"/><text>x</text></a></svg>',
+    'animate xlink:href sans javascript': '<svg><a><set attributeName="xlink:href" to="x"/></a></svg>',
+    'svg/onload': '<svg/onload=alert(1)>',
+    'handler apres guillemet': '<svg xmlns="x"onload="alert(1)"></svg>',
+    'document HTML contenant svg': '<html><body><svg xmlns="http://www.w3.org/2000/svg"></svg></body></html>',
+    'embed': '<svg><embed src="x"/></svg>',
+    'object': '<svg><object data="x"></object></svg>',
+    'entite': '<svg><!ENTITY x "y"></svg>',
+    'DOCTYPE avec sous-ensemble': '<!DOCTYPE svg [ <!ENTITY a "b"> ]><svg></svg>',
+    'href data:': '<svg><image href="data:text/html;base64,AAAA"/></svg>',
+    'xlink:href data:': '<svg><image xlink:href=" data:image/svg+xml,x"/></svg>',
+    'majuscules': '<SVG><SCRIPT>1</SCRIPT></SVG>',
+  };
+  it.each(Object.entries(bad))('refuse le SVG piege %s', (_n, svg) => {
+    expect(detectFileType(Buffer.from(svg))).toBeNull();
+  });
+});
+
 describe('storageDirFor', () => {
   it('renvoie un chemin absolu sous storage/ideas pour un ObjectId valide', () => {
     const dir = storageDirFor('507f1f77bcf86cd799439011');
