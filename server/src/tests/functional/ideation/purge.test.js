@@ -118,7 +118,7 @@ describe('DELETE /api/ideas/admin/purge', () => {
     const { headers, idea1, idea2 } = await setup();
     const res = await purge(headers, { confirm: 'PURGER' });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, data: { ideas: 2, files: 3 } });
+    expect(res.body).toEqual({ success: true, data: { ideas: 2, files: 3, roster: 0 } });
     expect(await Idea.countDocuments()).toBe(0);
     expect(fs.existsSync(storageDirFor(idea1._id.toString()))).toBe(false);
     expect(fs.existsSync(storageDirFor(idea2._id.toString()))).toBe(false);
@@ -163,7 +163,7 @@ describe('DELETE /api/ideas/admin/purge', () => {
     const orphan = putOrphan();
     const res = await purge(headers, { confirm: 'PURGER' });
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({ ideas: 0, files: 1 });
+    expect(res.body.data).toEqual({ ideas: 0, files: 1, roster: 0 });
     expect(fs.existsSync(orphan)).toBe(false);
   });
 
@@ -173,7 +173,7 @@ describe('DELETE /api/ideas/admin/purge', () => {
     fs.rmSync(IDEA_STORAGE_ROOT, { recursive: true, force: true });
     const res = await purge(headers, { confirm: 'PURGER' });
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({ ideas: 0, files: 0 });
+    expect(res.body.data).toEqual({ ideas: 0, files: 0, roster: 0 });
     expect(fs.existsSync(IDEA_STORAGE_ROOT)).toBe(true);
   });
 

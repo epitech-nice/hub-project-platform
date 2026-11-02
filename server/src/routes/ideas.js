@@ -14,6 +14,8 @@ const fileController = require('../controllers/ideation/fileController');
 const linkController = require('../controllers/ideation/linkController');
 const memberController = require('../controllers/ideation/memberController');
 const adminController = require('../controllers/ideation/adminController');
+const rosterController = require('../controllers/ideation/rosterController');
+const rosterUpload = require('../middleware/rosterUpload');
 
 // Toutes les routes exigent une authentification
 router.use(authenticateToken);
@@ -30,6 +32,12 @@ router.get('/admin', isAdmin, adminController.listAdmin);
 router.get('/admin/export', isAdmin, adminController.exportDecks);
 router.put('/admin/deadline', isAdmin, adminController.setDeadline);
 router.delete('/admin/purge', isAdmin, adminController.purge);
+
+// Liste de la promotion (CSV, en mémoire) : admin seulement, jamais exposée aux étudiants
+router.post('/admin/roster/preview', isAdmin, rosterUpload, rosterController.preview);
+router.get('/admin/roster/without-project', isAdmin, rosterController.withoutProject);
+router.post('/admin/roster', isAdmin, rosterUpload, rosterController.importRoster);
+router.delete('/admin/roster', isAdmin, rosterController.clearRoster);
 
 // Admin paramétré : suivi, masquage, suppression, modération
 router.patch('/admin/:id/hide', isAdmin, adminController.hideIdea);

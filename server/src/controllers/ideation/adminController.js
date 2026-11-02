@@ -5,6 +5,7 @@ const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
 const Idea = require('../../models/Idea');
 const IdeationSettings = require('../../models/IdeationSettings');
+const RosterEntry = require('../../models/RosterEntry');
 const archiver = require('archiver');
 const { countWords, escapeRegex, sanitizeFileName } = require('../../utils/ideation');
 const { storageDirFor, IDEA_STORAGE_ROOT } = require('../../utils/fileSignature');
@@ -453,12 +454,19 @@ const purgeSettings = async () => {
   );
 };
 
+// Étape 4 : supprime la liste de la promotion (données personnelles, R5)
+const purgeRoster = async () => {
+  const { deletedCount } = await RosterEntry.deleteMany({});
+  return deletedCount;
+};
+
 // Base d'abord, disque ensuite : si le disque échoue, la base est déjà purgée et le staff peut relancer
 const purgeSeason = async () => {
   const ideas = await purgeIdeas();
+  const roster = await purgeRoster();
   await purgeSettings();
   const { files, failed } = await purgeFiles();
-  return { ideas, files, failed };
+  return { ideas, files, failed, roster };
 };
 
 // DELETE /api/ideas/admin/purge : { confirm: 'PURGER' } (saisie exacte, irréversible)
@@ -468,8 +476,8 @@ exports.purge = asyncHandler(async (req, res) => {
     throw new ErrorResponse('Confirmation requise : saisir exactement PURGER', 400);
   }
 
-  const { ideas, files, failed } = await purgeSeason();
-  console.log(`Purge idéation : ${ideas} idée(s), ${files} fichier(s) supprimé(s), ${failed} échec(s)`);
+  const { ideas, files, failed, roster } = await purgeSeason();
+  console.log(`Purge idéation : ${ideas} idée(s), ${files} fichier(s) supprimé(s), ${roster} entrée(s) de liste, ${failed} échec(s)`);
 
   if (failed > 0) {
     throw new ErrorResponse(
@@ -477,5 +485,5 @@ exports.purge = asyncHandler(async (req, res) => {
       500
     );
   }
-  res.json({ success: true, data: { ideas, files } });
+  res.json({ success: true, data: { ideas, files, roster } });
 });
