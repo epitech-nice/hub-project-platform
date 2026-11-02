@@ -10,6 +10,7 @@ const {
 const ideaUpload = require('../middleware/ideaUpload');
 const ideaController = require('../controllers/ideation/ideaController');
 const fileController = require('../controllers/ideation/fileController');
+const linkController = require('../controllers/ideation/linkController');
 
 // Toutes les routes exigent une authentification
 router.use(authenticateToken);
@@ -37,5 +38,9 @@ const canonicalId = (req, res, next) => {
 router.post('/:id/logo', loadIdea, requireAcceptedMember, requireWritable, canonicalId, ideaUpload('logo'), fileController.uploadLogo);
 router.post('/:id/deck', loadIdea, requireAcceptedMember, requireWritable, canonicalId, ideaUpload('deck'), fileController.uploadDeck);
 router.get('/:id/:kind(logo|deck)/:version?', loadIdea, fileController.downloadFile);
+
+// Liens du jour 2
+router.post('/:id/links', loadIdea, requireAcceptedMember, requireWritable, linkController.addLink);
+router.delete('/:id/links/:linkId', loadIdea, requireAcceptedMember, requireWritable, linkController.removeLink);
 
 module.exports = router;
