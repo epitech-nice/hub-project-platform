@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApi } from '../../hooks/useApi';
-import { GROUP_MAX, GROUP_MIN, errorText, formatDate } from '../../lib/ideation';
+import { GROUP_MAX, GROUP_MIN, errorText, formatDate, withCreatorFlag } from '../../lib/ideation';
 import FormField from '../ui/FormField';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
@@ -62,16 +62,7 @@ export default function MemberManager({ idea, disabled = false, onUpdated }) {
   const [removing, setRemoving] = useState(false);
   const requestRef = useRef(0);
 
-  const creatorId = idea.creator && idea.creator.userId ? String(idea.creator.userId) : null;
-  const members = (idea.members || []).map((m) => ({
-    ...m,
-    isCreator: Boolean(creatorId) && String(m.userId) === creatorId,
-  }));
-  // Le créateur d'abord, puis les acceptés, puis les invitations en attente
-  members.sort((a, b) => {
-    const rank = (m) => (m.isCreator ? 0 : m.status === 'accepted' ? 1 : 2);
-    return rank(a) - rank(b);
-  });
+  const members = withCreatorFlag(idea);
   const listedIds = new Set(members.map((m) => String(m.userId)));
   const accepted = members.filter((m) => m.status === 'accepted').length;
   const full = members.length >= GROUP_MAX;

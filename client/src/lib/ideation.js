@@ -199,6 +199,21 @@ export const errorText = (err, fallback = 'Une erreur est survenue') => {
   return details.length ? `${base} : ${details.join(', ')}` : base;
 };
 
+// Membres avec `isCreator`, triés : créateur, acceptés, invitations en attente.
+// Le créateur est repéré par son userId quand le serveur le fournit (créateur, staff),
+// sinon par son nom (les autres étudiants ne reçoivent pas les userId).
+export const withCreatorFlag = (idea) => {
+  const creatorId = idea && idea.creator && idea.creator.userId ? String(idea.creator.userId) : null;
+  const creatorName = idea && idea.creator && idea.creator.name;
+  const rank = (m) => (m.isCreator ? 0 : m.status === 'accepted' ? 1 : 2);
+  return ((idea && idea.members) || [])
+    .map((m) => ({
+      ...m,
+      isCreator: creatorId ? String(m.userId) === creatorId : m.status === 'accepted' && m.name === creatorName,
+    }))
+    .sort((a, b) => rank(a) - rank(b));
+};
+
 export const ROLE_LABELS = {
   creator: 'Créateur',
   member: 'Membre',
