@@ -23,7 +23,7 @@ import {
   ROLE_LABELS,
   errorText,
   formatDate,
-  isDeadlinePassed,
+  isIdeaLocked,
   withCreatorFlag,
 } from '../../../lib/ideation';
 
@@ -167,7 +167,8 @@ export default function IdeaDetail() {
 
   const role = idea.myRole;
   const canEdit = role === 'creator' || role === 'member';
-  const deadlinePassed = isDeadlinePassed(settings.deadlineDate);
+  // Date limite passée, sauf déblocage staff de cette idée ; le serveur reste l'autorité
+  const locked = isIdeaLocked(settings.deadlineDate, idea);
   const members = withCreatorFlag(idea);
   const accepted = members.filter((m) => m.status === 'accepted').length;
   const myEntry = members.find((m) => m.userId && m.status === 'accepted' && !m.isCreator);
@@ -208,7 +209,7 @@ export default function IdeaDetail() {
         </div>
         {canEdit && (
           <div className="shrink-0">
-            {deadlinePassed ? (
+            {locked ? (
               <Button variant="outline" disabled>Modifier</Button>
             ) : (
               <Link href={`/idees/${idea._id}/modifier`} passHref>
@@ -219,7 +220,7 @@ export default function IdeaDetail() {
         )}
       </header>
 
-      <DeadlineNotice deadlineDate={settings.deadlineDate} className="mb-6" />
+      <DeadlineNotice deadlineDate={settings.deadlineDate} idea={idea} className="mb-6" />
 
       {/* Invitation en attente */}
       {role === 'pending' && (
@@ -229,10 +230,10 @@ export default function IdeaDetail() {
             <p className="text-text-muted">En acceptant, vous pourrez modifier l&apos;idée, déposer des fichiers et des liens.</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="subtle" onClick={() => respond('decline')} loading={acting === 'decline'} disabled={Boolean(acting) || deadlinePassed}>
+            <Button variant="subtle" onClick={() => respond('decline')} loading={acting === 'decline'} disabled={Boolean(acting) || locked}>
               Refuser
             </Button>
-            <Button onClick={() => respond('accept')} loading={acting === 'accept'} disabled={Boolean(acting) || deadlinePassed}>
+            <Button onClick={() => respond('accept')} loading={acting === 'accept'} disabled={Boolean(acting) || locked}>
               Accepter
             </Button>
           </div>
@@ -294,7 +295,7 @@ export default function IdeaDetail() {
                 variant="ghost"
                 size="sm"
                 className="mt-4"
-                disabled={deadlinePassed || Boolean(acting)}
+                disabled={locked || Boolean(acting)}
                 onClick={() => setConfirmLeave(true)}
               >
                 Quitter le groupe

@@ -19,7 +19,7 @@ import MemberManager, { MemberRows } from '../../../components/ideas/MemberManag
 import DeadlineNotice from '../../../components/ideas/DeadlineNotice';
 import { useAuth } from '../../../context/AuthContext';
 import { useApi } from '../../../hooks/useApi';
-import { checkFile, errorText, isDeadlinePassed, withCreatorFlag } from '../../../lib/ideation';
+import { checkFile, errorText, isIdeaLocked, withCreatorFlag } from '../../../lib/ideation';
 
 function Section({ id, eyebrow, title, sub, children }) {
   return (
@@ -226,7 +226,8 @@ export default function EditIdea() {
     );
   }
 
-  const locked = isDeadlinePassed(settings.deadlineDate);
+  // Date limite passée, sauf déblocage staff de cette idée ; le serveur reste l'autorité
+  const locked = isIdeaLocked(settings.deadlineDate, idea);
   const fieldErrors = checkIdeaFields(fields);
   const unchanged = sameFields(fields, fieldsOf(idea));
   const canSave = !locked && !saving && !unchanged && Object.keys(fieldErrors).length === 0;
@@ -251,7 +252,7 @@ export default function EditIdea() {
         }
       />
 
-      <DeadlineNotice deadlineDate={settings.deadlineDate} className="mb-6" />
+      <DeadlineNotice deadlineDate={settings.deadlineDate} idea={idea} className="mb-6" />
 
       <div className="flex flex-col gap-6">
         <Section id="sec-infos" eyebrow="L'idée" title="Informations">

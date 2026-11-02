@@ -264,6 +264,22 @@ describe('GET /api/ideas/:id', () => {
     expect((await request(app).get(`/api/ideas/${idea._id}`).set(authHeader(admin))).status).toBe(200);
   });
 
+  it('expose unlockedUntil : null par défaut, date ISO si débloquée', async () => {
+    const u = await createUser();
+    const v = await createUser();
+    const closed = await createIdea(u);
+    const until = new Date(Date.now() + 3600 * 1000);
+    const open = await createIdea(u, { unlockedUntil: until });
+
+    const resClosed = await request(app).get(`/api/ideas/${closed._id}`).set(authHeader(v));
+    expect(resClosed.status).toBe(200);
+    expect(resClosed.body.data).toHaveProperty('unlockedUntil', null);
+
+    const resOpen = await request(app).get(`/api/ideas/${open._id}`).set(authHeader(v));
+    expect(resOpen.status).toBe(200);
+    expect(resOpen.body.data.unlockedUntil).toBe(until.toISOString());
+  });
+
   it('id invalide donne 404', async () => {
     const u = await createUser();
     const res = await request(app).get('/api/ideas/pas-un-id').set(authHeader(u));
@@ -456,6 +472,25 @@ describe('GET /api/ideas/me', () => {
     expect(res.body.data.invitations).toHaveLength(1);
     expect(res.body.data.invitations[0].ideaId).toBe(invitedTo._id.toString());
     expect(res.body.data.invitations[0].title).toBe('Invitation');
+    expect(res.body.data.invitations[0]).toHaveProperty('unlockedUntil', null);
     expectNoEmail(res.body);
+  });
+
+  it('une invitation porte unlockedUntil quand l\'idée est débloquée', async () => {
+    const me = await createUser();
+    const other = await createUser();
+    const until = new Date(Date.now() + 3600 * 1000);
+    await createIdea(other, {
+      unlockedUntil: until,
+      members: [
+        { userId: other._id, name: other.name, email: other.email, status: 'accepted' },
+        { userId: me._id, name: me.name, email: me.email, status: 'pending' },
+      ],
+    });
+
+    const res = await request(app).get('/api/ideas/me').set(authHeader(me));
+    expect(res.status).toBe(200);
+    expect(res.body.data.invitations).toHaveLength(1);
+    expect(res.body.data.invitations[0].unlockedUntil).toBe(until.toISOString());
   });
 });

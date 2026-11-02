@@ -159,6 +159,14 @@ export const isDeadlinePassed = (deadlineDate, now = new Date()) => {
   return Boolean(cutoff) && now >= cutoff;
 };
 
+// Déblocage staff en cours pour cette idée (unlockedUntil dans le futur)
+export const isIdeaUnlocked = (idea, now = new Date()) =>
+  Boolean(idea && idea.unlockedUntil) && new Date(idea.unlockedUntil) > now;
+
+// Édition fermée : date limite passée et pas de déblocage staff en cours (miroir de assertWritable)
+export const isIdeaLocked = (deadlineDate, idea, now = new Date()) =>
+  isDeadlinePassed(deadlineDate, now) && !isIdeaUnlocked(idea, now);
+
 // "vendredi 12 mars 2027" (date de calendrier, sans décalage de fuseau)
 export const formatDeadline = (deadlineDate) => {
   if (typeof deadlineDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(deadlineDate)) return null;

@@ -17,7 +17,7 @@ import IdeaCard from '../../components/ideas/IdeaCard';
 import DeadlineNotice from '../../components/ideas/DeadlineNotice';
 import { useAuth } from '../../context/AuthContext';
 import { useApi } from '../../hooks/useApi';
-import { ROLE_LABELS, errorText, formatDate, isDeadlinePassed } from '../../lib/ideation';
+import { ROLE_LABELS, errorText, formatDate, isDeadlinePassed, isIdeaLocked } from '../../lib/ideation';
 
 export default function MyIdeas() {
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -97,7 +97,9 @@ export default function MyIdeas() {
 
   if (!isAuthenticated) return null;
 
+  // Création : date limite globale ; réponse à une invitation : déblocage staff de l'idée pris en compte
   const locked = isDeadlinePassed(settings.deadlineDate);
+  const invitationLocked = (inv) => isIdeaLocked(settings.deadlineDate, inv);
 
   return (
     <div className="min-h-screen flex flex-col bg-bg">
@@ -168,7 +170,7 @@ export default function MyIdeas() {
                           size="sm"
                           onClick={() => respond(inv, 'decline')}
                           loading={acting === `${inv.ideaId}-decline`}
-                          disabled={Boolean(acting) || locked}
+                          disabled={Boolean(acting) || invitationLocked(inv)}
                           aria-label={`Refuser l'invitation pour ${inv.title}`}
                         >
                           Refuser
@@ -177,7 +179,7 @@ export default function MyIdeas() {
                           size="sm"
                           onClick={() => respond(inv, 'accept')}
                           loading={acting === `${inv.ideaId}-accept`}
-                          disabled={Boolean(acting) || locked}
+                          disabled={Boolean(acting) || invitationLocked(inv)}
                           aria-label={`Accepter l'invitation pour ${inv.title}`}
                         >
                           Accepter

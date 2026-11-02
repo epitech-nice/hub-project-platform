@@ -133,6 +133,8 @@ const toDetail = (idea, user) => {
       createdAt: l.createdAt,
     })),
     hidden: idea.hidden,
+    // Déblocage staff : l'interface rouvre l'édition de cette idée après la date limite
+    unlockedUntil: idea.unlockedUntil || null,
     myRole: admin ? 'admin' : roleOf(idea, user),
     createdAt: idea.createdAt,
     updatedAt: idea.updatedAt,
@@ -189,6 +191,7 @@ exports.getMine = asyncHandler(async (req, res) => {
       title: idea.title,
       invitedBy: idea.creator.name,
       invitedAt: entry && entry.invitedAt,
+      unlockedUntil: idea.unlockedUntil || null,
     };
   });
 
