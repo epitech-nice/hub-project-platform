@@ -132,6 +132,7 @@ export default function AppHeader() {
     { label: 'Catalogue', href: '/idees' },
     { label: 'Soumettre une idée', href: '/idees/nouvelle' },
     { label: 'Mes idées', href: '/idees/mes-idees' },
+    ...(isAdmin ? [{ label: 'Admin idéation', href: '/admin/idees' }] : []),
   ];
 
   // Build nav sections shared between desktop dropdowns and mobile panel
