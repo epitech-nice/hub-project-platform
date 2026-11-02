@@ -10,6 +10,7 @@ import Tabs from '../../../components/ui/Tabs';
 import Skeleton from '../../../components/ui/Skeleton';
 import SeasonControls from '../../../components/ideas/admin/SeasonControls';
 import SuiviTab from '../../../components/ideas/admin/SuiviTab';
+import SansProjetTab from '../../../components/ideas/admin/SansProjetTab';
 import { useAuth } from '../../../context/AuthContext';
 
 export default function AdminIdeas() {
@@ -37,9 +38,9 @@ export default function AdminIdeas() {
 
   if (!isAuthenticated || !isAdmin) return null;
 
-  // Onglets : la tâche 14 ajoute « Sans projet » à cette liste
   const tabItems = [
     { id: 'suivi', label: 'Suivi', content: <SuiviTab refreshKey={refreshKey} /> },
+    { id: 'sans-projet', label: 'Sans projet', content: <SansProjetTab refreshKey={refreshKey} /> },
   ];
 
   return (
