@@ -33,6 +33,7 @@ services:
       - server/.env.prod
     volumes:
       - uploads_data:/app/uploads
+      - ideas_data:/app/storage/ideas
     networks:
       - app-network
     restart: always
@@ -55,6 +56,7 @@ services:
 volumes:
   mongodb_data:
   uploads_data:
+  ideas_data:
 
 # Réseau commun pour tous les services
 networks:
