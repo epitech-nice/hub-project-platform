@@ -1,5 +1,5 @@
 const path = require('path');
-const { detectFileType, storageDirFor, IDEA_FILE_RULES } = require('../../utils/fileSignature');
+const { detectFileType, storageDirFor, IDEA_STORAGE_ROOT, IDEA_FILE_RULES } = require('../../utils/fileSignature');
 
 describe('detectFileType', () => {
   it('reconnait PNG', () => {
@@ -121,10 +121,10 @@ describe('detectFileType SVG: temps borne sur 2 Mo hostiles', () => {
 });
 
 describe('storageDirFor', () => {
-  it('renvoie un chemin absolu sous storage/ideas pour un ObjectId valide', () => {
+  it('renvoie un chemin absolu sous la racine de stockage pour un ObjectId valide', () => {
     const dir = storageDirFor('507f1f77bcf86cd799439011');
     expect(path.isAbsolute(dir)).toBe(true);
-    expect(dir.endsWith(path.join('storage', 'ideas', '507f1f77bcf86cd799439011'))).toBe(true);
+    expect(dir).toBe(path.join(IDEA_STORAGE_ROOT, '507f1f77bcf86cd799439011'));
   });
   it.each(['../x', '..', '', 'abc', '507f1f77bcf86cd79943901/../', '507f1f77bcf86cd79943901z', undefined, null, 42])(
     'leve pour %p',

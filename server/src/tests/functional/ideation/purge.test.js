@@ -54,6 +54,41 @@ const setup = async () => {
 };
 
 describe('DELETE /api/ideas/admin/purge', () => {
+  it('le stockage de test est isolé : sous le dossier temporaire, pas dans server/storage/ideas', () => {
+    const real = path.resolve(__dirname, '../../../../storage/ideas');
+    expect(IDEA_STORAGE_ROOT).not.toBe(real);
+    expect(IDEA_STORAGE_ROOT.startsWith(fs.realpathSync(os.tmpdir())) || IDEA_STORAGE_ROOT.startsWith(os.tmpdir())).toBe(true);
+    expect(IDEA_STORAGE_ROOT.startsWith(real)).toBe(false);
+  });
+
+  it('purge partielle : 500 avec le nombre d\'échecs, les autres entrées sont quand même supprimées', async () => {
+    const { headers, idea1, idea2 } = await setup();
+    const realRm = fs.promises.rm;
+    let calls = 0;
+    const spy = jest.spyOn(fs.promises, 'rm').mockImplementation((...args) => {
+      calls += 1;
+      if (calls === 1) return Promise.reject(Object.assign(new Error('boom'), { code: 'EBUSY' }));
+      return realRm(...args);
+    });
+    let res;
+    try {
+      res = await purge(headers, { confirm: 'PURGER' });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/Purge partielle/);
+    expect(res.body.error).toMatch(/1 élément/);
+    expect(await Idea.countDocuments()).toBe(0);
+    // Un seul des deux dossiers reste (celui dont la suppression a échoué)
+    const left = [idea1, idea2].filter((i) => fs.existsSync(storageDirFor(i._id.toString())));
+    expect(left).toHaveLength(1);
+    // La relance termine le nettoyage
+    const again = await purge(headers, { confirm: 'PURGER' });
+    expect(again.status).toBe(200);
+    expect(fs.readdirSync(IDEA_STORAGE_ROOT)).toEqual([]);
+  });
+
   describe('confirmation refusée', () => {
     const cases = [
       ['sans corps', undefined],
@@ -93,7 +128,7 @@ describe('DELETE /api/ideas/admin/purge', () => {
 
   it('conserve le dossier racine et ne touche pas aux autres dossiers de storage', async () => {
     const { headers } = await setup();
-    const sibling = path.join(IDEA_STORAGE_ROOT, '..', `print-jobs-test-${crypto.randomBytes(6).toString('hex')}`);
+    const sibling = path.join(path.dirname(IDEA_STORAGE_ROOT), `print-jobs-test-${crypto.randomBytes(6).toString('hex')}`);
     cleanup.add(sibling);
     fs.mkdirSync(sibling, { recursive: true });
     fs.writeFileSync(path.join(sibling, 'job.gcode'), 'G1');

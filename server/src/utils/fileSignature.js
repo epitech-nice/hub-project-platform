@@ -3,7 +3,10 @@
 // à l'extension ni au mimetype envoyé par le client).
 const path = require('path');
 
-const IDEA_STORAGE_ROOT = path.join(__dirname, '../../storage/ideas');
+// Racine surchargeable par variable d'env (utilisée par les tests pour isoler le disque)
+const IDEA_STORAGE_ROOT = process.env.IDEA_STORAGE_ROOT
+  ? path.resolve(process.env.IDEA_STORAGE_ROOT)
+  : path.join(__dirname, '../../storage/ideas');
 
 const IDEA_FILE_RULES = {
   logo: { exts: ['.png', '.jpg', '.jpeg', '.svg'], types: ['png', 'jpeg', 'svg'], maxSize: 2 * 1024 * 1024 },
