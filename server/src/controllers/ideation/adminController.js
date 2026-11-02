@@ -5,7 +5,8 @@ const asyncHandler = require('../../middleware/asyncHandler');
 const ErrorResponse = require('../../utils/errorResponse');
 const Idea = require('../../models/Idea');
 const IdeationSettings = require('../../models/IdeationSettings');
-const { countWords, escapeRegex } = require('../../utils/ideation');
+const archiver = require('archiver');
+const { countWords, escapeRegex, sanitizeFileName } = require('../../utils/ideation');
 const { storageDirFor } = require('../../utils/fileSignature');
 const { toDetail } = require('./ideaController');
 
@@ -79,6 +80,123 @@ const removeStoredFiles = async (ideaId, versions) => {
     }
   }
 };
+
+// Chemin d'un fichier stocké, ou null s'il sort du dossier de l'idée
+const resolveStored = (ideaId, storedName) => {
+  const dir = path.resolve(storageDirFor(ideaId));
+  const full = path.resolve(dir, String(storedName));
+  return full.startsWith(dir + path.sep) ? full : null;
+};
+
+const EXPORT_EXTS = ['.pdf', '.pptx'];
+
+// Nom d'entrée unique sans tenir compte de la casse (systèmes de fichiers Windows/macOS)
+const uniqueEntryName = (base, ext, taken) => {
+  let name = `${base}${ext}`;
+  for (let n = 2; taken.has(name.toLowerCase()); n += 1) name = `${base}-${n}${ext}`;
+  taken.add(name.toLowerCase());
+  return name;
+};
+
+// GET /api/ideas/admin/export?includeHidden=true|false : ZIP en flux des decks courants
+exports.exportDecks = asyncHandler(async (req, res) => {
+  const includeHidden = queryBool(req.query.includeHidden, 'includeHidden') === true;
+
+  const filter = { 'deck.versions.0': { $exists: true } };
+  if (!includeHidden) filter.hidden = { $ne: true };
+
+  // 'store' : pas de compression (PDF/PPTX déjà compressés, CPU épargné, contenu lisible dans les tests)
+  const archive = archiver('zip', { store: true });
+  const cursor = Idea.find(filter).select('title deck').sort({ _id: 1 }).lean().cursor();
+
+  res.set({
+    'Content-Type': 'application/zip',
+    'Content-Disposition': 'attachment; filename="decks-idees.zip"',
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': 'private, no-store',
+  });
+
+  try {
+    await new Promise((resolve, reject) => {
+      let done = false;
+      const finish = (err) => {
+        if (done) return;
+        done = true;
+        cursor.close().catch(() => {});
+        if (err) reject(err);
+        else resolve();
+      };
+
+      // Échec : avant le premier octet, réponse d'erreur normale ; ensuite on coupe la connexion
+      const fail = (err) => {
+        archive.unpipe(res);
+        archive.abort();
+        if (res.headersSent) {
+          console.error(`Export ZIP interrompu : ${err.message}`);
+          res.destroy();
+          finish();
+        } else {
+          finish(err);
+        }
+      };
+
+      archive.on('error', fail);
+      // Avertissement (ex. fichier disparu pendant la lecture) : l'entrée est perdue, le flux continue
+      archive.on('warning', (err) => console.error(`Export ZIP, avertissement : ${err.message}`));
+      // Fin normale ou client parti avant la fin (res et non req : req.close part dès la requête lue)
+      res.on('close', () => {
+        if (!res.writableFinished) archive.abort();
+        finish();
+      });
+
+      archive.pipe(res);
+
+      (async () => {
+        const taken = new Set();
+        const skipped = [];
+        for await (const idea of cursor) {
+          if (done) return;
+          const versions = idea.deck && idea.deck.versions ? idea.deck.versions : [];
+          if (versions.length === 0) continue;
+          const current = versions.reduce((best, v) => (v.number > best.number ? v : best));
+
+          const ext = path.extname(String(current.storedName)).toLowerCase();
+          const full = EXPORT_EXTS.includes(ext) ? resolveStored(idea._id.toString(), current.storedName) : null;
+          let ok = false;
+          if (full) {
+            try {
+              ok = (await fs.promises.stat(full)).isFile();
+            } catch (e) {
+              ok = false;
+            }
+          }
+          if (!ok) {
+            skipped.push(idea.title);
+            continue;
+          }
+          archive.file(full, { name: uniqueEntryName(sanitizeFileName(idea.title), ext, taken) });
+        }
+        if (done) return;
+        if (skipped.length > 0) {
+          const lines = skipped.map((t) => `- ${String(t).replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')}`);
+          const text = [
+            "Certains decks n'ont pas pu être ajoutés à cette archive (fichier introuvable ou invalide) :",
+            '',
+            ...lines,
+            '',
+          ].join('\n');
+          archive.append(text, { name: 'LISEZ-MOI.txt' });
+        }
+        await archive.finalize();
+      })().catch(fail);
+    });
+  } catch (err) {
+    // Aucun octet envoyé : on retire les en-têtes du ZIP, le gestionnaire d'erreurs répond
+    res.removeHeader('Content-Type');
+    res.removeHeader('Content-Disposition');
+    throw err;
+  }
+});
 
 // GET /api/ideas/admin : tableau de suivi
 exports.listAdmin = asyncHandler(async (req, res) => {

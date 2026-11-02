@@ -27,6 +27,7 @@ router.get('/me', ideaController.getMine);
 // Bloc admin statique : TOUS les chemins fixes /admin/... ici, avant /admin/:id (R4)
 // (les tâches suivantes y ajoutent /admin/export, /admin/purge, /admin/roster...)
 router.get('/admin', isAdmin, adminController.listAdmin);
+router.get('/admin/export', isAdmin, adminController.exportDecks);
 router.put('/admin/deadline', isAdmin, adminController.setDeadline);
 
 // Admin paramétré : suivi, masquage, suppression, modération

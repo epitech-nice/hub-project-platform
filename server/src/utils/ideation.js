@@ -95,7 +95,27 @@ const assertWritable = (idea, settings, now = new Date()) => {
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const NAME_MAX_CODE_POINTS = 100;
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)$/i;
+
+// Titre -> nom de fichier sûr (sans extension) : pas de séparateur, de '..', de caractère de
+// contrôle ou de marque bidirectionnelle, de caractère interdit sous Windows ni de point initial ;
+// espaces réduits, 100 points de code au plus, 'idee' si le résultat est vide
+const sanitizeFileName = (title) => {
+  let name = String(title === undefined || title === null ? '' : title)
+    .replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g, '')
+    .replace(/[<>:"/\\|?*]/g, ' ')
+    .replace(/\.{2,}/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  name = [...name].slice(0, NAME_MAX_CODE_POINTS).join('');
+  name = name.replace(/^[.\s]+/, '').replace(/[.\s]+$/, '');
+  if (!name) return 'idee';
+  return WINDOWS_RESERVED.test(name) ? `${name}_` : name;
+};
+
 module.exports = {
+  sanitizeFileName,
   normalizeHashtag,
   normalizeHashtags,
   countWords,
