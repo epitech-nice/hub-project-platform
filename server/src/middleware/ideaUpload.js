@@ -79,6 +79,9 @@ const ideaUpload = (kind) => {
 
       if (!detected || detected !== expected || !rules.types.includes(detected)) {
         removeQuietly(filePath);
+        if (ext === '.svg') {
+          return next(new ErrorResponse('Ce fichier SVG contient du code actif ou un contenu non autorisé', 400));
+        }
         return next(new ErrorResponse(
           `Le contenu du fichier ne correspond pas à son extension. Formats autorisés : ${KIND_LABELS[kind]}`,
           400

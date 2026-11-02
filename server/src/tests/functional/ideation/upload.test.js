@@ -88,6 +88,7 @@ describe('ideaUpload', () => {
     const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
     const res = await request(app).post(`/${ideaId}/logo`).attach('file', svg, 'logo.svg');
     expect(res.status).toBe(400);
+    expect(res.body.error).toContain('code actif');
     expect(left()).toEqual([]);
   });
 
