@@ -142,6 +142,38 @@ describe('POST /admin/roster (import)', () => {
   });
 });
 
+describe('fichier sans aucune adresse valide', () => {
+  const MSG = "Aucune adresse email valide dans le fichier : la liste actuelle n'a pas été modifiée";
+  const inputs = [
+    ['toutes invalides', 'email\nfoo\nbar\n'],
+    ['lignes vides', 'email;nom\n;\n;\n'],
+    ['colonne email vide', 'nom,email\nDoe,\nRoe,\n'],
+  ];
+
+  it.each(inputs)('import (%s) : 400 et la liste existante est intacte', async (label, text) => {
+    await RosterEntry.create([{ email: 'a@x.fr' }, { email: 'b@x.fr' }]);
+    const res = await importCsv(headers, csv(text));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe(MSG);
+    const emails = (await RosterEntry.find().lean()).map((e) => e.email).sort();
+    expect(emails).toEqual(['a@x.fr', 'b@x.fr']);
+  });
+
+  it.each(inputs)('aperçu (%s) : 400 avec le même message', async (label, text) => {
+    const res = await preview(headers, csv(text));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe(MSG);
+  });
+
+  it('exactement 2000 lignes valides : importées', async () => {
+    const rows = Array.from({ length: 2000 }, (_, i) => `u${i}@x.fr`).join('\n');
+    const res = await importCsv(headers, csv(`email\n${rows}\n`));
+    expect(res.status).toBe(200);
+    expect(res.body.data.imported).toBe(2000);
+    expect(await RosterEntry.countDocuments()).toBe(2000);
+  });
+});
+
 describe('DELETE /admin/roster', () => {
   it('vide la liste et renvoie le nombre supprimé', async () => {
     await importCsv(headers, csv('email\na@x.fr\nb@x.fr\n'));

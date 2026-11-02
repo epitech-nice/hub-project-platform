@@ -115,10 +115,14 @@ const parseRosterCsv = (buf) => {
     entries.push({ email, lastName: cell(record, lastCol), firstName: cell(record, firstCol) });
   }
 
+  // Des lignes existent mais aucune adresse exploitable : refusé (jamais de liste vide à importer)
+  if (entries.length === 0) return { entries, duplicates, invalid, error: 'NO_VALID_ENTRY' };
+
   return { entries, duplicates, invalid };
 };
 
 const ERROR_MESSAGES = {
+  NO_VALID_ENTRY: "Aucune adresse email valide dans le fichier : la liste actuelle n'a pas été modifiée",
   NO_EMAIL_COLUMN: 'Le fichier ne contient pas de colonne email (en-têtes acceptés : email, mail, e-mail, courriel)',
   TOO_LARGE: `Le fichier contient trop de lignes (${MAX_ROWS} maximum)`,
   EMPTY: 'Le fichier est vide ou ne contient aucune ligne de données',
@@ -153,6 +157,8 @@ exports.preview = asyncHandler(async (req, res) => {
 // la liste n'est jamais vide pendant le remplacement)
 exports.importRoster = asyncHandler(async (req, res) => {
   const { entries, duplicates, invalid } = parseUpload(req);
+  // Garde-fou : $nin: [] correspond à tous les documents, une liste vide ne doit jamais supprimer
+  if (entries.length === 0) throw new ErrorResponse(ERROR_MESSAGES.NO_VALID_ENTRY, 400);
   const now = new Date();
 
   await RosterEntry.bulkWrite(

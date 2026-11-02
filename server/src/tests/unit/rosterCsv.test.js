@@ -94,6 +94,20 @@ describe('parseRosterCsv', () => {
     expect(parse('email\n').error).toBe('EMPTY');
   });
 
+  it.each([
+    ['toutes les lignes invalides', 'email\nfoo\nbar\n'],
+    ['uniquement des lignes vides', 'email;nom\n;\n;\n'],
+    ['colonne email entièrement vide', 'nom,email\nDoe,\nRoe,\n'],
+  ])('lignes présentes mais aucune adresse valide (%s) : NO_VALID_ENTRY', (label, text) => {
+    const r = parse(text);
+    expect(r.error).toBe('NO_VALID_ENTRY');
+    expect(r.entries).toEqual([]);
+  });
+
+  it('en-tête seul : EMPTY (et non NO_VALID_ENTRY)', () => {
+    expect(parse('email,nom\n').error).toBe('EMPTY');
+  });
+
   it('guillemets non fermés : UNREADABLE sans exception', () => {
     let r;
     expect(() => {
