@@ -7,7 +7,9 @@ const {
   requireAcceptedMember,
   requireWritable,
 } = require('../middleware/ideaAccess');
+const ideaUpload = require('../middleware/ideaUpload');
 const ideaController = require('../controllers/ideation/ideaController');
+const fileController = require('../controllers/ideation/fileController');
 
 // Toutes les routes exigent une authentification
 router.use(authenticateToken);
@@ -24,5 +26,16 @@ router.post('/', ideaController.createIdea);
 // Routes paramétrées
 router.get('/:id', loadIdea, ideaController.getIdea);
 router.put('/:id', loadIdea, requireAcceptedMember, requireWritable, ideaController.updateIdea);
+
+// Le dossier de stockage vient toujours de l'_id en minuscules, jamais de l'URL brute
+const canonicalId = (req, res, next) => {
+  req.params.id = req.idea._id.toString();
+  next();
+};
+
+// Fichiers versionnés : l'upload ne démarre qu'après les contrôles d'accès (R2), rien n'est écrit sinon
+router.post('/:id/logo', loadIdea, requireAcceptedMember, requireWritable, canonicalId, ideaUpload('logo'), fileController.uploadLogo);
+router.post('/:id/deck', loadIdea, requireAcceptedMember, requireWritable, canonicalId, ideaUpload('deck'), fileController.uploadDeck);
+router.get('/:id/:kind(logo|deck)/:version?', loadIdea, fileController.downloadFile);
 
 module.exports = router;

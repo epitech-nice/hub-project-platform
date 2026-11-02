@@ -126,6 +126,8 @@ const toDetail = (idea, user) => {
   };
 };
 
+exports.toDetail = toDetail;
+
 // GET /api/ideas/settings
 exports.getSettings = asyncHandler(async (req, res) => {
   const settings = await IdeationSettings.getSingleton();
