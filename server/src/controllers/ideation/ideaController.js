@@ -10,7 +10,7 @@ const {
   assertWritable,
   escapeRegex,
 } = require('../../utils/ideation');
-const { isAcceptedMember, isCreator } = require('../../middleware/ideaAccess');
+const { isAcceptedMember, isListedMember, isCreator } = require('../../middleware/ideaAccess');
 
 const TITLE_MAX = 80;
 const DESCRIPTION_MAX_WORDS = 50;
@@ -94,20 +94,33 @@ const roleOf = (idea, user) => {
   return null;
 };
 
-// Détail d'une idée ; les emails ne sont donnés qu'aux admins
+// Détail d'une idée ; emails réservés aux admins. Les invités en attente et les userId
+// ne sont montrés qu'au créateur, aux admins et (entrée propre) à l'intéressé.
 const toDetail = (idea, user) => {
   const admin = user.role === 'admin';
+  const creator = isCreator(idea, user);
+  const privileged = admin || creator;
+  const isMe = (id) => String(id) === String(user._id);
   const withEmail = (obj, email) => (admin ? { ...obj, email } : obj);
+
+  const members = idea.members
+    .filter((m) => privileged || m.status === 'accepted' || isMe(m.userId))
+    .map((m) => {
+      const base = { name: m.name, status: m.status, invitedAt: m.invitedAt };
+      if (privileged || isMe(m.userId)) base.userId = m.userId;
+      return withEmail(base, m.email);
+    });
+
+  const creatorInfo = { name: idea.creator.name };
+  if (privileged) creatorInfo.userId = idea.creator.userId;
 
   return {
     _id: idea._id,
     title: idea.title,
     description: idea.description,
     hashtags: idea.hashtags,
-    creator: withEmail({ userId: idea.creator.userId, name: idea.creator.name }, idea.creator.email),
-    members: idea.members.map((m) =>
-      withEmail({ userId: m.userId, name: m.name, status: m.status, invitedAt: m.invitedAt }, m.email)
-    ),
+    creator: withEmail(creatorInfo, idea.creator.email),
+    members,
     memberCount: idea.acceptedCount(),
     incomplete: idea.isIncomplete(),
     logo: toFileInfo(idea, 'logo'),
@@ -249,7 +262,7 @@ exports.getIdea = asyncHandler(async (req, res) => {
     hasDeck ||
     req.user.role === 'admin' ||
     isCreator(idea, req.user) ||
-    isAcceptedMember(idea, req.user);
+    isListedMember(idea, req.user);
   if (!canSee) throw new ErrorResponse('Idée introuvable', 404);
 
   res.json({ success: true, data: toDetail(idea, req.user) });

@@ -5,12 +5,14 @@ const { authenticateToken } = require('../middleware/auth');
 const {
   loadIdea,
   requireAcceptedMember,
+  requireCreator,
   requireWritable,
 } = require('../middleware/ideaAccess');
 const ideaUpload = require('../middleware/ideaUpload');
 const ideaController = require('../controllers/ideation/ideaController');
 const fileController = require('../controllers/ideation/fileController');
 const linkController = require('../controllers/ideation/linkController');
+const memberController = require('../controllers/ideation/memberController');
 
 // Toutes les routes exigent une authentification
 router.use(authenticateToken);
@@ -42,5 +44,11 @@ router.get('/:id/:kind(logo|deck)/:version?', loadIdea, fileController.downloadF
 // Liens du jour 2
 router.post('/:id/links', loadIdea, requireAcceptedMember, requireWritable, linkController.addLink);
 router.delete('/:id/links/:linkId', loadIdea, requireAcceptedMember, requireWritable, linkController.removeLink);
+
+// Groupe et invitations : l'invité répond via son entrée en attente (contrôlée dans le contrôleur)
+router.post('/:id/members', loadIdea, requireCreator, requireWritable, memberController.inviteMember);
+router.delete('/:id/members/:userId', loadIdea, requireWritable, memberController.removeMember);
+router.post('/:id/invitation/accept', loadIdea, requireWritable, memberController.acceptInvitation);
+router.post('/:id/invitation/decline', loadIdea, requireWritable, memberController.declineInvitation);
 
 module.exports = router;

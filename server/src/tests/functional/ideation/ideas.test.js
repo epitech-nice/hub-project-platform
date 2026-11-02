@@ -270,7 +270,7 @@ describe('GET /api/ideas/:id', () => {
     expect(res.status).toBe(404);
   });
 
-  it('R3 : sans deck, 404 pour un non-membre et un invité en attente, 200 pour créateur, membre accepté et admin', async () => {
+  it('R3/R10 : sans deck, 404 pour un non-listé, 200 pour invité en attente, créateur, membre accepté et admin', async () => {
     const creator = await createUser();
     const member = await createUser();
     const pending = await createUser();
@@ -286,7 +286,7 @@ describe('GET /api/ideas/:id', () => {
     });
     const get = (u) => request(app).get(`/api/ideas/${idea._id}`).set(authHeader(u));
     expect((await get(other)).status).toBe(404);
-    expect((await get(pending)).status).toBe(404);
+    expect((await get(pending)).status).toBe(200);
     expect((await get(creator)).status).toBe(200);
     expect((await get(member)).status).toBe(200);
     expect((await get(admin)).status).toBe(200);

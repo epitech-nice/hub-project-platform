@@ -24,6 +24,10 @@ const loadIdea = asyncHandler(async (req, res, next) => {
 const isAcceptedMember = (idea, user) =>
   idea.members.some((m) => m.status === 'accepted' && sameUser(m.userId, user._id));
 
+// Toute entrée de members (en attente ou acceptée) : suffit pour lire l'idée et répondre à l'invitation
+const isListedMember = (idea, user) =>
+  idea.members.some((m) => sameUser(m.userId, user._id));
+
 const isCreator = (idea, user) => sameUser(idea.creator && idea.creator.userId, user._id);
 
 // Membre ayant accepté (le créateur en fait partie) ; les admins ne passent pas ici
@@ -54,5 +58,6 @@ module.exports = {
   requireCreator,
   requireWritable,
   isAcceptedMember,
+  isListedMember,
   isCreator,
 };
