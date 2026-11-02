@@ -127,6 +127,13 @@ export default function AppHeader() {
     fetchSimulated();
   }, [isAuthenticated]);
 
+  // Piscine idéation : mêmes liens en desktop et en mobile
+  const ideationItems = [
+    { label: 'Catalogue', href: '/idees' },
+    { label: 'Soumettre une idée', href: '/idees/nouvelle' },
+    { label: 'Mes idées', href: '/idees/mes-idees' },
+  ];
+
   // Build nav sections shared between desktop dropdowns and mobile panel
   const soumettreDesktop = [
     {
@@ -153,6 +160,10 @@ export default function AppHeader() {
         { label: 'Mes projets', href: '/simulated/mes-projets' },
         ...(isAdmin ? [{ label: 'Admin Simulated', href: '/admin/simulated' }] : []),
       ],
+    },
+    {
+      label: 'Idéation',
+      items: ideationItems,
     },
   ];
 
@@ -199,6 +210,10 @@ export default function AppHeader() {
             { label: 'Mes projets', href: '/simulated/mes-projets' },
             ...(isAdmin ? [{ label: 'Admin Simulated', href: '/admin/simulated' }] : []),
           ],
+        },
+        {
+          label: 'Idéation',
+          items: ideationItems,
         },
         {
           label: 'Hub',
