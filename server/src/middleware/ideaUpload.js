@@ -19,6 +19,25 @@ const removeQuietly = (filePath) => {
   }
 };
 
+const MAX_STORED_NAME = 100;
+const MAX_ORIGINAL_NAME = 255;
+
+// Tronque à `max` caractères en gardant l'extension (jamais de paire de substitution coupée)
+const capName = (name, max) => {
+  const chars = Array.from(name);
+  if (chars.length <= max) return name;
+  const ext = path.extname(name);
+  const extLen = Array.from(ext).length;
+  if (extLen === 0 || extLen >= max) return chars.slice(0, max).join('');
+  return chars.slice(0, max - extLen).join('') + ext;
+};
+
+// multer décode les noms de fichier en latin1 : on retrouve l'UTF-8 d'origine quand c'est possible
+const repairName = (name) => {
+  const fixed = Buffer.from(name, 'latin1').toString('utf8');
+  return fixed !== name && !fixed.includes('\uFFFD') ? fixed : name;
+};
+
 // Fabrique le middleware d'upload d'un fichier d'idée (logo ou deck). Champ : `file`.
 // Contrôles : extension, taille, puis signature réelle du contenu ; tout échec supprime le fichier.
 const ideaUpload = (kind) => {
@@ -36,12 +55,13 @@ const ideaUpload = (kind) => {
       fs.mkdir(dir, { recursive: true }, (err) => cb(err, dir));
     },
     filename: (req, file, cb) => {
-      const sanitized = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_').toLowerCase();
+      const sanitized = capName(file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_').toLowerCase(), MAX_STORED_NAME);
       cb(null, `${Date.now()}-${crypto.randomBytes(6).toString('hex')}-${sanitized}`);
     },
   });
 
   const fileFilter = (req, file, cb) => {
+    file.originalname = capName(repairName(file.originalname), MAX_ORIGINAL_NAME);
     const ext = path.extname(file.originalname).toLowerCase();
     if (rules.exts.includes(ext)) return cb(null, true);
     cb(new ErrorResponse(`Format non accepté. Formats autorisés : ${KIND_LABELS[kind]}`, 400), false);

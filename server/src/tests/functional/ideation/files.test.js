@@ -261,3 +261,73 @@ describe('GET /api/ideas/:id/:kind/:version?', () => {
     expect([200, 404]).toContain(res.status);
   });
 });
+
+describe('noms de fichiers d origine (accents, longueur)', () => {
+  const upload = (u, idea, buf, name) =>
+    request(app).post(`/api/ideas/${idea._id}/deck`).set(authHeader(u)).attach('file', buf, name);
+
+  it('un nom accentue est conserve et sert de nom de telechargement', async () => {
+    const u = await createUser();
+    const idea = await createIdea(u, { deck: { versions: [] } });
+    track(idea);
+    const res = await upload(u, idea, PDF(), 'présentation.pdf');
+    expect(res.status).toBe(200);
+    expect(res.body.data.deck.current.originalName).toBe('présentation.pdf');
+    const dl = await request(app).get(`/api/ideas/${idea._id}/deck`).set(authHeader(u));
+    expect(dl.headers['content-disposition']).toContain("filename*=UTF-8''pr%C3%A9sentation.pdf");
+  });
+
+  it('un nom emoji / CJK fait l aller-retour', async () => {
+    const u = await createUser();
+    const idea = await createIdea(u, { deck: { versions: [] } });
+    track(idea);
+    const res = await upload(u, idea, PDF(), '幻灯片-📊.pdf');
+    expect(res.status).toBe(200);
+    expect(res.body.data.deck.current.originalName).toBe('幻灯片-📊.pdf');
+  });
+
+  it('un nom ASCII est inchange', async () => {
+    const u = await createUser();
+    const idea = await createIdea(u, { deck: { versions: [] } });
+    track(idea);
+    const res = await upload(u, idea, PDF(), 'my deck-1.pdf');
+    expect(res.status).toBe(200);
+    expect(res.body.data.deck.current.originalName).toBe('my deck-1.pdf');
+  });
+
+  it('un nom de 300 caracteres ne donne pas de 500 et aucun chemin n est expose', async () => {
+    const u = await createUser();
+    const idea = await createIdea(u, { deck: { versions: [] } });
+    track(idea);
+    const res = await upload(u, idea, PDF(), `${'a'.repeat(296)}.pdf`);
+    expect(res.status).toBe(200);
+    const name = res.body.data.deck.current.originalName;
+    expect(name.length).toBeLessThanOrEqual(255);
+    expect(name.endsWith('.pdf')).toBe(true);
+    const files = listDir(idea);
+    expect(files).toHaveLength(1);
+    expect(files[0].endsWith('.pdf')).toBe(true);
+    expect(JSON.stringify(res.body)).not.toMatch(/storage|\/Users|\/tmp|\/var/);
+  });
+
+  it('un nom aux octets latin1 non reparables est laisse tel quel sans plantage', async () => {
+    const u = await createUser();
+    const idea = await createIdea(u, { deck: { versions: [] } });
+    track(idea);
+    const b = 'XXBOUNDARY';
+    const body = Buffer.concat([
+      Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="file"; filename="caf`),
+      Buffer.from([0xe9]),
+      Buffer.from(`.pdf"\r\nContent-Type: application/pdf\r\n\r\n`),
+      PDF(),
+      Buffer.from(`\r\n--${b}--\r\n`),
+    ]);
+    const res = await request(app)
+      .post(`/api/ideas/${idea._id}/deck`)
+      .set(authHeader(u))
+      .set('Content-Type', `multipart/form-data; boundary=${b}`)
+      .send(body);
+    expect(res.status).toBe(200);
+    expect(res.body.data.deck.current.originalName).toBe('café.pdf');
+  });
+});
