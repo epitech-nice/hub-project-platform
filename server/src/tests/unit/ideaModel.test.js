@@ -27,6 +27,14 @@ describe('Idea model', () => {
     expect(idea.hidden).toBe(false);
   });
 
+  it('defaults logo.versions to an empty array', () => {
+    expect(new Idea(baseIdea()).logo.versions).toHaveLength(0);
+  });
+
+  it('rejects an invalid member status', async () => {
+    await expect(Idea.create(baseIdea({ members: [member('bogus')] }))).rejects.toThrow();
+  });
+
   it('slotCount counts pending members, acceptedCount does not', () => {
     const idea = new Idea(baseIdea({
       members: [member('accepted'), member('accepted'), member('pending')],
@@ -63,6 +71,24 @@ describe('IdeationSettings model', () => {
 
   it('rejects a malformed deadlineDate', async () => {
     await expect(IdeationSettings.create({ deadlineDate: '31/03/2027' })).rejects.toThrow();
+  });
+
+  it('rejects impossible calendar dates', async () => {
+    await expect(IdeationSettings.create({ deadlineDate: '2027-13-45' })).rejects.toThrow();
+    await expect(IdeationSettings.create({ deadlineDate: '2027-02-30' })).rejects.toThrow();
+  });
+
+  it('accepts a leap day', async () => {
+    const s = await IdeationSettings.create({ deadlineDate: '2028-02-29' });
+    expect(s.deadlineDate).toBe('2028-02-29');
+  });
+
+  it('concurrent getSingleton calls yield one document and one _id', async () => {
+    await IdeationSettings.deleteMany({});
+    await IdeationSettings.init();
+    const docs = await Promise.all(Array.from({ length: 5 }, () => IdeationSettings.getSingleton()));
+    expect(new Set(docs.map((d) => String(d._id))).size).toBe(1);
+    expect(await IdeationSettings.countDocuments()).toBe(1);
   });
 
   it('accepts a valid or absent deadlineDate', async () => {
