@@ -135,7 +135,8 @@ const toDetail = (idea, user) => {
     hidden: idea.hidden,
     // Déblocage staff : l'interface rouvre l'édition de cette idée après la date limite
     unlockedUntil: idea.unlockedUntil || null,
-    myRole: admin ? 'admin' : roleOf(idea, user),
+    // Le rôle de groupe prime : un admin créateur ou membre doit pouvoir modifier son idée
+    myRole: roleOf(idea, user) || (admin ? 'admin' : null),
     createdAt: idea.createdAt,
     updatedAt: idea.updatedAt,
   };

@@ -129,6 +129,17 @@ describe('POST /api/ideas/:id/members', () => {
     expect((await put(idea, guest)).status).toBe(200);
   });
 
+  it('un admin créateur garde son rôle de groupe, un admin extérieur reste admin', async () => {
+    const admin = await createAdmin();
+    const guest = await createUser();
+    const own = await createIdea(admin);
+    expect((await getIdea(own, admin)).body.data.myRole).toBe('creator');
+    expect((await put(own, admin)).status).toBe(200);
+
+    const other = await createIdea(guest);
+    expect((await getIdea(other, admin)).body.data.myRole).toBe('admin');
+  });
+
   it('refuser retire l\'entrée', async () => {
     const creator = await createUser();
     const guest = await createUser();

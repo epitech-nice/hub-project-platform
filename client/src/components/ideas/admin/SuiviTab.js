@@ -185,7 +185,7 @@ export default function SuiviTab({ refreshKey = 0 }) {
     {
       key: 'creator',
       label: 'Créateur',
-      className: 'min-w-[12rem]',
+      className: 'min-w-[10rem]',
       render: (creator) => (
         <div className="min-w-0">
           <p className="text-text">{creator && creator.name}</p>
@@ -253,7 +253,7 @@ export default function SuiviTab({ refreshKey = 0 }) {
       label: 'Actions',
       align: 'right',
       render: (_, row) => (
-        <div className="flex flex-wrap justify-end gap-1.5 min-w-[15rem]">
+        <div className="flex flex-wrap justify-end gap-1.5 min-w-[12rem]">
           <Button variant="subtle" size="sm" onClick={() => setDialog({ kind: 'moderate', row })} aria-label={`Modérer « ${row.title} »`}>
             Modérer
           </Button>
