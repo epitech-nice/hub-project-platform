@@ -157,8 +157,8 @@ export default function RosterImportDialog({ open, onClose, onImported }) {
       ) : (
         <div className="space-y-4 text-sm text-text-muted">
           <p>
-            Fichier CSV (UTF-8, séparateur virgule ou point-virgule) avec une colonne email obligatoire ;
-            les colonnes nom et prénom sont facultatives. 2 000 lignes et 1 Mo maximum.
+            Fichier CSV (UTF-8, séparateur virgule ou point-virgule) avec une colonne email ou login
+            obligatoire (un login seul est complété en @epitech.eu) ; les colonnes nom et prénom sont facultatives. 2 000 lignes et 1 Mo maximum.
           </p>
 
           <div className="space-y-1.5">

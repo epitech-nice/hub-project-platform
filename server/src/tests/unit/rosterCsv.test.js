@@ -44,7 +44,33 @@ describe('parseRosterCsv', () => {
     expect(r.entries[0].lastName).toBe('Doe');
   });
 
-  it("sans colonne email : NO_EMAIL_COLUMN et rien d'autre", () => {
+  it('une colonne login seule : le login reçoit le domaine de l\'école, une adresse complète est gardée', () => {
+    const r = parse('Nom;Prénom;Login\nDupont;Élise;Elise.Dupont\nMartin;Paul;paul@autre.fr\n');
+    expect(r.error).toBeUndefined();
+    expect(r.entries).toEqual([
+      { email: 'elise.dupont@epitech.eu', lastName: 'Dupont', firstName: 'Élise' },
+      { email: 'paul@autre.fr', lastName: 'Martin', firstName: 'Paul' },
+    ]);
+  });
+
+  it('colonnes email et login : email prioritaire, login en secours si la cellule email est vide', () => {
+    const r = parse('email,login\na@x.fr,ignore\n,b.c\n');
+    expect(r.entries.map((e) => e.email)).toEqual(['a@x.fr', 'b.c@epitech.eu']);
+  });
+
+  it('un login invalide ou dangereux est listé comme invalide, jamais complété', () => {
+    const r = parse('login\nok.ok\ndeux mots\n=cmd\n');
+    expect(r.entries.map((e) => e.email)).toEqual(['ok.ok@epitech.eu']);
+    expect(r.invalid.map((i) => i.value)).toEqual(['deux mots', '=cmd']);
+  });
+
+  it('un login en doublon avec une adresse complète compte une seule fois', () => {
+    const r = parse('login\nabc\nABC@epitech.eu\n');
+    expect(r.entries).toHaveLength(1);
+    expect(r.duplicates).toBe(1);
+  });
+
+  it("sans colonne email ni login : NO_EMAIL_COLUMN et rien d'autre", () => {
     const r = parse('nom,prenom\nDoe,Jane\n');
     expect(r.error).toBe('NO_EMAIL_COLUMN');
     expect(r.entries).toEqual([]);

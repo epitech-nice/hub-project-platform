@@ -16,7 +16,10 @@ const PREVIEW_INVALID_MAX = 50;
 const PREVIEW_SAMPLE = 5;
 
 const EMAIL_HEADERS = ['email', 'mail', 'e-mail', 'courriel', 'adresse mail', 'adresse email'];
-const LAST_NAME_HEADERS = ['nom', 'lastname', 'last name', 'family name', 'surname'];
+// Colonne login : partie locale de l'adresse (avant le @), complétée avec le domaine de l'école
+const LOGIN_HEADERS = ['login', 'identifiant', 'username', 'user'];
+const LOGIN_DOMAIN = 'epitech.eu';
+const LAST_NAME_HEADERS =['nom', 'lastname', 'last name', 'family name', 'surname'];
 const FIRST_NAME_HEADERS = ['prenom', 'firstname', 'first name', 'given name'];
 const FULL_NAME_HEADERS = ['name', 'nom complet', 'full name'];
 
@@ -80,7 +83,8 @@ const parseRosterCsv = (buf) => {
 
   const headers = records[0].record.map(normalizeHeader);
   const emailCol = findColumn(headers, EMAIL_HEADERS);
-  if (emailCol < 0) return fail('NO_EMAIL_COLUMN');
+  const loginCol = findColumn(headers, LOGIN_HEADERS);
+  if (emailCol < 0 && loginCol < 0) return fail('NO_EMAIL_COLUMN');
   const rows = records.slice(1);
   if (rows.length === 0) return fail('EMPTY');
   if (rows.length > MAX_ROWS) return fail('TOO_LARGE');
@@ -101,9 +105,18 @@ const parseRosterCsv = (buf) => {
     const embedded = record.reduce((n, c) => n + (String(c).match(/\n/g) || []).length, 0);
     const line = info.lines - embedded;
 
-    const raw = emailCol < record.length ? String(record[emailCol]).trim() : '';
-    const email = raw.toLowerCase();
+    // Colonne email d'abord ; à défaut de valeur, la colonne login (un login seul reçoit le domaine de l'école)
+    const colValue = (i) => (i >= 0 && i < record.length ? String(record[i]).trim() : '');
+    let raw = colValue(emailCol);
+    let candidate = raw;
+    if (raw === '') {
+      raw = colValue(loginCol);
+      candidate = raw;
+      if (raw !== '' && !raw.includes('@') && !/^[=+\-]/.test(raw)) candidate = `${raw}@${LOGIN_DOMAIN}`;
+    }
+    const email = candidate.toLowerCase();
     if (!isValidEmail(email)) {
+      // La valeur d'origine du fichier est affichée, pas l'adresse complétée
       invalid.push({ line, value: raw.slice(0, INVALID_VALUE_MAX) });
       continue;
     }
@@ -123,7 +136,7 @@ const parseRosterCsv = (buf) => {
 
 const ERROR_MESSAGES = {
   NO_VALID_ENTRY: "Aucune adresse email valide dans le fichier : la liste actuelle n'a pas été modifiée",
-  NO_EMAIL_COLUMN: 'Le fichier ne contient pas de colonne email (en-têtes acceptés : email, mail, e-mail, courriel)',
+  NO_EMAIL_COLUMN: 'Le fichier ne contient pas de colonne email ou login (en-têtes acceptés : email, mail, e-mail, courriel, login)',
   TOO_LARGE: `Le fichier contient trop de lignes (${MAX_ROWS} maximum)`,
   EMPTY: 'Le fichier est vide ou ne contient aucune ligne de données',
   UNREADABLE: 'Le fichier est illisible (guillemets non fermés ou format CSV invalide)',

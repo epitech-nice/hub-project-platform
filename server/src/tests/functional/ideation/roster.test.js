@@ -58,7 +58,7 @@ describe('POST /admin/roster/preview', () => {
     const res = await preview(headers, csv('nom,prenom\nDoe,Jane\n'));
     expect(res.status).toBe(400);
     expect(res.body.error).toBe(
-      'Le fichier ne contient pas de colonne email (en-têtes acceptés : email, mail, e-mail, courriel)'
+      'Le fichier ne contient pas de colonne email ou login (en-têtes acceptés : email, mail, e-mail, courriel, login)'
     );
   });
 
