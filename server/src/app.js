@@ -238,6 +238,8 @@ app.use("/api/print/access-requests", require("./routes/printAccessRequests"));
 
 app.use("/api/tools", require("./routes/tools"));
 
+app.use("/api/ideas", require("./routes/ideas"));
+
 // Route de santé
 app.get("/api/health", (req, res) => {
   res.status(200).json({ status: "ok" });

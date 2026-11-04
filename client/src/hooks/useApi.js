@@ -102,13 +102,13 @@ export const useApi = () => {
     }
   };
 
-  // Méthode DELETE
-  const deleteRequest = async (url) => {
+  // Méthode DELETE (corps JSON facultatif, ex. confirmation de purge)
+  const deleteRequest = async (url, data) => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await api.delete(url);
+      const response = await api.delete(url, data === undefined ? undefined : { data });
       return response.data;
     } catch (err) {
       setError(err.message);
