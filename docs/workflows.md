@@ -49,7 +49,7 @@ Chaque étudiant affiche trois badges : inscrit, présent, points (`+8 pts` par 
 - Session d'évaluation déjà confirmée sur my : rouvrir l'évaluation sur my, puis « Relancer »
 - Note qui dépasserait le maximum (16 en 2026) ou valeur non autorisée : les points ne sont pas ajoutés, corriger la note sur my si nécessaire
 - Étudiant introuvable dans le projet Student Engagement : l'étudiant n'est pas inscrit à ce projet sur my (hors cursus ou autre promotion), l'inscrire puis relancer
-- Note modifiée entre-temps sur my : remettre la note aux valeurs indiquées avant l'envoi (`markBefore` ou `markTarget` du message), puis relancer
+- Note modifiée entre-temps sur my : le message ne donne pas les valeurs, qui se lisent dans `data.mySync.students[]` de la réponse de `POST /api/projects/:id/sync-my` ou dans le champ `mySync.students` du projet en base (`markBefore` = note avant l'ajout, `markTarget` = note visée). La note actuelle sur my n'est ni l'une ni l'autre, peut-être modifiée volontairement : vérifier d'abord sur my. Puis remettre la note à `markBefore` si les points n'ont jamais été écrits sur my (la relance les ajoutera), ou à `markTarget` s'ils l'ont déjà été (la relance enregistrera simplement le résultat sans rien écrire). Se tromper de valeur donne un crédit manquant ou doublé
 - Clé API my invalide ou expirée : renouveler `MY_API_TOKEN` côté serveur
 - Message `409` « synchronisation déjà en cours » : attendre la fin de l'envoi (le verrou expire seul après 2 minutes)
 

@@ -217,7 +217,7 @@ Les erreurs sont gérées par étudiant : un étudiant en erreur n'empêche pas 
 - `409` si une synchronisation est déjà en cours pour ce projet
 - `500` si la configuration my est incomplète ou invalide (variables d'environnement `MY_*`)
 
-**Réponse** : le projet mis à jour, avec le détail dans `data.mySync` (`status`, `activityId`, `eventId`, `lastAttemptAt`, `lastError`, `students[]` avec `registered`, `present`, `pointsApplied`, `error`).
+**Réponse** : le projet mis à jour, avec le détail dans `data.mySync` (`status`, `activityId`, `eventId`, `lastAttemptAt`, `lastError`, `students[]` avec `registered`, `present`, `markBefore`, `markTarget`, `pointsApplied`, `error`).
 
 Un `401` ou `403` renvoyé par my est présenté comme `Clé API my invalide ou expirée` dans `mySync.lastError` ou dans l'erreur de l'étudiant.
 
