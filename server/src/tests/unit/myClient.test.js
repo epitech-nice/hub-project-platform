@@ -197,8 +197,98 @@ describe('myClient', () => {
     expect(axios.request.mock.calls.length).toBeGreaterThan(0);
     axios.request.mock.calls.forEach(([c]) => expect(c.url).not.toMatch(/\/confirm\/?$/));
     expect(Object.keys(my).sort()).toEqual([
-      'MyApiError', 'MyConfigError', 'createActivity', 'createEvent', 'findEngagementRegistrationId',
-      'getAssessmentSession', 'getConfig', 'openAssessmentSession', 'registerStudent', 'saveAssessment', 'setPresent',
+      'MyApiError', 'MyConfigError', 'createActivity', 'createEvent', 'findActivitiesByName',
+      'findEngagementRegistrationId', 'getAssessmentSession', 'getConfig', 'listActivityEvents',
+      'openAssessmentSession', 'registerStudent', 'saveAssessment', 'setPresent',
     ]);
+  });
+
+  describe('unusable creation responses', () => {
+    test.each([
+      ['an empty body', null],
+      ['a body without id', {}],
+      ['a non-numeric id', { id: 'abc' }],
+    ])('createActivity with %s rejects with an explicit MyApiError', async (_label, data) => {
+      axios.request.mockResolvedValue({ data });
+      let err;
+      try { await my.createActivity({ name: 'n', description: 'd', startDate: 's', endDate: 'e', duration: 30 }); } catch (e) { err = e; }
+      expect(err).toBeInstanceOf(my.MyApiError);
+      expect(err.step).toBe('createActivity');
+      expect(err.message).toBe('Réponse my inattendue, vérifier sur my avant de relancer');
+    });
+
+    test.each([
+      ['an empty body', ''],
+      ['a body without id', { title: 't' }],
+    ])('createEvent with %s rejects with an explicit MyApiError', async (_label, data) => {
+      axios.request.mockResolvedValue({ data });
+      let err;
+      try { await my.createEvent({ activityInstanceId: 1, title: 't', startDate: 's', endDate: 'e' }); } catch (e) { err = e; }
+      expect(err).toBeInstanceOf(my.MyApiError);
+      expect(err.step).toBe('createEvent');
+      expect(err.message).toBe('Réponse my inattendue, vérifier sur my avant de relancer');
+    });
+  });
+
+  test('findActivitiesByName lists the unit instance activities with that exact name and reads their description', async () => {
+    axios.request.mockImplementation(async ({ url }) => {
+      if (url.endsWith('/units/instances/949/summary')) {
+        return { data: { id: 949, activities: [
+          { id: 1, name: 'Projet HUB - Alpha' },
+          { id: 2, name: 'Projet HUB - Alpha bis' },
+          { id: 3, name: 'Projet HUB - Alpha' },
+        ] } };
+      }
+      if (url.endsWith('/units/instances/949/activities/1')) return { data: { id: 1, name: 'Projet HUB - Alpha', description: 'a : x/admin/projects/p1' } };
+      if (url.endsWith('/units/instances/949/activities/3')) return { data: { id: 3, name: 'Projet HUB - Alpha', description: null } };
+      throw new Error(`unexpected ${url}`);
+    });
+    await expect(my.findActivitiesByName('Projet HUB - Alpha')).resolves.toEqual([
+      { id: 1, name: 'Projet HUB - Alpha', description: 'a : x/admin/projects/p1' },
+      { id: 3, name: 'Projet HUB - Alpha', description: '' },
+    ]);
+    axios.request.mock.calls.forEach(([c]) => expect(c.method).toBe('GET'));
+  });
+
+  test('findActivitiesByName rejects an unexpected summary shape instead of reporting no activity', async () => {
+    axios.request.mockResolvedValue({ data: { id: 949 } });
+    await expect(my.findActivitiesByName('x')).rejects.toThrow('Réponse my inattendue, vérifier sur my avant de relancer');
+  });
+
+  test('listActivityEvents returns the events of an activity', async () => {
+    axios.request.mockResolvedValue({ data: [
+      { id: 5, title: 't', startDate: '2026-11-20T12:00:00.000Z', activityInstanceId: 11 },
+    ] });
+    await expect(my.listActivityEvents(11)).resolves.toEqual([
+      { id: 5, title: 't', startDate: '2026-11-20T12:00:00.000Z' },
+    ]);
+    const call = lastCall();
+    expect(call.method).toBe('GET');
+    expect(call.url).toBe('https://my.test/api/events/by-activity/11');
+  });
+
+  test('listActivityEvents rejects a non-array response instead of reporting no event', async () => {
+    axios.request.mockResolvedValue({ data: { message: 'x' } });
+    await expect(my.listActivityEvents(11)).rejects.toBeInstanceOf(my.MyApiError);
+  });
+
+  describe('MY_API_URL scheme', () => {
+    const savedNodeEnv = process.env.NODE_ENV;
+    afterEach(() => { process.env.NODE_ENV = savedNodeEnv; });
+
+    test('a plain http URL is rejected outside tests', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.MY_API_URL = 'http://my.epitech.eu/api';
+      expect(() => my.getConfig()).toThrow(my.MyConfigError);
+      expect(() => my.getConfig()).toThrow(/MY_API_URL/);
+    });
+
+    test('http on localhost is accepted, https always', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.MY_API_URL = 'http://localhost:4000/api';
+      expect(my.getConfig().baseUrl).toBe('http://localhost:4000/api');
+      process.env.MY_API_URL = 'https://my.epitech.eu/api';
+      expect(my.getConfig().baseUrl).toBe('https://my.epitech.eu/api');
+    });
   });
 });
