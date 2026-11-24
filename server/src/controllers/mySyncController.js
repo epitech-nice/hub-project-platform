@@ -72,24 +72,34 @@ exports.syncProjectToMy = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Une synchronisation est déjà en cours pour ce projet', 409));
   }
 
+  let released = false;
+  const release = async () => {
+    if (released) return;
+    released = true;
+    await Project.updateOne({ _id: project._id }, { $set: { 'mySync.inProgressUntil': null } });
+  };
+
   try {
     // Etat relu sous verrou : un envoi concurrent a pu se terminer entre-temps.
-    const lockedError = validationError(project);
-    if (lockedError) return next(lockedError);
+    let failure = validationError(project);
 
-    try {
-      await runSync(project, withAuthMessage(myClient));
-    } catch (err) {
-      if (err instanceof myClient.MyConfigError) {
-        return next(new ErrorResponse(err.message, 500));
+    if (!failure) {
+      try {
+        await runSync(project, withAuthMessage(myClient));
+      } catch (err) {
+        if (!(err instanceof myClient.MyConfigError)) throw err;
+        failure = new ErrorResponse(err.message, 500);
       }
-      throw err;
     }
-    // Le verrou est libere dans le finally : la reponse ne l'expose pas.
+
+    // Le verrou est libere (et attendu) avant toute reponse : un appel enchaine ne voit plus de verrou.
+    await release();
+    if (failure) return next(failure);
     const data = project.toObject();
     data.mySync.inProgressUntil = null;
-    res.status(200).json({ success: true, data });
+    return res.status(200).json({ success: true, data });
   } finally {
-    await Project.updateOne({ _id: project._id }, { $set: { 'mySync.inProgressUntil': null } });
+    // Chemins d'exception : le verrou est libere avant que l'erreur n'atteigne le gestionnaire.
+    await release();
   }
 });

@@ -203,6 +203,9 @@ describe('POST /api/projects/:id/sync-my', () => {
     const first = await sync(admin, project);
     expect(first.status).toBe(200);
     expect(first.body.data.mySync.status).toBe('partial');
+    // Le verrou doit deja etre libere au moment ou la reponse arrive, sans attente.
+    const afterFirst = await Project.findById(project._id);
+    expect(afterFirst.mySync.inProgressUntil == null).toBe(true);
     const second = await sync(admin, project);
     expect(second.status).toBe(200);
     expect(second.body.data.mySync.status).toBe('done');
