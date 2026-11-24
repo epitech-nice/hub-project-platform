@@ -40,7 +40,7 @@ pending
 
 **États de la carte** :
 - « Non synchronisé » : rien n'a encore été envoyé (bouton « Envoyer sur my »)
-- « Synchronisation partielle » : au moins une étape ou un étudiant est en erreur (bouton « Relancer »). Le message en rouge donne la cause
+- « Synchronisation partielle » : au moins une étape ou un étudiant est en erreur (bouton « Relancer »). Le message en rouge donne seulement le nombre d'étudiants en erreur ou l'erreur d'étape (activité, session) ; la cause de chaque étudiant est écrite sous sa ligne
 - « Synchronisé » : tous les étudiants sont inscrits, présents et ont reçu leurs points
 
 Chaque étudiant affiche trois badges : inscrit, présent, points (`+8 pts` par exemple, ou « en attente »).
@@ -49,9 +49,14 @@ Chaque étudiant affiche trois badges : inscrit, présent, points (`+8 pts` par 
 - Session d'évaluation déjà confirmée sur my : rouvrir l'évaluation sur my, puis « Relancer »
 - Note qui dépasserait le maximum (16 en 2026) ou valeur non autorisée : les points ne sont pas ajoutés, corriger la note sur my si nécessaire
 - Étudiant introuvable dans le projet Student Engagement : l'étudiant n'est pas inscrit à ce projet sur my (hors cursus ou autre promotion), l'inscrire puis relancer
-- Note modifiée entre-temps sur my : le message ne donne pas les valeurs, qui se lisent dans `data.mySync.students[]` de la réponse de `POST /api/projects/:id/sync-my` ou dans le champ `mySync.students` du projet en base (`markBefore` = note avant l'ajout, `markTarget` = note visée). La note actuelle sur my n'est ni l'une ni l'autre, peut-être modifiée volontairement : vérifier d'abord sur my. Puis remettre la note à `markBefore` si les points n'ont jamais été écrits sur my (la relance les ajoutera), ou à `markTarget` s'ils l'ont déjà été (la relance enregistrera simplement le résultat sans rien écrire). Se tromper de valeur donne un crédit manquant ou doublé
+- Note modifiée entre-temps sur my : le message donne la note lue sur my, la note avant l'envoi (`markBefore`) et la note visée (`markTarget`), et la ligne de l'étudiant dans la carte affiche `markBefore → markTarget`. La note actuelle sur my n'est ni l'une ni l'autre, peut-être modifiée volontairement : vérifier d'abord sur my. Puis remettre la note à `markBefore` si les points n'ont jamais été écrits sur my (la relance les ajoutera), ou à `markTarget` s'ils l'ont déjà été (la relance enregistrera simplement le résultat sans rien écrire). Se tromper de valeur donne un crédit manquant ou doublé
 - Clé API my invalide ou expirée : renouveler `MY_API_TOKEN` côté serveur
-- Message `409` « synchronisation déjà en cours » : attendre la fin de l'envoi (le verrou expire seul après 2 minutes)
+- Envoi concurrent détecté : un autre envoi a réservé l'étudiant au même moment ; relancer, le Hub relira la note et terminera sans ajouter deux fois
+- Écriture non confirmée par my : my a répondu sans enregistrer la note ; relancer (la note visée est conservée, la relance applique la règle ci-dessous)
+- Plusieurs activités ou sessions my correspondent à ce projet : supprimer les doublons sur my (garder une seule activité « Projet HUB - <nom> » et une seule session), puis relancer
+- Aucun membre à synchroniser : le projet n'a aucun membre, rien n'est envoyé
+- Étudiant absent de la session d'évaluation my ou note illisible : la session renvoyée par my ne correspond pas à l'étudiant ; rien n'est écrit, vérifier son inscription au projet Student Engagement sur my puis relancer
+- Message `409` « Une synchronisation est déjà en cours pour ce projet » : attendre la fin de l'envoi (le verrou expire seul après 2 minutes)
 
 **Les points ne sont jamais ajoutés deux fois** : la note avant ajout et la note visée sont enregistrées avant l'écriture sur my. Après un plantage ou une relance, le Hub relit la note sur my : si elle vaut déjà la note visée, il enregistre simplement le résultat sans rien ajouter.
 

@@ -18,6 +18,8 @@ function formatDateTime(value) {
 function StudentRow({ student }) {
   const hasPoints =
     student.pointsApplied !== null && student.pointsApplied !== undefined;
+  const hasTarget =
+    student.markTarget !== null && student.markTarget !== undefined;
 
   return (
     <li className="py-3 first:pt-0 last:pb-0">
@@ -28,7 +30,7 @@ function StudentRow({ student }) {
             {student.registered ? "Inscrit" : "Non inscrit"}
           </Badge>
           <Badge size="sm" variant={student.present ? "approved" : "neutral"}>
-            {student.present ? "Présent" : "Absent"}
+            {student.present ? "Présent" : "Présence : en attente"}
           </Badge>
           <Badge size="sm" variant={hasPoints ? "approved" : "neutral"}>
             {hasPoints
@@ -37,6 +39,11 @@ function StudentRow({ student }) {
           </Badge>
         </div>
       </div>
+      {hasTarget && (
+        <p className="mt-1 text-xs text-text-muted font-mono">
+          Note my : {student.markBefore ?? "?"} → {student.markTarget}
+        </p>
+      )}
       {student.error && (
         <p className="mt-1.5 text-xs text-danger">{student.error}</p>
       )}
