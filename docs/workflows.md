@@ -51,6 +51,7 @@ Chaque étudiant affiche trois badges : inscrit, présent, points (`+8 pts` par 
 - Étudiant introuvable dans le projet Student Engagement : l'étudiant n'est pas inscrit à ce projet sur my (hors cursus ou autre promotion), l'inscrire puis relancer
 - Note modifiée entre-temps sur my : le message donne la note lue sur my, la note avant l'envoi (`markBefore`) et la note visée (`markTarget`), et la ligne de l'étudiant dans la carte affiche `markBefore → markTarget`. La note actuelle sur my n'est ni l'une ni l'autre, peut-être modifiée volontairement : vérifier d'abord sur my. Puis remettre la note à `markBefore` si les points n'ont jamais été écrits sur my (la relance les ajoutera), ou à `markTarget` s'ils l'ont déjà été (la relance enregistrera simplement le résultat sans rien écrire). Se tromper de valeur donne un crédit manquant ou doublé
 - Clé API my invalide ou expirée : renouveler `MY_API_TOKEN` côté serveur
+- Un autre projet a un envoi de points non terminé pour cet étudiant : la note est cumulative et partagée entre les projets, le Hub refuse donc de calculer une nouvelle note tant qu'un autre projet a réservé une note visée sans la terminer. Le message donne le nom et l'identifiant de cet autre projet : ouvrir ce projet, cliquer sur « Relancer » (le Hub relit la note sur my et enregistre le résultat), puis relancer le projet en erreur
 - Envoi concurrent détecté : un autre envoi a réservé l'étudiant au même moment ; relancer, le Hub relira la note et terminera sans ajouter deux fois
 - Écriture non confirmée par my : my a répondu sans enregistrer la note ; relancer (la note visée est conservée, la relance applique la règle ci-dessous)
 - Plusieurs activités ou sessions my correspondent à ce projet : supprimer les doublons sur my (garder une seule activité « Projet HUB - <nom> » et une seule session), puis relancer
@@ -58,7 +59,7 @@ Chaque étudiant affiche trois badges : inscrit, présent, points (`+8 pts` par 
 - Étudiant absent de la session d'évaluation my ou note illisible : la session renvoyée par my ne correspond pas à l'étudiant ; rien n'est écrit, vérifier son inscription au projet Student Engagement sur my puis relancer
 - Message `409` « Une synchronisation est déjà en cours pour ce projet » : attendre la fin de l'envoi (le verrou expire seul après 2 minutes)
 
-**Les points ne sont jamais ajoutés deux fois** : la note avant ajout et la note visée sont enregistrées avant l'écriture sur my. Après un plantage ou une relance, le Hub relit la note sur my : si elle vaut déjà la note visée, il enregistre simplement le résultat sans rien ajouter.
+**Les points ne sont jamais ajoutés deux fois** : la note avant ajout et la note visée sont enregistrées avant l'écriture sur my. Après un plantage ou une relance, le Hub relit la note sur my : si elle vaut déjà la note visée, il enregistre simplement le résultat sans rien ajouter. Pour un étudiant présent dans deux projets, le second ne démarre que lorsque le premier est terminé (voir ci-dessus), ce qui évite de confondre l'écriture d'un projet avec celle de l'autre.
 
 ---
 

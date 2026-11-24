@@ -524,6 +524,78 @@ describe('runSync data safety', () => {
     }
   });
 
+  describe('another project has an unfinished claim for the same student', () => {
+    async function projectWithUnfinishedClaim() {
+      return makeProject({
+        name: 'P1',
+        members: [{ email: ALICE }],
+        mySync: {
+          activityId: 1,
+          eventId: 2,
+          status: 'partial',
+          students: [
+            { email: ALICE, registered: true, present: true, markBefore: 0, markTarget: 8, pointsApplied: null },
+          ],
+        },
+      });
+    }
+
+    test('critical: the second project is refused and writes nothing, so P1 cannot be mistaken for P2', async () => {
+      await projectWithUnfinishedClaim();
+      const p2 = await makeProject({ name: 'P2', members: [{ email: ALICE }] });
+      // my already shows 8 (P1 wrote, or timed out after writing): P2 must not add on top of it silently.
+      const { client } = makeClient({ marks: { [ALICE]: 8 } });
+
+      await runSync(p2, client);
+
+      expect(client.saveAssessment).not.toHaveBeenCalled();
+      const saved = await Project.findById(p2._id);
+      const st = studentOf(saved, ALICE);
+      expect(st.error).toMatch(/autre projet/);
+      expect(st.error).toContain('P1');
+      expect(st.markTarget).toBeNull();
+      expect(st.pointsApplied).toBeNull();
+      expect(saved.mySync.status).toBe('partial');
+    });
+
+    test('once P1 is resumed and finished, P2 goes through and the student ends at 16', async () => {
+      const p1 = await projectWithUnfinishedClaim();
+      const p2 = await makeProject({ name: 'P2', members: [{ email: ALICE }] });
+      const { client, state } = makeClient({ marks: { [ALICE]: 8 } });
+
+      await runSync(p2, client); // refused
+      await runSync(await Project.findById(p1._id), client); // mark == markTarget: recorded, no PUT
+      expect(client.saveAssessment).not.toHaveBeenCalled();
+      expect(studentOf(await Project.findById(p1._id), ALICE).pointsApplied).toBe(8);
+
+      await runSync(await Project.findById(p2._id), client);
+
+      expect(state.marks[ALICE]).toBe(16);
+      expect(client.saveAssessment).toHaveBeenCalledTimes(1);
+      expect(studentOf(await Project.findById(p2._id), ALICE)).toMatchObject({ pointsApplied: 8, error: null });
+    });
+
+    test('a finished claim on another project does not block', async () => {
+      await makeProject({
+        name: 'P1',
+        members: [{ email: ALICE }],
+        mySync: {
+          status: 'done',
+          students: [
+            { email: ALICE, registered: true, present: true, markBefore: 0, markTarget: 8, pointsApplied: 8 },
+          ],
+        },
+      });
+      const p2 = await makeProject({ name: 'P2', members: [{ email: ALICE }] });
+      const { client, state } = makeClient({ marks: { [ALICE]: 8 } });
+
+      await runSync(p2, client);
+
+      expect(state.marks[ALICE]).toBe(16);
+      expect(studentOf(await Project.findById(p2._id), ALICE).error).toBeNull();
+    });
+  });
+
   test('a PUT that returns without changing the mark puts the student in error and keeps markTarget for the resume rule', async () => {
     const project = await makeProject({ members: [{ email: ALICE }] });
     const { client, state } = makeClient({ marks: { [ALICE]: 2 } });

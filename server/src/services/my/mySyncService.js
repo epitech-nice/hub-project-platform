@@ -196,6 +196,22 @@ async function putAndVerify(project, st, client, config, sessionId, existing) {
   await project.save();
 }
 
+function findOtherUnfinishedClaim(project, email) {
+  return Project.findOne({
+    _id: { $ne: project._id },
+    'mySync.students': { $elemMatch: { email, markTarget: { $ne: null }, pointsApplied: null } },
+  })
+    .select('name')
+    .lean();
+}
+
+function otherProjectMessage(other) {
+  return (
+    `Points non appliqués : un autre projet (« ${other.name} », n° ${other._id}) a un envoi de points ` +
+    `non terminé pour cet étudiant, le relancer d'abord`
+  );
+}
+
 async function applyPoints(project, st, client, config) {
   const registrationId = await client.findEngagementRegistrationId(st.email);
   if (registrationId == null) {
@@ -227,6 +243,14 @@ async function applyPoints(project, st, client, config) {
 
   if (existing.confirmed) {
     st.error = CONFIRMED_SESSION_MESSAGE;
+    return;
+  }
+  // La note est cumulative et partagee entre les projets : si un autre projet a reserve une cible
+  // sans la terminer, la note lue ici peut deja contenir (ou non) ses points. On ne calcule rien
+  // tant qu'il n'est pas termine, sinon la reprise de l'un se confondrait avec l'ecriture de l'autre.
+  const blocking = await findOtherUnfinishedClaim(project, st.email);
+  if (blocking) {
+    st.error = otherProjectMessage(blocking);
     return;
   }
   let target;
