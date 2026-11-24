@@ -298,9 +298,15 @@ exports.completeProject = asyncHandler(async (req, res, next) => {
   if (project.status !== PROJECT_STATUSES.APPROVED) {
     return next(new ErrorResponse('Seuls les projets approuvés peuvent être marqués comme terminés', 400));
   }
-    
+
+  const defenseDate = req.body.defenseDate ? new Date(req.body.defenseDate) : null;
+  if (!defenseDate || Number.isNaN(defenseDate.getTime())) {
+    return next(new ErrorResponse('Date de soutenance invalide ou manquante', 400));
+  }
+
   // Changer le statut et ajouter les commentaires
   project.status = PROJECT_STATUSES.COMPLETED;
+  project.defenseDate = defenseDate;
   if (req.body.comments) {
     project.reviewedBy = {
       userId: req.user._id,

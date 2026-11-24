@@ -116,6 +116,34 @@ const ProjectSchema = new mongoose.Schema({
     ],
     default: [], // Tableau vide par défaut
   },
+  defenseDate: Date,
+  mySync: {
+    activityId: Number,
+    eventId: Number,
+    status: {
+      type: String,
+      enum: ['idle', 'partial', 'done'],
+      default: 'idle',
+    },
+    lastAttemptAt: Date,
+    lastError: String,
+    inProgressUntil: Date,
+    students: {
+      type: [
+        {
+          _id: false,
+          email: String,
+          registered: { type: Boolean, default: false },
+          present: { type: Boolean, default: false },
+          markBefore: { type: Number, default: null },
+          markTarget: { type: Number, default: null },
+          pointsApplied: { type: Number, default: null },
+          error: { type: String, default: null },
+        },
+      ],
+      default: [],
+    },
+  },
   createdAt: {
     type: Date,
     default: Date.now,
