@@ -69,6 +69,26 @@ Base de données : **MongoDB** via **Mongoose**.
     date: Date
   }],
 
+  defenseDate: Date,          // Date de soutenance, saisie à la complétion (obligatoire pour `completed`)
+
+  mySync: {                   // Envoi vers my.epitech.eu (reprenable)
+    activityId: Number,       // Activité créée sur my
+    eventId: Number,          // Session créée sur my
+    status: String,           // 'idle' (défaut) | 'partial' | 'done'
+    lastAttemptAt: Date,
+    lastError: String,
+    inProgressUntil: Date,    // Verrou d'envoi (expire après 2 minutes)
+    students: [{
+      email: String,
+      registered: Boolean,    // Inscrit à la session
+      present: Boolean,       // Présence enregistrée
+      markBefore: Number,     // Note my lue avant l'ajout (null tant que non calculée)
+      markTarget: Number,     // Note visée = markBefore + crédits × 4
+      pointsApplied: Number,  // Points ajoutés (null tant que non appliqués)
+      error: String
+    }]
+  },
+
   createdAt: Date,
   updatedAt: Date
 }

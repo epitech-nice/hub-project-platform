@@ -176,6 +176,51 @@ Relance email unitaire pour un projet en statut `pending_changes` : met en file 
 #### `PATCH /api/projects/:id/complete`
 Marquer un projet comme terminé (`status → completed`).
 
+**Body** :
+```json
+{ "defenseDate": "2026-11-20T14:00:00.000Z", "comments": "..." }
+```
+
+- `defenseDate` : obligatoire, date et heure de la soutenance (ISO 8601). Elle sert à créer la session et les présences sur my (voir `sync-my`)
+- `comments` : optionnel, enregistré dans `reviewedBy.comments`
+
+**Erreurs** :
+- `404` si le projet n'existe pas
+- `400` si le projet n'est pas en statut `approved`
+- `400` si `defenseDate` est absente ou invalide
+
+---
+
+#### `POST /api/projects/:id/sync-my`
+Envoie un projet terminé sur my.epitech.eu (admin uniquement) : création de l'activité et de la session, inscription et présence de chaque membre, puis ajout des points sur le critère Student Engagement. L'envoi est reprenable : une relance ne refait jamais une étape déjà faite.
+
+**Conditions** (sinon `400`) :
+- le projet est en statut `completed`
+- `credits > 0`
+- `defenseDate` est renseignée
+- le projet n'est pas déjà synchronisé (`mySync.status = done`)
+
+**Étapes** (chaque appel réussi est enregistré avant de passer au suivant) :
+1. Activité `Projet HUB - <nom du projet>` sur l'unité Hub de my
+2. Session de 30 minutes à `defenseDate`
+3. Pour chaque membre : inscription à la session, puis présence
+4. Pour chaque membre : points = `credits × 4`, ajoutés à la note actuelle du critère Student Engagement (plafond `MY_MAX_ENGAGEMENT_MARK`, 16 en 2026). La note est laissée non confirmée : le Hub ne confirme ni ne rouvre jamais une évaluation sur my
+
+Les erreurs sont gérées par étudiant : un étudiant en erreur n'empêche pas les autres d'être traités. Les points ne sont jamais ajoutés deux fois (`markBefore` et `markTarget` sont enregistrés avant l'écriture sur my, et une reprise compare la note lue sur my à ces valeurs).
+
+**Verrou** : un envoi à la fois par projet (`mySync.inProgressUntil`, expiration automatique après 2 minutes).
+
+**Codes de réponse** :
+- `200` : envoi terminé, `data.mySync.status` vaut `done` ou `partial` (au moins un étudiant ou une étape en erreur : relancer après correction)
+- `404` si le projet n'existe pas
+- `400` si une condition ci-dessus n'est pas remplie
+- `409` si une synchronisation est déjà en cours pour ce projet
+- `500` si la configuration my est incomplète ou invalide (variables d'environnement `MY_*`)
+
+**Réponse** : le projet mis à jour, avec le détail dans `data.mySync` (`status`, `activityId`, `eventId`, `lastAttemptAt`, `lastError`, `students[]` avec `registered`, `present`, `pointsApplied`, `error`).
+
+Un `401` ou `403` renvoyé par my est présenté comme `Clé API my invalide ou expirée` dans `mySync.lastError` ou dans l'erreur de l'étudiant.
+
 ---
 
 #### `GET /api/projects/export/completed-csv`
