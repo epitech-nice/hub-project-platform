@@ -118,7 +118,7 @@ Jamais dans le repo ni dans les logs. Ajouter les noms (sans valeurs) à la docu
 ## Risques à valider en premier
 
 1. `attendance/set` est peut-être refusé sur une session passée ou "pas encore ouverte" (le connecteur évoque ce cas). À tester sur une vraie session de test ; si refusé, il faudra ouvrir la présence (`start`/`stop` attendance) avant de poser le statut.
-2. Forme exacte de la réponse de `GET .../session/{id}` (non typée dans le spec) : récupérer la note existante par login et par achievement. À observer sur un cas réel avant d'écrire le parseur.
+2. Forme de la réponse de `GET .../session/{id}` : **observée le 2026-11-24** sur une session réelle (voir `server/src/tests/fixtures/mySessionResponse.json`). La note est dans `assessments[login][]` (ligne dont `achievementId` = 5833), avec `mark`, `individualComment`, `groupComment`, `validated`. La session existe déjà pour les étudiants que le staff a ouverts, et `session.confirmedAt` peut être renseigné : une session confirmée refuse un `PUT` tant que l'évaluation n'est pas rouverte. Décision : le Hub ne rouvre jamais une évaluation confirmée ; l'étape points de cet étudiant échoue avec un message explicite et le staff rouvre l'évaluation sur my avant de relancer. À confirmer avec l'utilisateur.
 3. Durée de vie et droits de la clé API : si elle expire, le message d'erreur doit le dire clairement.
 4. Étudiants non inscrits à Student Engagement : le module est en `forceRegistration`, mais un étudiant peut être hors cursus ou d'une autre promotion.
 

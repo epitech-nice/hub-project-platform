@@ -1,0 +1,72 @@
+{
+  "_note": "Real GET /evaluations/assessments/session/{id} response shape for a Student Engagement project session (captured 2026-11-24), anonymised and trimmed (only 2 of 10 achievements kept, long texts shortened). Marks live at assessments[login][] where achievementId matches. session.confirmedAt is set when the session was confirmed (a PUT then needs the evaluation reopened first).",
+  "session": {
+    "id": 900001,
+    "type": "project",
+    "occurredAt": "2026-11-23T13:54:18.941Z",
+    "projectRegistrationId": 700001,
+    "comment": "",
+    "nonCompliant": false,
+    "gradingOwnerLogin": "staff.example@epitech.eu",
+    "gradingOwnerSince": "2026-11-23T14:03:33.123Z",
+    "confirmedAt": "2026-11-23T14:03:54.759Z",
+    "metadata": null,
+    "isProjectSession": true,
+    "students": [
+      {
+        "login": "student.example@epitech.eu",
+        "firstname": "Student",
+        "lastname": "Example",
+        "isAbsent": false,
+        "memberId": 800001,
+        "nonCompliant": false,
+        "tooManyAbsences": false,
+        "isInvalidated": false,
+        "invalidationReasons": []
+      }
+    ]
+  },
+  "assessments": {
+    "student.example@epitech.eu": [
+      {
+        "id": 910001,
+        "login": "student.example@epitech.eu",
+        "assessmentSessionId": 900001,
+        "userLogin": "staff.example@epitech.eu",
+        "achievementId": 5835,
+        "mark": 0,
+        "individualComment": "",
+        "groupComment": "",
+        "validated": true,
+        "achievement": {
+          "id": 5835,
+          "title": "Engagement interne - Associations etudiantes",
+          "markValues": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+          "order": 2
+        },
+        "finalMark": 0
+      },
+      {
+        "id": 910002,
+        "login": "student.example@epitech.eu",
+        "assessmentSessionId": 900001,
+        "userLogin": "staff.example@epitech.eu",
+        "achievementId": 5833,
+        "mark": 12,
+        "individualComment": "Projet A + Projet B",
+        "groupComment": "",
+        "validated": true,
+        "achievement": {
+          "id": 5833,
+          "title": "Engagement interne - Projets Hub",
+          "markValues": [0, 2, 4, 6, 8, 10, 12, 14, 16],
+          "order": 0
+        },
+        "finalMark": 12
+      }
+    ]
+  },
+  "rights": { "canAssess": true },
+  "markType": "values",
+  "linkedProjectRegistrationId": null
+}
