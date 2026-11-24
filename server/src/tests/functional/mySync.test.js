@@ -6,6 +6,8 @@ jest.mock('../../services/my/myClient', () => {
     MyApiError: actual.MyApiError,
     MyConfigError: actual.MyConfigError,
     getConfig: jest.fn(),
+    findActivitiesByName: jest.fn(),
+    listActivityEvents: jest.fn(),
     createActivity: jest.fn(),
     createEvent: jest.fn(),
     registerStudent: jest.fn(),
@@ -24,6 +26,7 @@ const my = require('../../services/my/myClient');
 const { createUser, createAdmin, authHeader } = require('../helpers/auth');
 
 const CONFIG = { achievementId: 7, maxMark: 20 };
+const EXPIRED_KEY_MESSAGE = 'Clé API my invalide ou expirée';
 
 async function createProject(student, overrides = {}) {
   return Project.create({
@@ -45,16 +48,25 @@ async function createProject(student, overrides = {}) {
   });
 }
 
+// my simule : la note ecrite par saveAssessment est relue par getAssessmentSession.
 function mockHappyPath() {
+  const marks = {};
   my.getConfig.mockReturnValue(CONFIG);
+  my.findActivitiesByName.mockResolvedValue([]);
+  my.listActivityEvents.mockResolvedValue([]);
   my.createActivity.mockResolvedValue({ id: 11 });
   my.createEvent.mockResolvedValue({ id: 22 });
   my.registerStudent.mockResolvedValue();
   my.setPresent.mockResolvedValue();
-  my.findEngagementRegistrationId.mockResolvedValue(33);
-  my.openAssessmentSession.mockResolvedValue(44);
-  my.getAssessmentSession.mockResolvedValue({ session: { confirmedAt: null }, assessments: {} });
-  my.saveAssessment.mockResolvedValue();
+  my.findEngagementRegistrationId.mockImplementation(async (login) => login);
+  my.openAssessmentSession.mockImplementation(async (login) => login);
+  my.getAssessmentSession.mockImplementation(async (login) => ({
+    session: { confirmedAt: null, students: [{ login }] },
+    assessments: marks[login] == null ? {} : { [login]: [{ achievementId: CONFIG.achievementId, mark: marks[login] }] },
+  }));
+  my.saveAssessment.mockImplementation(async (sessionId, { login, mark }) => {
+    marks[login] = mark;
+  });
 }
 
 const sync = (admin, project) =>
@@ -137,10 +149,13 @@ describe('POST /api/projects/:id/sync-my', () => {
   it('missing env config -> 500 with the missing variable names, my client never called', async () => {
     const actual = jest.requireActual('../../services/my/myClient');
     my.getConfig.mockImplementation(actual.getConfig);
-    const saved = { ...process.env };
+    const saved = {};
     Object.keys(process.env)
       .filter((k) => k.startsWith('MY_'))
-      .forEach((k) => delete process.env[k]);
+      .forEach((k) => {
+        saved[k] = process.env[k];
+        delete process.env[k];
+      });
     try {
       const admin = await createAdmin();
       const project = await createProject(await createUser());
@@ -151,20 +166,65 @@ describe('POST /api/projects/:id/sync-my', () => {
       const fresh = await Project.findById(project._id);
       expect(fresh.mySync.inProgressUntil == null).toBe(true);
     } finally {
-      process.env = saved;
+      Object.entries(saved).forEach(([k, v]) => {
+        process.env[k] = v;
+      });
     }
   });
 
   it('my returns 401 -> 200 with status partial and the expired-key message', async () => {
+    // myClient traduit deja 401/403 en ce message : le controleur le transmet tel quel.
     my.createActivity.mockRejectedValue(
-      new my.MyApiError('Unauthorized', { status: 401, step: 'createActivity' })
+      new my.MyApiError(EXPIRED_KEY_MESSAGE, { status: 401, step: 'createActivity' })
     );
     const admin = await createAdmin();
     const project = await createProject(await createUser());
     const res = await sync(admin, project);
     expect(res.status).toBe(200);
     expect(res.body.data.mySync.status).toBe('partial');
-    expect(res.body.data.mySync.lastError).toBe('Clé API my invalide ou expirée');
+    expect(res.body.data.mySync.lastError).toBe(EXPIRED_KEY_MESSAGE);
+  });
+
+  it('my returns 401 mid-run -> 200 partial, the saved state is kept and the error is on the student', async () => {
+    my.setPresent.mockRejectedValue(
+      new my.MyApiError(EXPIRED_KEY_MESSAGE, { status: 401, step: 'setPresent' })
+    );
+    const admin = await createAdmin();
+    const student = await createUser();
+    const project = await createProject(student, { mySync: { activityId: 11, eventId: 22, status: 'partial' } });
+    const res = await sync(admin, project);
+    expect(res.status).toBe(200);
+    expect(res.body.data.mySync.status).toBe('partial');
+    expect(my.createActivity).not.toHaveBeenCalled();
+    expect(my.createEvent).not.toHaveBeenCalled();
+    const fresh = await Project.findById(project._id);
+    expect(fresh.mySync.activityId).toBe(11);
+    expect(fresh.mySync.eventId).toBe(22);
+    const st = fresh.mySync.students.find((s) => s.email === student.email.toLowerCase());
+    expect(st.registered).toBe(true);
+    expect(st.present).toBe(false);
+    expect(st.error).toBe(EXPIRED_KEY_MESSAGE);
+    expect(my.saveAssessment).not.toHaveBeenCalled();
+    expect(fresh.mySync.inProgressUntil == null).toBe(true);
+  });
+
+  it('the original error survives a failing lock release', async () => {
+    const admin = await createAdmin();
+    const project = await createProject(await createUser());
+    my.getConfig.mockImplementation(() => {
+      throw new Error('unexpected boom');
+    });
+    const spy = jest.spyOn(Project, 'updateOne').mockRejectedValueOnce(new Error('release failed'));
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await sync(admin, project);
+      expect(res.status).toBe(500);
+      expect(JSON.stringify(res.body)).not.toContain('release failed');
+      expect(JSON.stringify(res.body)).toContain('unexpected boom');
+    } finally {
+      spy.mockRestore();
+      errSpy.mockRestore();
+    }
   });
 
   it('second call while the lock is active -> 409 and createActivity called once', async () => {

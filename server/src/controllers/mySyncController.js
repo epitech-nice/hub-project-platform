@@ -2,33 +2,8 @@ const Project = require('../models/Project');
 const asyncHandler = require('../middleware/asyncHandler');
 const ErrorResponse = require('../utils/errorResponse');
 const myClient = require('../services/my/myClient');
-const { runSync } = require('../services/my/mySyncService');
-
-const LOCK_DURATION_MS = 2 * 60 * 1000;
-const EXPIRED_KEY_MESSAGE = 'Clé API my invalide ou expirée';
-
-// Remplace le message des erreurs 401/403 de my par un message actionnable pour l'admin.
-function withAuthMessage(client) {
-  const wrapped = {};
-  Object.keys(client).forEach((key) => {
-    const value = client[key];
-    if (typeof value !== 'function' || key === 'getConfig' || /^My.*Error$/.test(key)) {
-      wrapped[key] = value;
-      return;
-    }
-    wrapped[key] = async (...args) => {
-      try {
-        return await value(...args);
-      } catch (err) {
-        if (err instanceof client.MyApiError && (err.status === 401 || err.status === 403)) {
-          throw new client.MyApiError(EXPIRED_KEY_MESSAGE, { status: err.status, step: err.step });
-        }
-        throw err;
-      }
-    };
-  });
-  return wrapped;
-}
+// myClient traduit deja les 401/403 de my en "Clé API my invalide ou expirée".
+const { runSync, LOCK_DURATION_MS } = require('../services/my/mySyncService');
 
 function validationError(project) {
   if (project.status !== 'completed') {
@@ -75,8 +50,8 @@ exports.syncProjectToMy = asyncHandler(async (req, res, next) => {
   let released = false;
   const release = async () => {
     if (released) return;
-    released = true;
     await Project.updateOne({ _id: project._id }, { $set: { 'mySync.inProgressUntil': null } });
+    released = true;
   };
 
   try {
@@ -85,7 +60,7 @@ exports.syncProjectToMy = asyncHandler(async (req, res, next) => {
 
     if (!failure) {
       try {
-        await runSync(project, withAuthMessage(myClient));
+        await runSync(project, myClient);
       } catch (err) {
         if (!(err instanceof myClient.MyConfigError)) throw err;
         failure = new ErrorResponse(err.message, 500);
@@ -100,6 +75,11 @@ exports.syncProjectToMy = asyncHandler(async (req, res, next) => {
     return res.status(200).json({ success: true, data });
   } finally {
     // Chemins d'exception : le verrou est libere avant que l'erreur n'atteigne le gestionnaire.
-    await release();
+    // Un echec de liberation est journalise sans remplacer l'erreur d'origine (le verrou expirera).
+    try {
+      await release();
+    } catch (releaseErr) {
+      console.error('Liberation du verrou my impossible :', releaseErr.message);
+    }
   }
 });
