@@ -112,9 +112,6 @@ export default function AdminProjectDetail() {
 
       toast.success(`${actionMsg} avec succès!`);
 
-      if (reviewForm.status === "approved" && response.externalSiteUrl) {
-        window.open(response.externalSiteUrl, "_blank");
-      }
       router.push("/admin/dashboard");
     } catch (err) {
       setError(

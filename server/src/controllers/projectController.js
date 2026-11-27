@@ -387,7 +387,6 @@ exports.reviewProject = asyncHandler(async (req, res, next) => {
   project.updatedAt = Date.now();
   
   // Si le projet est approuvé, traitement en tâche de fond de la requête externe
-  const externalSiteUrl = "https://intra.epitech.eu/module/2025/G-INN-020/NCE-0-1/#!/create";
   if (status === PROJECT_STATUSES.APPROVED) {
     backgroundJobs.addJob('sendExternalRequest', { project });
   }
@@ -399,15 +398,10 @@ exports.reviewProject = asyncHandler(async (req, res, next) => {
     backgroundJobs.addJob('sendStatusEmail', { project, status });
   }
   
-  const responseData = {
+  res.status(200).json({
     success: true,
     data: project
-  };
-  
-  if (status === PROJECT_STATUSES.APPROVED) {
-    responseData.externalSiteUrl = externalSiteUrl;
-  }
-  res.status(200).json(responseData);
+  });
 });
 
 // Mettre à jour un projet
