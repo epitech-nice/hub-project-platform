@@ -37,10 +37,6 @@ MICROSOFT_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 # Frontend
 FRONTEND_URL=http://localhost:3000
 
-# API Intra Epitech
-EXTERNAL_API_URL=https://intra.epitech.eu/module/2025/G-INN-020/NCE-0-1/#!/create
-EXTERNAL_API_KEY=votre-api-key
-
 # Emails (Resend)
 EMAIL_FROM=Hub Projets <noreply@votredomaine.eu>
 RESEND_API_KEY=re_xxxxxxxxxxxx
@@ -132,8 +128,15 @@ Adapter `MONGODB_URI` dans `server/.env` pour pointer vers `localhost:27017`.
 | `EMAIL_FROM` | Oui | Expéditeur des emails |
 | `EMAIL_DOMAIN` | Non | Domaine utilisé dans le pied d'email |
 | `APP_OWNER_EMAILS` | Oui | Emails admin, séparés par virgule |
-| `EXTERNAL_API_URL` | Non | URL API Intra Epitech (approbation projets) |
-| `EXTERNAL_API_KEY` | Non | Clé API Intra Epitech |
+| `MY_API_URL` | Non | URL de l'API my (défaut : `https://my.epitech.eu/api`) |
+| `MY_API_TOKEN` | Pour l'envoi sur my | Clé API my (secret, ne jamais la committer) |
+| `MY_HUB_UNIT_INSTANCE_ID` | Pour l'envoi sur my | Identifiant de l'instance d'unité Hub sur my, qui reçoit les activités (2026 : `949`) |
+| `MY_ENGAGEMENT_PROJECT_ID` | Pour l'envoi sur my | Identifiant du projet Student Engagement sur my, où l'on cherche l'inscription de l'étudiant (2026 : `5651`) |
+| `MY_ENGAGEMENT_ACHIEVEMENT_ID` | Pour l'envoi sur my | Identifiant du critère dont la note reçoit les points (2026 : `5833`) |
+| `MY_SCHOOL_YEAR` | Pour l'envoi sur my | Année scolaire sur my (2026 : `2026`) |
+| `MY_MAX_ENGAGEMENT_MARK` | Pour l'envoi sur my | Note maximale du critère, au-delà de laquelle les points ne sont pas ajoutés (2026 : `16`) |
+
+> Les variables `MY_*` (hors `MY_API_URL` et `MY_API_TOKEN`) changent chaque année scolaire : les mettre à jour à la rentrée. Si l'une manque ou n'est pas numérique, `POST /api/projects/:id/sync-my` répond `500` avec la liste des variables concernées.
 
 ### Frontend (`client/.env.local`)
 

@@ -1,9 +1,6 @@
 jest.mock('../../services/emailService', () => ({
   sendStatusChangeEmail: jest.fn().mockResolvedValue({ success: true }),
 }));
-jest.mock('../../services/externalService', () => ({
-  sendExternalRequest: jest.fn().mockResolvedValue({ ok: true }),
-}));
 
 const emailService = require('../../services/emailService');
 const { addJob } = require('../../utils/backgroundJobs');

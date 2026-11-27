@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken, isAdmin } = require('../middleware/auth');
 const projectController = require('../controllers/projectController');
+const mySyncController = require('../controllers/mySyncController');
 const { projectValidationRules, validate } = require('../middleware/validators');
 
 // Routes statiques avant /:id pour éviter les conflits de route
@@ -26,5 +27,6 @@ router.patch('/:id/review', authenticateToken, isAdmin, projectController.review
 router.patch('/:id/request-changes', authenticateToken, isAdmin, projectController.requestChanges);
 router.patch('/:id/complete', authenticateToken, isAdmin, projectController.completeProject);
 router.post('/:id/resend-notification', authenticateToken, isAdmin, projectController.resendNotification);
+router.post('/:id/sync-my', authenticateToken, isAdmin, mySyncController.syncProjectToMy);
 
 module.exports = router;

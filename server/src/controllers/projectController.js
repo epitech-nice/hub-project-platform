@@ -1,7 +1,6 @@
 // controllers/projectController.js
 const Project = require("../models/Project");
 const User = require("../models/User");
-const { sendExternalRequest } = require("../services/externalService");
 const emailService = require('../services/emailService');
 const projectService = require('../services/projectService');
 const axios = require('axios');
@@ -298,9 +297,15 @@ exports.completeProject = asyncHandler(async (req, res, next) => {
   if (project.status !== PROJECT_STATUSES.APPROVED) {
     return next(new ErrorResponse('Seuls les projets approuvés peuvent être marqués comme terminés', 400));
   }
-    
+
+  const defenseDate = req.body.defenseDate ? new Date(req.body.defenseDate) : null;
+  if (!defenseDate || Number.isNaN(defenseDate.getTime())) {
+    return next(new ErrorResponse('Date de soutenance invalide ou manquante', 400));
+  }
+
   // Changer le statut et ajouter les commentaires
   project.status = PROJECT_STATUSES.COMPLETED;
+  project.defenseDate = defenseDate;
   if (req.body.comments) {
     project.reviewedBy = {
       userId: req.user._id,
@@ -380,12 +385,6 @@ exports.reviewProject = asyncHandler(async (req, res, next) => {
   };
   project.updatedAt = Date.now();
   
-  // Si le projet est approuvé, traitement en tâche de fond de la requête externe
-  const externalSiteUrl = "https://intra.epitech.eu/module/2025/G-INN-020/NCE-0-1/#!/create";
-  if (status === PROJECT_STATUSES.APPROVED) {
-    backgroundJobs.addJob('sendExternalRequest', { project });
-  }
-    
   await project.save();
   
   // Envoi différé de l'email si le statut a changé
@@ -393,15 +392,10 @@ exports.reviewProject = asyncHandler(async (req, res, next) => {
     backgroundJobs.addJob('sendStatusEmail', { project, status });
   }
   
-  const responseData = {
+  res.status(200).json({
     success: true,
     data: project
-  };
-  
-  if (status === PROJECT_STATUSES.APPROVED) {
-    responseData.externalSiteUrl = externalSiteUrl;
-  }
-  res.status(200).json(responseData);
+  });
 });
 
 // Mettre à jour un projet

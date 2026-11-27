@@ -19,6 +19,7 @@ import FormField from "../../../components/ui/FormField";
 import Skeleton from "../../../components/ui/Skeleton";
 import StatusBadge from "../../../components/domain/StatusBadge";
 import ChangeHistory from "../../../components/domain/ChangeHistory";
+import MySyncCard from "../../../components/projects/MySyncCard";
 
 export default function AdminProjectDetail() {
   const { isAuthenticated, isAdmin, loading: authLoading } = useAuth();
@@ -34,6 +35,12 @@ export default function AdminProjectDetail() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [isResending, setIsResending] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [defenseDate, setDefenseDate] = useState(() => {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T13:00`;
+  });
 
   useEffect(() => {
     if (!authLoading && (!isAuthenticated || !isAdmin)) {
@@ -41,26 +48,27 @@ export default function AdminProjectDetail() {
     }
   }, [isAuthenticated, isAdmin, authLoading, router]);
 
-  useEffect(() => {
-    const fetchProject = async () => {
-      if (isAuthenticated && isAdmin && id) {
-        try {
-          const response = await get(`/api/projects/${id}`);
-          setProject(response.data);
+  // `get` n'est pas mémorisé : cette fonction ne doit jamais figurer dans des deps.
+  const fetchProject = async () => {
+    if (isAuthenticated && isAdmin && id) {
+      try {
+        const response = await get(`/api/projects/${id}`);
+        setProject(response.data);
 
-          if (response.data.status !== "pending") {
-            setReviewForm({
-              status: response.data.status,
-              comments: response.data.reviewedBy?.comments || "",
-              credits: response.data.credits || null,
-            });
-          }
-        } catch (err) {
-          console.error("Erreur lors de la récupération du projet:", err);
+        if (response.data.status !== "pending") {
+          setReviewForm({
+            status: response.data.status,
+            comments: response.data.reviewedBy?.comments || "",
+            credits: response.data.credits || null,
+          });
         }
+      } catch (err) {
+        console.error("Erreur lors de la récupération du projet:", err);
       }
-    };
+    }
+  };
 
+  useEffect(() => {
     fetchProject();
   }, [isAuthenticated, isAdmin, id]);
 
@@ -104,9 +112,6 @@ export default function AdminProjectDetail() {
 
       toast.success(`${actionMsg} avec succès!`);
 
-      if (reviewForm.status === "approved" && response.externalSiteUrl) {
-        window.open(response.externalSiteUrl, "_blank");
-      }
       router.push("/admin/dashboard");
     } catch (err) {
       setError(
@@ -118,6 +123,11 @@ export default function AdminProjectDetail() {
   };
 
   const handleCompleteProject = async () => {
+    const parsedDate = defenseDate ? new Date(defenseDate) : null;
+    if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
+      setError("La date de la soutenance est obligatoire");
+      return;
+    }
     if (
       window.confirm(
         "Êtes-vous sûr de vouloir marquer ce projet comme terminé ?"
@@ -125,11 +135,13 @@ export default function AdminProjectDetail() {
     ) {
       try {
         setIsSubmitting(true);
+        setError("");
         await patch(`/api/projects/${id}/complete`, {
           comments: "Projet terminé avec succès.",
+          defenseDate: parsedDate.toISOString(),
         });
         toast.success("Le projet a été marqué comme terminé avec succès !");
-        router.push("/admin/dashboard");
+        await fetchProject();
       } catch (err) {
         setError(err.message || "Une erreur est survenue");
       } finally {
@@ -154,6 +166,25 @@ export default function AdminProjectDetail() {
       } finally {
         setIsSubmitting(false);
       }
+    }
+  };
+
+  const handleSyncMy = async () => {
+    try {
+      setIsSyncing(true);
+      const response = await post(`/api/projects/${id}/sync-my`, {});
+      setProject(response.data);
+      if (response.data?.mySync?.status === "done") {
+        toast.success("Le projet a été synchronisé sur my");
+      } else {
+        toast.warning(
+          "Synchronisation partielle : certains éléments n'ont pas pu être envoyés sur my"
+        );
+      }
+    } catch (err) {
+      toast.error(err.message || "Erreur lors de la synchronisation avec my");
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -590,10 +621,23 @@ export default function AdminProjectDetail() {
                 <p className="text-sm text-text-muted mb-4">
                   Une fois le projet complètement terminé, vous pouvez le marquer comme tel.
                 </p>
+                <FormField
+                  label="Date de la soutenance"
+                  required
+                  hint="Utilisée pour la session et les présences sur my."
+                  className="mb-4"
+                >
+                  <Input
+                    type="datetime-local"
+                    value={defenseDate}
+                    onChange={(e) => setDefenseDate(e.target.value)}
+                    required
+                  />
+                </FormField>
                 <Button
                   variant="subtle"
                   onClick={handleCompleteProject}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !defenseDate}
                   loading={isSubmitting}
                   className="w-full"
                 >
@@ -601,6 +645,12 @@ export default function AdminProjectDetail() {
                 </Button>
               </Card>
             )}
+
+            <MySyncCard
+              project={project}
+              onSync={handleSyncMy}
+              isSyncing={isSyncing}
+            />
 
             {project.status === "pending_changes" && (
               <Card>

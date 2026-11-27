@@ -262,7 +262,6 @@ const app = require('../../app');
 const request = require('supertest');
 
 jest.mock('../../utils/backgroundJobs');       // Pas de vrais emails
-jest.mock('../../services/externalService');   // Pas de vrais appels externes
 ```
 
 `supertest` permet de faire de vrais appels HTTP à `app` sans démarrer un serveur réseau :

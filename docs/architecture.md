@@ -100,7 +100,6 @@ hub-project-platform/
 │   │   │   └── upload.js            # Multer — PDF sujets Simulated
 │   │   ├── services/
 │   │   │   ├── emailService.js
-│   │   │   ├── externalService.js
 │   │   │   └── projectService.js
 │   │   ├── utils/
 │   │   │   ├── apiKey.js

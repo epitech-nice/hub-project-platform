@@ -1,0 +1,774 @@
+const mongoose = require('mongoose');
+const Project = require('../../models/Project');
+const fixture = require('../fixtures/mySessionResponse.json');
+const {
+  MarkOverflowError,
+  computeTargetMark,
+  extractExistingAssessment,
+  buildActivityPayload,
+  runSync,
+} = require('../../services/my/mySyncService');
+
+const ACHIEVEMENT_ID = 5833;
+const CONFIRMED_MESSAGE = "Session d'évaluation déjà confirmée sur my : la rouvrir sur my puis relancer";
+
+class FakeApiError extends Error {
+  constructor(message, { status = 0, step = '' } = {}) {
+    super(message);
+    this.name = 'MyApiError';
+    this.status = status;
+    this.step = step;
+  }
+}
+
+function sessionBody(login, mark, { confirmed = false, individualComment = '', groupComment = '' } = {}) {
+  return {
+    session: {
+      id: 1,
+      confirmedAt: confirmed ? '2026-11-23T14:03:54.759Z' : null,
+      students: [{ login }],
+    },
+    assessments: {
+      [login]: [
+        { achievementId: 5835, mark: 3, individualComment: 'other', groupComment: 'other' },
+        {
+          achievementId: ACHIEVEMENT_ID,
+          mark,
+          individualComment,
+          groupComment,
+          achievement: { id: ACHIEVEMENT_ID, markValues: [0, 2, 4, 6, 8, 10, 12, 14, 16] },
+        },
+      ],
+    },
+  };
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+// Fake my: one mark per login, read by getAssessmentSession, written by saveAssessment.
+// Every call yields to the event loop so that concurrent runs really interleave.
+function makeClient({ marks = {}, comments = {}, confirmed = {}, unknown = [] } = {}) {
+  const state = { marks: { ...marks } };
+  const sessionLogin = {};
+  let nextSession = 100;
+  const client = {
+    MyApiError: FakeApiError,
+    getConfig: jest.fn(() => ({ maxMark: 16, achievementId: ACHIEVEMENT_ID, schoolYear: 2026 })),
+    findActivitiesByName: jest.fn(async () => []),
+    listActivityEvents: jest.fn(async () => []),
+    createActivity: jest.fn(async () => ({ id: 4242 })),
+    createEvent: jest.fn(async () => ({ id: 5353 })),
+    registerStudent: jest.fn(async () => {}),
+    setPresent: jest.fn(async () => {}),
+    findEngagementRegistrationId: jest.fn(async (login) => (unknown.includes(login) ? null : `reg-${login}`)),
+    openAssessmentSession: jest.fn(async (registrationId) => {
+      const id = nextSession++;
+      sessionLogin[id] = registrationId.replace(/^reg-/, '');
+      return id;
+    }),
+    getAssessmentSession: jest.fn(async (sessionId) => {
+      const login = sessionLogin[sessionId];
+      const c = comments[login] || {};
+      const mark = state.marks[login] || 0;
+      await tick();
+      return sessionBody(login, mark, {
+        confirmed: !!confirmed[login],
+        individualComment: c.individualComment || '',
+        groupComment: c.groupComment || '',
+      });
+    }),
+    saveAssessment: jest.fn(async (sessionId, { login, mark }) => {
+      await tick();
+      state.marks[login] = mark;
+    }),
+  };
+  return { client, state };
+}
+
+// Records every property read on the client, to prove no confirm/reopen function is ever touched.
+function spyAccess(client) {
+  const accessed = new Set();
+  const proxy = new Proxy(client, {
+    get(target, prop) {
+      if (typeof prop === 'string') accessed.add(prop);
+      return target[prop];
+    },
+  });
+  return { proxy, accessed };
+}
+
+async function makeProject(overrides = {}) {
+  return Project.create({
+    name: 'Chartscope',
+    description: 'desc',
+    objectives: 'obj',
+    technologies: ['js'],
+    studentCount: 2,
+    links: { github: 'https://github.com/a', projectGithub: 'https://github.com/a/b' },
+    status: 'completed',
+    credits: 2,
+    members: [{ email: 'Alice.Martin@epitech.eu', isCreator: true }, { email: 'bob.durand@epitech.eu' }],
+    submittedBy: { userId: new mongoose.Types.ObjectId(), name: 'Alice', email: 'alice.martin@epitech.eu' },
+    defenseDate: new Date('2026-11-20T12:00:00.000Z'),
+    ...overrides,
+  });
+}
+
+const studentOf = (project, email) => project.mySync.students.find((s) => s.email === email);
+const ALICE = 'alice.martin@epitech.eu';
+const BOB = 'bob.durand@epitech.eu';
+
+describe('mySyncService helpers', () => {
+  test('computeTargetMark adds credits x 4', () => {
+    expect(computeTargetMark(0, 2, 16)).toBe(8);
+  });
+
+  test('computeTargetMark throws MarkOverflowError above the max', () => {
+    expect(() => computeTargetMark(12, 2, 16)).toThrow(MarkOverflowError);
+  });
+
+  test('extractExistingAssessment reads mark and comments from the real fixture', () => {
+    expect(extractExistingAssessment(fixture, 'Student.Example@epitech.eu', ACHIEVEMENT_ID)).toEqual({
+      mark: 12,
+      individualComment: 'Projet A + Projet B',
+      groupComment: '',
+      confirmed: true,
+    });
+  });
+
+  test('extractExistingAssessment returns zeros and confirmed false for a session without the achievement row', () => {
+    const body = {
+      session: { confirmedAt: null, students: [{ login: 'student.example@epitech.eu' }] },
+      assessments: { 'student.example@epitech.eu': [{ achievementId: 5835, mark: 4, individualComment: 'x', groupComment: 'y' }] },
+    };
+    expect(extractExistingAssessment(body, 'student.example@epitech.eu', ACHIEVEMENT_ID)).toEqual({
+      mark: 0,
+      individualComment: '',
+      groupComment: '',
+      confirmed: false,
+    });
+  });
+
+  test('extractExistingAssessment refuses a session that does not list the student', () => {
+    const body = {
+      session: { confirmedAt: null, students: [{ login: 'someone.else@epitech.eu' }] },
+      assessments: {},
+    };
+    expect(() => extractExistingAssessment(body, ALICE, ACHIEVEMENT_ID)).toThrow(/absent de la session/);
+    expect(() => extractExistingAssessment({ assessments: {} }, ALICE, ACHIEVEMENT_ID)).toThrow(/absent de la session/);
+  });
+
+  test.each([['a string', 'abc'], ['null', null], ['NaN', NaN], ['Infinity', Infinity]])(
+    'extractExistingAssessment refuses a row whose mark is %s',
+    (_label, mark) => {
+      const body = {
+        session: { confirmedAt: null, students: [{ login: ALICE }] },
+        assessments: { [ALICE]: [{ achievementId: ACHIEVEMENT_ID, mark, individualComment: '', groupComment: '' }] },
+      };
+      expect(() => extractExistingAssessment(body, ALICE, ACHIEVEMENT_ID)).toThrow(/note illisible/);
+    }
+  );
+
+  test('buildActivityPayload names the activity "Projet HUB - <nom>" and links the admin page', async () => {
+    const project = await makeProject();
+    const payload = buildActivityPayload(project, 'https://hub.example');
+    expect(payload.name).toBe('Projet HUB - Chartscope');
+    expect(payload.description).toBe(
+      `${ALICE}, ${BOB} : https://hub.example/admin/projects/${project._id}`
+    );
+    expect(payload.duration).toBe(30);
+    const start = new Date(payload.startDate).getTime();
+    const end = new Date(payload.endDate).getTime();
+    const defense = project.defenseDate.getTime();
+    expect(start).toBeLessThanOrEqual(defense);
+    expect(end).toBeGreaterThanOrEqual(defense + 30 * 60 * 1000);
+  });
+});
+
+describe('runSync', () => {
+  test('runSync happy path: one activity, one event, each member registered, present, points added, status done', async () => {
+    const project = await makeProject();
+    const { client } = makeClient({
+      comments: { [ALICE]: { individualComment: 'Projet X', groupComment: 'Groupe Y' } },
+    });
+
+    await runSync(project, client);
+
+    expect(client.createActivity).toHaveBeenCalledTimes(1);
+    expect(client.createActivity.mock.calls[0][0].name).toBe('Projet HUB - Chartscope');
+    expect(client.createEvent).toHaveBeenCalledTimes(1);
+    expect(client.createEvent).toHaveBeenCalledWith(expect.objectContaining({
+      activityInstanceId: 4242,
+      title: 'Projet HUB - Chartscope',
+      startDate: '2026-11-20T12:00:00.000Z',
+      endDate: '2026-11-20T12:30:00.000Z',
+    }));
+    expect(client.registerStudent).toHaveBeenCalledWith(5353, ALICE);
+    expect(client.registerStudent).toHaveBeenCalledWith(5353, BOB);
+    expect(client.setPresent).toHaveBeenCalledWith(5353, ALICE);
+    expect(client.setPresent).toHaveBeenCalledWith(5353, BOB);
+    expect(client.saveAssessment).toHaveBeenCalledTimes(2);
+    expect(client.saveAssessment).toHaveBeenCalledWith(expect.any(Number), {
+      login: ALICE, mark: 8, individualComment: 'Projet X', groupComment: 'Groupe Y',
+    });
+    expect(client.saveAssessment).toHaveBeenCalledWith(expect.any(Number), {
+      login: BOB, mark: 8, individualComment: '', groupComment: '',
+    });
+
+    const saved = await Project.findById(project._id);
+    expect(saved.mySync.status).toBe('done');
+    expect(saved.mySync.activityId).toBe(4242);
+    expect(saved.mySync.eventId).toBe(5353);
+    expect(saved.mySync.lastError).toBeFalsy();
+    expect(saved.mySync.lastAttemptAt).toBeInstanceOf(Date);
+    expect(saved.mySync.students).toHaveLength(2);
+    for (const email of [ALICE, BOB]) {
+      const st = studentOf(saved, email);
+      expect(st).toMatchObject({
+        registered: true, present: true, markBefore: 0, markTarget: 8, pointsApplied: 8, error: null,
+      });
+    }
+  });
+
+  test('runSync resumes: with activityId already stored, createActivity is not called again', async () => {
+    const project = await makeProject({ mySync: { activityId: 777, status: 'partial' } });
+    const { client } = makeClient();
+
+    await runSync(project, client);
+
+    expect(client.createActivity).not.toHaveBeenCalled();
+    expect(client.createEvent).toHaveBeenCalledWith(expect.objectContaining({ activityInstanceId: 777 }));
+    const saved = await Project.findById(project._id);
+    expect(saved.mySync.activityId).toBe(777);
+    expect(saved.mySync.status).toBe('done');
+  });
+
+  test('runSync skips registration, presence and points already done', async () => {
+    const project = await makeProject({
+      mySync: {
+        activityId: 1, eventId: 2, status: 'partial',
+        students: [
+          { email: ALICE, registered: true, present: true, markBefore: 0, markTarget: 8, pointsApplied: 8 },
+          { email: BOB, registered: true, present: false },
+        ],
+      },
+    });
+    const { client } = makeClient();
+
+    await runSync(project, client);
+
+    expect(client.registerStudent).not.toHaveBeenCalled();
+    expect(client.setPresent).toHaveBeenCalledTimes(1);
+    expect(client.setPresent).toHaveBeenCalledWith(2, BOB);
+    expect(client.findEngagementRegistrationId).toHaveBeenCalledTimes(1);
+    expect(client.saveAssessment).toHaveBeenCalledTimes(1);
+    expect((await Project.findById(project._id)).mySync.status).toBe('done');
+  });
+
+  test('runSync does not add points twice when markTarget is set and the mark already equals markTarget', async () => {
+    const project = await makeProject({
+      members: [{ email: ALICE }],
+      mySync: {
+        activityId: 1, eventId: 2, status: 'partial',
+        students: [{ email: ALICE, registered: true, present: true, markBefore: 4, markTarget: 12, pointsApplied: null }],
+      },
+    });
+    const { client, state } = makeClient({ marks: { [ALICE]: 12 } });
+
+    await runSync(project, client);
+
+    expect(client.saveAssessment).not.toHaveBeenCalled();
+    expect(state.marks[ALICE]).toBe(12);
+    const saved = await Project.findById(project._id);
+    expect(studentOf(saved, ALICE)).toMatchObject({ markBefore: 4, markTarget: 12, pointsApplied: 8, error: null });
+    expect(saved.mySync.status).toBe('done');
+  });
+
+  test('runSync redoes the PUT when markTarget is set and the mark still equals markBefore', async () => {
+    const project = await makeProject({
+      members: [{ email: ALICE }],
+      mySync: {
+        activityId: 1, eventId: 2, status: 'partial',
+        students: [{ email: ALICE, registered: true, present: true, markBefore: 4, markTarget: 12, pointsApplied: null }],
+      },
+    });
+    const { client, state } = makeClient({
+      marks: { [ALICE]: 4 },
+      comments: { [ALICE]: { individualComment: 'Projet A' } },
+    });
+
+    await runSync(project, client);
+
+    expect(client.saveAssessment).toHaveBeenCalledTimes(1);
+    expect(client.saveAssessment).toHaveBeenCalledWith(expect.any(Number), {
+      login: ALICE, mark: 12, individualComment: 'Projet A', groupComment: '',
+    });
+    expect(state.marks[ALICE]).toBe(12);
+    const saved = await Project.findById(project._id);
+    expect(studentOf(saved, ALICE)).toMatchObject({ markBefore: 4, markTarget: 12, pointsApplied: 8, error: null });
+    expect(saved.mySync.status).toBe('done');
+  });
+
+  test('runSync marks the student in error when the mark changed to another value in between', async () => {
+    const project = await makeProject({
+      members: [{ email: ALICE }],
+      mySync: {
+        activityId: 1, eventId: 2, status: 'partial',
+        students: [{ email: ALICE, registered: true, present: true, markBefore: 4, markTarget: 12, pointsApplied: null }],
+      },
+    });
+    const { client } = makeClient({ marks: { [ALICE]: 6 } });
+
+    await runSync(project, client);
+
+    expect(client.saveAssessment).not.toHaveBeenCalled();
+    const saved = await Project.findById(project._id);
+    const st = studentOf(saved, ALICE);
+    expect(st.pointsApplied).toBeNull();
+    expect(st.error).toMatch(/note modifiée entre-temps/);
+    expect(saved.mySync.status).toBe('partial');
+  });
+
+  test('runSync: a confirmed session puts the student in error with the confirmed-session message and never calls saveAssessment', async () => {
+    const project = await makeProject({ members: [{ email: ALICE }] });
+    const { client } = makeClient({ confirmed: { [ALICE]: true } });
+
+    await runSync(project, client);
+
+    expect(client.saveAssessment).not.toHaveBeenCalled();
+    const saved = await Project.findById(project._id);
+    const st = studentOf(saved, ALICE);
+    expect(st.error).toBe(CONFIRMED_MESSAGE);
+    expect(st.registered).toBe(true);
+    expect(st.present).toBe(true);
+    expect(st.pointsApplied).toBeNull();
+    expect(st.markTarget).toBeNull();
+    expect(saved.mySync.status).toBe('partial');
+  });
+
+  test('overflow: member at 12 points with a 2-credit project is in error, saveAssessment not called for him, other members done, status partial', async () => {
+    const project = await makeProject();
+    const { client, state } = makeClient({ marks: { [ALICE]: 12 } });
+
+    await runSync(project, client);
+
+    expect(client.saveAssessment).toHaveBeenCalledTimes(1);
+    expect(client.saveAssessment.mock.calls[0][1].login).toBe(BOB);
+    expect(state.marks[ALICE]).toBe(12);
+    const saved = await Project.findById(project._id);
+    const alice = studentOf(saved, ALICE);
+    expect(alice.error).toMatch(/16/);
+    expect(alice.markTarget).toBeNull();
+    expect(alice.pointsApplied).toBeNull();
+    expect(studentOf(saved, BOB)).toMatchObject({ pointsApplied: 8, error: null });
+    expect(saved.mySync.status).toBe('partial');
+  });
+
+  test('unknown member (findEngagementRegistrationId returns null) is in error, others processed, status partial', async () => {
+    const project = await makeProject();
+    const { client } = makeClient({ unknown: [ALICE] });
+
+    await runSync(project, client);
+
+    expect(client.openAssessmentSession).toHaveBeenCalledTimes(1);
+    const saved = await Project.findById(project._id);
+    expect(studentOf(saved, ALICE).error).toMatch(/Student Engagement/);
+    expect(studentOf(saved, ALICE).pointsApplied).toBeNull();
+    expect(studentOf(saved, BOB)).toMatchObject({ pointsApplied: 8, error: null });
+    expect(saved.mySync.status).toBe('partial');
+  });
+
+  test('a student-level my error (registration refused) does not stop other students', async () => {
+    const project = await makeProject();
+    const { client } = makeClient();
+    client.registerStudent.mockImplementation(async (eventId, login) => {
+      if (login === ALICE) throw new FakeApiError('Erreur my (HTTP 404)', { status: 404, step: 'registerStudent' });
+    });
+
+    await runSync(project, client);
+
+    const saved = await Project.findById(project._id);
+    expect(studentOf(saved, ALICE)).toMatchObject({ registered: false, present: false, error: 'Erreur my (HTTP 404)' });
+    expect(client.setPresent).not.toHaveBeenCalledWith(5353, ALICE);
+    expect(studentOf(saved, BOB)).toMatchObject({ registered: true, present: true, pointsApplied: 8 });
+    expect(saved.mySync.status).toBe('partial');
+  });
+
+  test('an error creating the activity stops everything and leaves status partial with lastError set', async () => {
+    const project = await makeProject();
+    const { client } = makeClient();
+    client.createActivity.mockRejectedValue(
+      new FakeApiError('Clé API my invalide ou expirée', { status: 401, step: 'createActivity' })
+    );
+
+    await expect(runSync(project, client)).resolves.toBeDefined();
+
+    expect(client.createEvent).not.toHaveBeenCalled();
+    expect(client.registerStudent).not.toHaveBeenCalled();
+    expect(client.saveAssessment).not.toHaveBeenCalled();
+    const saved = await Project.findById(project._id);
+    expect(saved.mySync.status).toBe('partial');
+    expect(saved.mySync.lastError).toBe('Clé API my invalide ou expirée');
+    expect(saved.mySync.activityId).toBeUndefined();
+  });
+
+  test('an error creating the event keeps the stored activityId and stops everything', async () => {
+    const project = await makeProject();
+    const { client } = makeClient();
+    client.createEvent.mockRejectedValue(new FakeApiError('Erreur my (HTTP 500)', { status: 500 }));
+
+    await runSync(project, client);
+
+    expect(client.registerStudent).not.toHaveBeenCalled();
+    const saved = await Project.findById(project._id);
+    expect(saved.mySync.activityId).toBe(4242);
+    expect(saved.mySync.eventId).toBeUndefined();
+    expect(saved.mySync.status).toBe('partial');
+    expect(saved.mySync.lastError).toBe('Erreur my (HTTP 500)');
+  });
+
+  test('a failed PUT keeps markBefore/markTarget written and pointsApplied empty', async () => {
+    const project = await makeProject({ members: [{ email: ALICE }] });
+    const { client } = makeClient({ marks: { [ALICE]: 2 } });
+    client.saveAssessment.mockRejectedValue(new FakeApiError('my injoignable ou sans réponse'));
+
+    await runSync(project, client);
+
+    const saved = await Project.findById(project._id);
+    expect(studentOf(saved, ALICE)).toMatchObject({
+      markBefore: 2, markTarget: 10, pointsApplied: null, error: 'my injoignable ou sans réponse',
+    });
+    expect(saved.mySync.status).toBe('partial');
+  });
+
+  test('never calls anything that confirms the assessment', async () => {
+    const project = await makeProject();
+    const { client } = makeClient();
+    const { proxy, accessed } = spyAccess(client);
+
+    await runSync(project, proxy);
+
+    const touched = [...accessed];
+    expect(touched.filter((name) => /confirm|reopen|publish/i.test(name))).toEqual([]);
+    const allowed = [
+      'MyApiError', 'MyConfigError', 'getConfig', 'createActivity', 'createEvent', 'registerStudent',
+      'setPresent', 'findEngagementRegistrationId', 'openAssessmentSession', 'getAssessmentSession',
+      'saveAssessment', 'findActivitiesByName', 'listActivityEvents',
+    ];
+    expect(touched.filter((name) => !allowed.includes(name))).toEqual([]);
+  });
+});
+
+describe('runSync data safety', () => {
+  test('markBefore/markTarget are persisted in the database before the PUT is sent', async () => {
+    const project = await makeProject({ members: [{ email: ALICE }] });
+    const { client } = makeClient({ marks: { [ALICE]: 4 } });
+    const seenAtPut = [];
+    const realSave = client.saveAssessment.getMockImplementation();
+    client.saveAssessment.mockImplementation(async (sessionId, args) => {
+      const stored = await Project.findById(project._id).lean();
+      seenAtPut.push(stored.mySync.students.find((s) => s.email === ALICE));
+      return realSave(sessionId, args);
+    });
+
+    await runSync(project, client);
+
+    expect(seenAtPut).toHaveLength(1);
+    expect(seenAtPut[0]).toMatchObject({ markBefore: 4, markTarget: 12, pointsApplied: null });
+  });
+
+  test('critical: a markTarget written by another run between the read and the claim blocks the PUT', async () => {
+    const project = await makeProject({ members: [{ email: ALICE }] });
+    const { client } = makeClient({ marks: { [ALICE]: 0 } });
+    const realGet = client.getAssessmentSession.getMockImplementation();
+    let first = true;
+    client.getAssessmentSession.mockImplementation(async (sessionId) => {
+      const body = await realGet(sessionId);
+      if (first) {
+        first = false;
+        // Another run claimed this student while we were reading my.
+        await Project.updateOne(
+          { _id: project._id, 'mySync.students.email': ALICE },
+          { $set: { 'mySync.students.$.markBefore': 0, 'mySync.students.$.markTarget': 8 } }
+        );
+      }
+      return body;
+    });
+
+    await runSync(project, client);
+
+    expect(client.saveAssessment).not.toHaveBeenCalled();
+    const saved = await Project.findById(project._id);
+    const st = studentOf(saved, ALICE);
+    expect(st.error).toMatch(/envoi concurrent/);
+    expect(st.pointsApplied).toBeNull();
+    expect(st.markTarget).toBe(8);
+    expect(saved.mySync.status).toBe('partial');
+  });
+
+  test('two projects sharing a member synced at the same time add both points (no lost update)', async () => {
+    const p1 = await makeProject({ name: 'P1', members: [{ email: ALICE }] });
+    const p2 = await makeProject({ name: 'P2', members: [{ email: ALICE }] });
+    const { client, state } = makeClient({ marks: { [ALICE]: 0 } });
+
+    await Promise.all([runSync(p1, client), runSync(p2, client)]);
+
+    expect(state.marks[ALICE]).toBe(16);
+    const marks = client.saveAssessment.mock.calls.map(([, args]) => args.mark).sort((a, b) => a - b);
+    expect(marks).toEqual([8, 16]);
+    for (const p of [p1, p2]) {
+      // eslint-disable-next-line no-await-in-loop
+      const saved = await Project.findById(p._id);
+      expect(saved.mySync.status).toBe('done');
+      expect(studentOf(saved, ALICE).pointsApplied).toBe(8);
+    }
+  });
+
+  describe('another project has an unfinished claim for the same student', () => {
+    async function projectWithUnfinishedClaim() {
+      return makeProject({
+        name: 'P1',
+        members: [{ email: ALICE }],
+        mySync: {
+          activityId: 1,
+          eventId: 2,
+          status: 'partial',
+          students: [
+            { email: ALICE, registered: true, present: true, markBefore: 0, markTarget: 8, pointsApplied: null },
+          ],
+        },
+      });
+    }
+
+    test('critical: the second project is refused and writes nothing, so P1 cannot be mistaken for P2', async () => {
+      await projectWithUnfinishedClaim();
+      const p2 = await makeProject({ name: 'P2', members: [{ email: ALICE }] });
+      // my already shows 8 (P1 wrote, or timed out after writing): P2 must not add on top of it silently.
+      const { client } = makeClient({ marks: { [ALICE]: 8 } });
+
+      await runSync(p2, client);
+
+      expect(client.saveAssessment).not.toHaveBeenCalled();
+      const saved = await Project.findById(p2._id);
+      const st = studentOf(saved, ALICE);
+      expect(st.error).toMatch(/autre projet/);
+      expect(st.error).toContain('P1');
+      expect(st.markTarget).toBeNull();
+      expect(st.pointsApplied).toBeNull();
+      expect(saved.mySync.status).toBe('partial');
+    });
+
+    test('once P1 is resumed and finished, P2 goes through and the student ends at 16', async () => {
+      const p1 = await projectWithUnfinishedClaim();
+      const p2 = await makeProject({ name: 'P2', members: [{ email: ALICE }] });
+      const { client, state } = makeClient({ marks: { [ALICE]: 8 } });
+
+      await runSync(p2, client); // refused
+      await runSync(await Project.findById(p1._id), client); // mark == markTarget: recorded, no PUT
+      expect(client.saveAssessment).not.toHaveBeenCalled();
+      expect(studentOf(await Project.findById(p1._id), ALICE).pointsApplied).toBe(8);
+
+      await runSync(await Project.findById(p2._id), client);
+
+      expect(state.marks[ALICE]).toBe(16);
+      expect(client.saveAssessment).toHaveBeenCalledTimes(1);
+      expect(studentOf(await Project.findById(p2._id), ALICE)).toMatchObject({ pointsApplied: 8, error: null });
+    });
+
+    test('a finished claim on another project does not block', async () => {
+      await makeProject({
+        name: 'P1',
+        members: [{ email: ALICE }],
+        mySync: {
+          status: 'done',
+          students: [
+            { email: ALICE, registered: true, present: true, markBefore: 0, markTarget: 8, pointsApplied: 8 },
+          ],
+        },
+      });
+      const p2 = await makeProject({ name: 'P2', members: [{ email: ALICE }] });
+      const { client, state } = makeClient({ marks: { [ALICE]: 8 } });
+
+      await runSync(p2, client);
+
+      expect(state.marks[ALICE]).toBe(16);
+      expect(studentOf(await Project.findById(p2._id), ALICE).error).toBeNull();
+    });
+  });
+
+  test('a PUT that returns without changing the mark puts the student in error and keeps markTarget for the resume rule', async () => {
+    const project = await makeProject({ members: [{ email: ALICE }] });
+    const { client, state } = makeClient({ marks: { [ALICE]: 2 } });
+    client.saveAssessment.mockImplementation(async () => {}); // 2xx but the row was rejected
+
+    await runSync(project, client);
+
+    let saved = await Project.findById(project._id);
+    expect(studentOf(saved, ALICE)).toMatchObject({ markBefore: 2, markTarget: 10, pointsApplied: null });
+    expect(studentOf(saved, ALICE).error).toMatch(/non confirmée/);
+    expect(saved.mySync.status).toBe('partial');
+
+    // Retry with a working my: mark still equals markBefore -> the PUT is redone with the stored target.
+    const { client: fixed } = makeClient({ marks: { [ALICE]: state.marks[ALICE] } });
+    await runSync(saved, fixed);
+    saved = await Project.findById(project._id);
+    expect(fixed.saveAssessment).toHaveBeenCalledTimes(1);
+    expect(fixed.saveAssessment.mock.calls[0][1].mark).toBe(10);
+    expect(studentOf(saved, ALICE)).toMatchObject({ pointsApplied: 8, error: null });
+    expect(saved.mySync.status).toBe('done');
+  });
+
+  test('a session that does not list the student is an error and nothing is written', async () => {
+    const project = await makeProject({ members: [{ email: ALICE }] });
+    const { client } = makeClient();
+    const realGet = client.getAssessmentSession.getMockImplementation();
+    client.getAssessmentSession.mockImplementation(async (sessionId) => {
+      const body = await realGet(sessionId);
+      body.session.students = [{ login: 'someone.else@epitech.eu' }];
+      return body;
+    });
+
+    await runSync(project, client);
+
+    expect(client.saveAssessment).not.toHaveBeenCalled();
+    const st = studentOf(await Project.findById(project._id), ALICE);
+    expect(st.error).toMatch(/absent de la session/);
+    expect(st.markTarget).toBeNull();
+  });
+
+  test('without markValues on the row, an odd or fractional target is refused', async () => {
+    const project = await makeProject({ members: [{ email: ALICE }], credits: 0.75 });
+    const { client } = makeClient();
+    client.getAssessmentSession.mockImplementation(async () => ({
+      session: { confirmedAt: null, students: [{ login: ALICE }] },
+      assessments: {},
+    }));
+
+    await runSync(project, client);
+
+    expect(client.saveAssessment).not.toHaveBeenCalled();
+    const st = studentOf(await Project.findById(project._id), ALICE);
+    expect(st.error).toMatch(/valeur autorisée/);
+    expect(st.markTarget).toBeNull();
+  });
+
+  test('the mark-changed error shows the read mark, markBefore and markTarget', async () => {
+    const project = await makeProject({
+      members: [{ email: ALICE }],
+      mySync: {
+        activityId: 1, eventId: 2, status: 'partial',
+        students: [{ email: ALICE, registered: true, present: true, markBefore: 4, markTarget: 12, pointsApplied: null }],
+      },
+    });
+    const { client } = makeClient({ marks: { [ALICE]: 6 } });
+
+    await runSync(project, client);
+
+    const { error } = studentOf(await Project.findById(project._id), ALICE);
+    expect(error).toMatch(/note modifiée entre-temps/);
+    expect(error).toContain('6');
+    expect(error).toContain('4');
+    expect(error).toContain('12');
+  });
+
+  test('the lock is renewed while the run progresses', async () => {
+    const project = await makeProject({ mySync: { inProgressUntil: new Date(Date.now() + 1000) } });
+    const { client } = makeClient();
+    const seen = [];
+    client.registerStudent.mockImplementation(async () => {
+      const stored = await Project.findById(project._id).lean();
+      seen.push(stored.mySync.inProgressUntil.getTime());
+      // Lock about to expire: the next student step must renew it again.
+      await Project.updateOne(
+        { _id: project._id },
+        { $set: { 'mySync.inProgressUntil': new Date(Date.now() + 1000) } }
+      );
+    });
+
+    await runSync(project, client);
+
+    expect(seen).toHaveLength(2);
+    seen.forEach((t) => expect(t).toBeGreaterThan(Date.now() + 60 * 1000));
+  });
+
+  test('the lock is not created when the run holds none', async () => {
+    const project = await makeProject();
+    const { client } = makeClient();
+    await runSync(project, client);
+    const stored = await Project.findById(project._id).lean();
+    expect(stored.mySync.inProgressUntil == null).toBe(true);
+  });
+});
+
+describe('runSync reuse of an activity or event my already created', () => {
+  test('an activity with the project name and admin URL is reused instead of created', async () => {
+    const project = await makeProject();
+    const { client } = makeClient();
+    client.findActivitiesByName.mockResolvedValue([
+      { id: 900, name: 'Projet HUB - Chartscope', description: `x : http://h/admin/projects/${project._id}` },
+      { id: 901, name: 'Projet HUB - Chartscope', description: 'x : http://h/admin/projects/someoneelse' },
+    ]);
+
+    await runSync(project, client);
+
+    expect(client.findActivitiesByName).toHaveBeenCalledWith('Projet HUB - Chartscope');
+    expect(client.createActivity).not.toHaveBeenCalled();
+    expect(client.listActivityEvents).toHaveBeenCalledWith(900);
+    const saved = await Project.findById(project._id);
+    expect(saved.mySync.activityId).toBe(900);
+    expect(saved.mySync.status).toBe('done');
+  });
+
+  test('several matching activities stop the run without creating anything', async () => {
+    const project = await makeProject();
+    const { client } = makeClient();
+    const description = `x : http://h/admin/projects/${project._id}`;
+    client.findActivitiesByName.mockResolvedValue([
+      { id: 900, name: 'Projet HUB - Chartscope', description },
+      { id: 902, name: 'Projet HUB - Chartscope', description },
+    ]);
+
+    await runSync(project, client);
+
+    expect(client.createActivity).not.toHaveBeenCalled();
+    expect(client.createEvent).not.toHaveBeenCalled();
+    const saved = await Project.findById(project._id);
+    expect(saved.mySync.activityId).toBeUndefined();
+    expect(saved.mySync.status).toBe('partial');
+    expect(saved.mySync.lastError).toMatch(/900/);
+    expect(saved.mySync.lastError).toMatch(/902/);
+  });
+
+  test('a failed lookup stops the run without creating anything', async () => {
+    const project = await makeProject();
+    const { client } = makeClient();
+    client.findActivitiesByName.mockRejectedValue(new FakeApiError('Erreur my (HTTP 500)', { status: 500 }));
+
+    await runSync(project, client);
+
+    expect(client.createActivity).not.toHaveBeenCalled();
+    expect((await Project.findById(project._id)).mySync.lastError).toBe('Erreur my (HTTP 500)');
+  });
+
+  test('an existing event of the stored activity is reused, several stop the run', async () => {
+    const project = await makeProject({ mySync: { activityId: 777 } });
+    const { client } = makeClient();
+    client.listActivityEvents.mockResolvedValue([{ id: 31, title: 't', startDate: 's' }]);
+
+    await runSync(project, client);
+
+    expect(client.createEvent).not.toHaveBeenCalled();
+    expect(client.registerStudent).toHaveBeenCalledWith(31, ALICE);
+    expect((await Project.findById(project._id)).mySync.eventId).toBe(31);
+
+    const other = await makeProject({ mySync: { activityId: 778 } });
+    const { client: c2 } = makeClient();
+    c2.listActivityEvents.mockResolvedValue([{ id: 31 }, { id: 32 }]);
+    await runSync(other, c2);
+    expect(c2.createEvent).not.toHaveBeenCalled();
+    expect(c2.registerStudent).not.toHaveBeenCalled();
+    const saved = await Project.findById(other._id);
+    expect(saved.mySync.eventId).toBeUndefined();
+    expect(saved.mySync.status).toBe('partial');
+  });
+});
