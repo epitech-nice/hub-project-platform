@@ -1,7 +1,6 @@
 // controllers/projectController.js
 const Project = require("../models/Project");
 const User = require("../models/User");
-const { sendExternalRequest } = require("../services/externalService");
 const emailService = require('../services/emailService');
 const projectService = require('../services/projectService');
 const axios = require('axios');
@@ -386,11 +385,6 @@ exports.reviewProject = asyncHandler(async (req, res, next) => {
   };
   project.updatedAt = Date.now();
   
-  // Si le projet est approuvé, traitement en tâche de fond de la requête externe
-  if (status === PROJECT_STATUSES.APPROVED) {
-    backgroundJobs.addJob('sendExternalRequest', { project });
-  }
-    
   await project.save();
   
   // Envoi différé de l'email si le statut a changé

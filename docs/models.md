@@ -56,7 +56,7 @@ Base de données : **MongoDB** via **Mongoose**.
     documents: [String]
   },
 
-  externalRequestStatus: {   // Intégration API Intra Epitech
+  externalRequestStatus: {   // Ancienne intégration API Intra Epitech, supprimée : conservé pour l'historique des projets déjà approuvés
     sent: Boolean,
     sentAt: Date,
     response: Object

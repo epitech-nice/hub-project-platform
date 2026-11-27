@@ -1,5 +1,4 @@
 jest.mock('../../utils/backgroundJobs');
-jest.mock('../../services/externalService');
 jest.mock('../../services/my/myClient', () => {
   const actual = jest.requireActual('../../services/my/myClient');
   return {

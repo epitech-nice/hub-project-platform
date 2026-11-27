@@ -37,10 +37,6 @@ MICROSOFT_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 # Frontend
 FRONTEND_URL=http://localhost:3000
 
-# API Intra Epitech
-EXTERNAL_API_URL=https://intra.epitech.eu/module/2025/G-INN-020/NCE-0-1/#!/create
-EXTERNAL_API_KEY=votre-api-key
-
 # Emails (Resend)
 EMAIL_FROM=Hub Projets <noreply@votredomaine.eu>
 RESEND_API_KEY=re_xxxxxxxxxxxx
@@ -132,8 +128,6 @@ Adapter `MONGODB_URI` dans `server/.env` pour pointer vers `localhost:27017`.
 | `EMAIL_FROM` | Oui | Expéditeur des emails |
 | `EMAIL_DOMAIN` | Non | Domaine utilisé dans le pied d'email |
 | `APP_OWNER_EMAILS` | Oui | Emails admin, séparés par virgule |
-| `EXTERNAL_API_URL` | Non | URL API Intra Epitech (approbation projets) |
-| `EXTERNAL_API_KEY` | Non | Clé API Intra Epitech |
 | `MY_API_URL` | Non | URL de l'API my (défaut : `https://my.epitech.eu/api`) |
 | `MY_API_TOKEN` | Pour l'envoi sur my | Clé API my (secret, ne jamais la committer) |
 | `MY_HUB_UNIT_INSTANCE_ID` | Pour l'envoi sur my | Identifiant de l'instance d'unité Hub sur my, qui reçoit les activités (2026 : `949`) |

@@ -1,5 +1,4 @@
 jest.mock('../../utils/backgroundJobs');
-jest.mock('../../services/externalService');
 
 const request = require('supertest');
 const app = require('../../app');
